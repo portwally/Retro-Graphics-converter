@@ -350,25 +350,25 @@ class SHRDecoder {
            let mainData = data.subdata(in: 0..<8192)
            let auxData = data.subdata(in: 8192..<16384)
            
-           // Apple IIgs DHGR Palette - Brauner Streifen → Dunkelrot
+           // Apple IIgs DHGR Palette
         let dhgrPalette: [(r: UInt8, g: UInt8, b: UInt8)] = [
-                   (0, 0, 0),         // 0: Schwarz ✓ (Position 1)
-                   (128, 128, 128),   // 1: Grau ✓ (Position 3)
-                   (255, 255, 0),     // 2: Gelb ✓ (Position 9)
-                   (0, 255, 255),     // 3: CYAN (zum Testen)
-                   (255, 0, 0),       // 4: ROT
-                   (255, 0, 0),       // 5: ROT
-                   (255, 0, 0),       // 6: ROT
-                   (255, 0, 0),       // 7: ROT
-                   (255, 0, 0),       // 8: ROT
-                   (255, 0, 0),       // 9: ROT
-                   (255, 0, 0),       // 10: ROT
-                   (255, 0, 0),       // 11: ROT
-                   (255, 0, 0),       // 12: ROT
-                   (255, 0, 0),       // 13: ROT
-                   (255, 0, 0),       // 14: ROT
-                   (255, 0, 0)        // 15: ROT
-               ]
+            (0, 0, 0),           // 0: Black
+            (134, 18, 192),      // 1: Lila/Violett
+            (0, 101, 43),        // 2: Dunkelgrün
+            (48, 48, 255),       // 3: Blau
+            (165, 95, 0),        // 4: Braun
+            (172, 172, 172),     // 5: Hellgrau
+            (0, 226, 0),         // 6: Hellgrün (war: 34, 34, 255 Medium Blue)
+            (0, 255, 146),       // 7: Cyan
+            (224, 0, 39),        // 8: Rot
+            (223, 17, 212),      // 9: Magenta
+            (81, 81, 81),        // 10: Dunkelgrau
+            (78, 158, 255),      // 11: Hellblau
+            (255, 39, 0),        // 12: Orange
+            (255, 150, 153),     // 13: Rosa
+            (255, 253, 0),       // 14: Gelb
+            (255, 255, 255)      // 15: White
+        ]
            
            for y in 0..<height {
                let base = (y & 0x07) << 10
