@@ -4,7 +4,7 @@ import CoreGraphics
 import ImageIO
 import AppKit
 
-// MARK: - New Types and Enums (Unchanged)
+// MARK: - New Types and Enums
 
 enum ExportFormat: String, CaseIterable {
     case png = "PNG"
@@ -38,49 +38,143 @@ enum AppleIIImageType: Equatable {
         case .Unknown: return (0, 0)
         }
     }
+    
+    var displayName: String {
+        switch self {
+        case .SHR(let mode): return "SHR (\(mode))"
+        case .DHGR: return "DHGR"
+        case .HGR: return "HGR"
+        case .Unknown: return "Unknown"
+        }
+    }
 }
 
-// MARK: - Main App Entry Point (Unchanged)
+// MARK: - Image Item Model
+
+struct ImageItem: Identifiable {
+    let id = UUID()
+    let url: URL
+    let image: NSImage
+    let type: AppleIIImageType
+    
+    var filename: String {
+        url.lastPathComponent
+    }
+}
+
+// MARK: - Main App Entry Point
+
 @main
 struct SHRConverterApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .frame(minWidth: 550, minHeight: 500)
+                .frame(minWidth: 900, minHeight: 600)
         }
     }
 }
 
-// MARK: - UI View (Unchanged)
+// MARK: - UI View with Image Browser
 
 struct ContentView: View {
     @State private var filesToConvert: [URL] = []
-    @State private var lastConvertedImage: NSImage?
-    @State private var detectedType: AppleIIImageType = .Unknown
+    @State private var imageItems: [ImageItem] = []
+    @State private var selectedImage: ImageItem?
     @State private var selectedExportFormat: ExportFormat = .png
-    @State private var statusMessage: String = "Drag files or open a single file."
+    @State private var statusMessage: String = "Drag files/folders or open files to start."
     @State private var isProcessing = false
     @State private var progressString = ""
+    @State private var showBrowser = false
     
     var body: some View {
+        HSplitView {
+            // Left Panel: Browser
+            if showBrowser && !imageItems.isEmpty {
+                browserPanel
+                    .frame(minWidth: 250, idealWidth: 300)
+            }
+            
+            // Right Panel: Main View
+            mainPanel
+                .frame(minWidth: 500)
+        }
+        .padding()
+    }
+    
+    // MARK: - Browser Panel
+    
+    var browserPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Image Browser")
+                    .font(.headline)
+                Spacer()
+                Button(action: { clearAllImages() }) {
+                    Image(systemName: "trash")
+                }
+                .help("Clear all images")
+            }
+            
+            Divider()
+            
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
+                    ForEach(imageItems) { item in
+                        ImageThumbnailView(item: item, isSelected: selectedImage?.id == item.id)
+                            .onTapGesture {
+                                selectedImage = item
+                            }
+                    }
+                }
+                .padding(.horizontal, 5)
+            }
+            
+            Divider()
+            
+            Text("\(imageItems.count) image(s) loaded")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+    }
+    
+    // MARK: - Main Panel
+    
+    var mainPanel: some View {
         VStack(spacing: 20) {
-            // Drop Zone Area
+            // Image Display Area
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(style: StrokeStyle(lineWidth: 2, dash: [10]))
-                    .foregroundColor(isProcessing ? .blue : (filesToConvert.isEmpty ? .secondary : .green))
+                    .foregroundColor(isProcessing ? .blue : (!imageItems.isEmpty ? .green : .secondary))
                     .background(Color(NSColor.controlBackgroundColor))
                 
-                if let img = lastConvertedImage {
-                    Image(nsImage: img)
-                        .resizable()
-                        .interpolation(.none)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxHeight: 350)
-                        .padding()
-                } else {
+                if let selectedImg = selectedImage {
+                    VStack(spacing: 10) {
+                        Image(nsImage: selectedImg.image)
+                            .resizable()
+                            .interpolation(.none)
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxHeight: 400)
+                        
+                        HStack {
+                            Text(selectedImg.filename)
+                                .font(.headline)
+                            Spacer()
+                            Text(selectedImg.type.displayName)
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.blue.opacity(0.2))
+                                .cornerRadius(4)
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding()
+                } else if imageItems.isEmpty {
                     VStack(spacing: 15) {
-                        Image(systemName: "square.stack.3d.down.right")
+                        Image(systemName: "photo.stack")
                             .font(.system(size: 50))
                             .foregroundColor(.secondary)
                         Text("Apple II Graphics Converter")
@@ -89,49 +183,85 @@ struct ContentView: View {
                             .multilineTextAlignment(.center)
                             .font(.caption)
                             .foregroundColor(.secondary)
+                        Text("Drag & drop files/folders or click 'Open Files...'")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    VStack(spacing: 15) {
+                        Image(systemName: "hand.tap")
+                            .font(.system(size: 50))
+                            .foregroundColor(.secondary)
+                        Text("Select an image from the browser")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
                     }
                 }
                 
                 if isProcessing {
-                    ProgressView()
-                        .scaleEffect(1.5)
+                    VStack(spacing: 10) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                        Text(progressString)
+                            .font(.caption)
+                            .padding(.top, 10)
+                    }
+                    .padding()
+                    .background(Color(NSColor.windowBackgroundColor).opacity(0.9))
+                    .cornerRadius(10)
                 }
             }
-            .frame(height: 350)
+            .frame(height: 450)
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                 loadDroppedFiles(providers)
                 return true
             }
             
             // Controls Bar
-            HStack {
-                // Open File Button
-                Button("Open Single File...") {
-                    openSingleFile()
+            VStack(spacing: 10) {
+                HStack {
+                    Button("Open Files...") {
+                        openFiles()
+                    }
+                    
+                    Button(showBrowser ? "Hide Browser" : "Show Browser") {
+                        withAnimation {
+                            showBrowser.toggle()
+                        }
+                    }
+                    .disabled(imageItems.isEmpty)
+                    
+                    Spacer()
+                    
+                    Picker("Export As:", selection: $selectedExportFormat) {
+                        ForEach(ExportFormat.allCases, id: \.self) { format in
+                            Text(format.rawValue).tag(format)
+                        }
+                    }
+                    .frame(width: 180)
+                    
+                    Button("Export All to \(selectedExportFormat.rawValue)...") {
+                        exportAllImages()
+                    }
+                    .disabled(imageItems.isEmpty || isProcessing)
                 }
                 
-                // Export Format Picker
-                Picker("Export As:", selection: $selectedExportFormat) {
-                    ForEach(ExportFormat.allCases, id: \.self) { format in
-                        Text(format.rawValue).tag(format)
+                if let selected = selectedImage {
+                    HStack {
+                        Spacer()
+                        Button("Export Selected Image...") {
+                            exportSingleImage(selected)
+                        }
+                        .disabled(isProcessing)
                     }
                 }
-                .frame(width: 180)
-                
-                Spacer()
-                
-                // Convert Button
-                Button("Convert \(filesToConvert.count) File(s) to \(selectedExportFormat.rawValue)...") {
-                    selectOutputFolderAndConvert()
-                }
-                .disabled(filesToConvert.isEmpty || isProcessing)
             }
             
             // Status Bar
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(statusMessage)
                     .font(.headline)
-                if !progressString.isEmpty {
+                if !progressString.isEmpty && !isProcessing {
                     Text(progressString)
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -142,35 +272,33 @@ struct ContentView: View {
         .padding()
     }
     
-    // MARK: - File Handling and Conversion Logic (Unchanged)
+    // MARK: - File Handling
     
-    func clearState() {
-        lastConvertedImage = nil
+    func clearAllImages() {
+        imageItems = []
+        selectedImage = nil
         filesToConvert = []
-        statusMessage = "Ready for the next task."
+        statusMessage = "All images cleared."
         progressString = ""
-        isProcessing = false
-        detectedType = .Unknown
+        showBrowser = false
     }
     
-    func openSingleFile() {
+    func openFiles() {
         let openPanel = NSOpenPanel()
         openPanel.allowedContentTypes = [.data]
-        openPanel.allowsMultipleSelection = false
-        openPanel.prompt = "Open Apple II/IIGS Graphics File"
+        openPanel.allowsMultipleSelection = true
+        openPanel.canChooseDirectories = true
+        openPanel.canChooseFiles = true
+        openPanel.prompt = "Open Apple II/IIGS Graphics Files or Folders"
 
-        if openPanel.runModal() == .OK, let url = openPanel.url {
-            clearState()
-            self.filesToConvert = [url]
-            self.statusMessage = "1 file loaded. Click 'Convert...' to proceed."
+        if openPanel.runModal() == .OK {
+            processFilesAndFolders(urls: openPanel.urls)
         }
     }
     
     func loadDroppedFiles(_ providers: [NSItemProvider]) {
         self.isProcessing = true
-        self.statusMessage = "Collecting dropped files..."
-        self.progressString = ""
-        self.filesToConvert = []
+        self.statusMessage = "Loading dropped files..."
         
         let group = DispatchGroup()
         var collectedURLs: [URL] = []
@@ -188,73 +316,189 @@ struct ContentView: View {
         }
         
         group.notify(queue: .main) {
-            self.isProcessing = false
-            self.filesToConvert = collectedURLs
-            self.statusMessage = "Ready to convert \(collectedURLs.count) files."
+            self.processFilesAndFolders(urls: collectedURLs)
         }
     }
     
-    func selectOutputFolderAndConvert() {
-        let openPanel = NSOpenPanel()
-        openPanel.canChooseFiles = false
-        openPanel.canChooseDirectories = true
-        openPanel.allowsMultipleSelection = false
-        openPanel.prompt = "Select folder to save \(selectedExportFormat.rawValue) files"
-
-        if openPanel.runModal() == .OK, let outputFolderURL = openPanel.url {
-            self.isProcessing = true
-            processBatch(inputURLs: self.filesToConvert, outputDir: outputFolderURL, format: selectedExportFormat)
-        } else {
-            self.statusMessage = "Output folder selection cancelled."
+    func processFilesAndFolders(urls: [URL]) {
+        guard !urls.isEmpty else {
+            isProcessing = false
+            return
         }
-    }
-    
-    func processBatch(inputURLs: [URL], outputDir: URL, format: ExportFormat) {
-        var successCount = 0
-        var failCount = 0
+        
+        isProcessing = true
+        statusMessage = "Scanning files and folders..."
         
         DispatchQueue.global(qos: .userInitiated).async {
-            for (index, url) in inputURLs.enumerated() {
-                
-                DispatchQueue.main.async {
-                    self.statusMessage = "Processing \(index + 1) of \(inputURLs.count)"
-                    self.progressString = "Converting: \(url.lastPathComponent) to \(format.rawValue)"
-                }
-                
-                let result = SHRDecoder.decode(data: (try? Data(contentsOf: url)) ?? Data())
-                
-                if let cgImage = result.image, result.type != .Unknown {
-                    // Use NSImage initializer that respects CGImage resolution
-                    let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: result.type.resolution.width, height: result.type.resolution.height))
-                    
-                    if saveImage(image: nsImage, originalURL: url, outputDir: outputDir, format: format) {
-                        successCount += 1
-                        DispatchQueue.main.async {
-                            self.lastConvertedImage = nsImage
-                            self.detectedType = result.type
+            var allFileURLs: [URL] = []
+            
+            // Recursively collect all files from folders
+            for url in urls {
+                var isDirectory: ObjCBool = false
+                if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) {
+                    if isDirectory.boolValue {
+                        // It's a folder - scan it
+                        if let files = self.scanFolder(url: url) {
+                            allFileURLs.append(contentsOf: files)
                         }
                     } else {
-                        failCount += 1
+                        // It's a file - add directly
+                        allFileURLs.append(url)
                     }
-                } else {
-                    failCount += 1
                 }
             }
             
             DispatchQueue.main.async {
-                self.isProcessing = false
-                self.filesToConvert = []
-                self.statusMessage = "Batch Complete! \(format.rawValue) files saved."
-                self.progressString = "Converted: \(successCount) | Failed/Ignored: \(failCount)."
+                if allFileURLs.isEmpty {
+                    self.isProcessing = false
+                    self.statusMessage = "No files found"
+                    self.progressString = ""
+                } else {
+                    self.processFiles(urls: allFileURLs)
+                }
             }
         }
     }
     
-    func saveImage(image: NSImage, originalURL: URL, outputDir: URL, format: ExportFormat) -> Bool {
-        let filenameWithoutExt = originalURL.deletingPathExtension().lastPathComponent
-        let newFilename = "\(filenameWithoutExt).\(format.fileExtension)"
-        let outputURL = outputDir.appendingPathComponent(newFilename)
+    func scanFolder(url: URL) -> [URL]? {
+        let fileManager = FileManager.default
+        var fileURLs: [URL] = []
         
+        guard let enumerator = fileManager.enumerator(at: url,
+                                                       includingPropertiesForKeys: [.isRegularFileKey],
+                                                       options: [.skipsHiddenFiles]) else {
+            return nil
+        }
+        
+        for case let fileURL as URL in enumerator {
+            do {
+                let fileAttributes = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
+                if fileAttributes.isRegularFile == true {
+                    // Optional: Filter by file size (Apple II images are typically 8KB, 16KB, or 32KB+)
+                    let fileSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
+                    if fileSize > 0 {
+                        fileURLs.append(fileURL)
+                    }
+                }
+            } catch {
+                continue
+            }
+        }
+        
+        return fileURLs
+    }
+    
+    func processFiles(urls: [URL]) {
+        guard !urls.isEmpty else {
+            isProcessing = false
+            return
+        }
+        
+        isProcessing = true
+        statusMessage = "Processing \(urls.count) file(s)..."
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            var newItems: [ImageItem] = []
+            var successCount = 0
+            
+            for (index, url) in urls.enumerated() {
+                DispatchQueue.main.async {
+                    self.progressString = "Processing \(index + 1) of \(urls.count): \(url.lastPathComponent)"
+                }
+                
+                guard let data = try? Data(contentsOf: url) else { continue }
+                let result = SHRDecoder.decode(data: data)
+                
+                if let cgImage = result.image, result.type != .Unknown {
+                    let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: result.type.resolution.width, height: result.type.resolution.height))
+                    let item = ImageItem(url: url, image: nsImage, type: result.type)
+                    newItems.append(item)
+                    successCount += 1
+                }
+            }
+            
+            DispatchQueue.main.async {
+                self.imageItems.append(contentsOf: newItems)
+                self.isProcessing = false
+                self.statusMessage = "Loaded \(successCount) of \(urls.count) file(s)"
+                self.progressString = ""
+                
+                if !newItems.isEmpty {
+                    self.showBrowser = true
+                    if self.selectedImage == nil {
+                        self.selectedImage = newItems.first
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Export Functions
+    
+    func exportSingleImage(_ item: ImageItem) {
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [UTType(filenameExtension: selectedExportFormat.fileExtension)!]
+        savePanel.nameFieldStringValue = "\(item.url.deletingPathExtension().lastPathComponent).\(selectedExportFormat.fileExtension)"
+        savePanel.prompt = "Export"
+        savePanel.canCreateDirectories = true
+        savePanel.showsHiddenFiles = false
+        
+        if savePanel.runModal() == .OK, let outputURL = savePanel.url {
+            isProcessing = true
+            DispatchQueue.global(qos: .userInitiated).async {
+                let success = self.saveImage(image: item.image, to: outputURL, format: self.selectedExportFormat)
+                
+                DispatchQueue.main.async {
+                    self.isProcessing = false
+                    if success {
+                        self.statusMessage = "Exported: \(outputURL.lastPathComponent)"
+                        self.progressString = ""
+                    } else {
+                        self.statusMessage = "Export failed!"
+                    }
+                }
+            }
+        }
+    }
+    
+    func exportAllImages() {
+        let openPanel = NSOpenPanel()
+        openPanel.canChooseFiles = false
+        openPanel.canChooseDirectories = true
+        openPanel.allowsMultipleSelection = false
+        openPanel.canCreateDirectories = true
+        openPanel.showsHiddenFiles = false
+        openPanel.prompt = "Select Export Folder"
+
+        if openPanel.runModal() == .OK, let outputFolderURL = openPanel.url {
+            isProcessing = true
+            
+            DispatchQueue.global(qos: .userInitiated).async {
+                var successCount = 0
+                
+                for (index, item) in self.imageItems.enumerated() {
+                    DispatchQueue.main.async {
+                        self.progressString = "Exporting \(index + 1) of \(self.imageItems.count)"
+                    }
+                    
+                    let filename = "\(item.url.deletingPathExtension().lastPathComponent).\(self.selectedExportFormat.fileExtension)"
+                    let outputURL = outputFolderURL.appendingPathComponent(filename)
+                    
+                    if self.saveImage(image: item.image, to: outputURL, format: self.selectedExportFormat) {
+                        successCount += 1
+                    }
+                }
+                
+                DispatchQueue.main.async {
+                    self.isProcessing = false
+                    self.statusMessage = "Exported \(successCount) of \(self.imageItems.count) image(s)"
+                    self.progressString = ""
+                }
+            }
+        }
+    }
+    
+    func saveImage(image: NSImage, to outputURL: URL, format: ExportFormat) -> Bool {
         guard let tiffData = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffData) else {
             return false
@@ -288,7 +532,43 @@ struct ContentView: View {
     }
 }
 
-// MARK: - HEIC Helper (Unchanged)
+// MARK: - Thumbnail View
+
+struct ImageThumbnailView: View {
+    let item: ImageItem
+    let isSelected: Bool
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(nsImage: item.image)
+                .resizable()
+                .interpolation(.none)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 120, height: 90)
+                .background(Color.black.opacity(0.1))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 3)
+                )
+            
+            Text(item.filename)
+                .font(.caption2)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .frame(width: 120)
+            
+            Text(item.type.displayName)
+                .font(.system(size: 9))
+                .foregroundColor(.secondary)
+        }
+        .padding(4)
+        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+        .cornerRadius(8)
+    }
+}
+
+// MARK: - HEIC Helper
 
 class HEICConverter {
     static func convert(cgImage: CGImage) -> Data? {
@@ -307,8 +587,7 @@ class HEICConverter {
     }
 }
 
-
-// MARK: - SHRDecoder (FINAL DHGR MAP TWEAK & HGR COLOR POLARITY REVERSAL)
+// MARK: - SHRDecoder
 
 class SHRDecoder {
     
@@ -339,18 +618,17 @@ class SHRDecoder {
         return (image, type)
     }
     
-    // --- DHGR Decoder (560x192, 16KB) - FINAL DHGR MAP TWEAK ---
+    // --- DHGR Decoder (560x192, 16KB) ---
     static func decodeDHGR(data: Data) -> CGImage? {
-           let width = 560  // Volle Breite zurück
-           let height = 192
-           var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
-           
-           guard data.count >= 16384 else { return nil }
-           
-           let mainData = data.subdata(in: 0..<8192)
-           let auxData = data.subdata(in: 8192..<16384)
-           
-           // Apple IIgs DHGR Palette
+        let width = 560
+        let height = 192
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+        
+        guard data.count >= 16384 else { return nil }
+        
+        let mainData = data.subdata(in: 0..<8192)
+        let auxData = data.subdata(in: 8192..<16384)
+        
         let dhgrPalette: [(r: UInt8, g: UInt8, b: UInt8)] = [
             (0, 0, 0),           // 0: Black
             (134, 18, 192),      // 1: Lila/Violett
@@ -358,7 +636,7 @@ class SHRDecoder {
             (48, 48, 255),       // 3: Blau
             (165, 95, 0),        // 4: Braun
             (172, 172, 172),     // 5: Hellgrau
-            (0, 226, 0),         // 6: Hellgrün (war: 34, 34, 255 Medium Blue)
+            (0, 226, 0),         // 6: Hellgrün
             (0, 255, 146),       // 7: Cyan
             (224, 0, 39),        // 8: Rot
             (223, 17, 212),      // 9: Magenta
@@ -369,114 +647,100 @@ class SHRDecoder {
             (255, 253, 0),       // 14: Gelb
             (255, 255, 255)      // 15: White
         ]
-           
-           for y in 0..<height {
-               let base = (y & 0x07) << 10
-               let row = (y >> 3) & 0x07
-               let block = (y >> 6) & 0x03
-               let offset = base | (row << 7) | (block * 40)
-               
-               guard offset + 40 <= 8192 else { continue }
-               
-               var bits: [UInt8] = []
-               for xByte in 0..<40 {
-                   let mainByte = mainData[offset + xByte]
-                   let auxByte = auxData[offset + xByte]
-                   
-                   for bitPos in 0..<7 {
-                       bits.append((mainByte >> bitPos) & 0x1)
-                   }
-                   for bitPos in 0..<7 {
-                       bits.append((auxByte >> bitPos) & 0x1)
-                   }
-               }
-               
-               var pixelX = 0
-               var bitIndex = 0
-               
-               while bitIndex + 3 < bits.count && pixelX < width {
-                   let bit0 = bits[bitIndex]
-                   let bit1 = bits[bitIndex + 1]
-                   let bit2 = bits[bitIndex + 2]
-                   let bit3 = bits[bitIndex + 3]
-                   
-                   let colorIndex = Int(bit0 | (bit1 << 1) | (bit2 << 2) | (bit3 << 3))
-                   let color = dhgrPalette[colorIndex]
-                   
-                   for _ in 0..<4 {
-                       let bufferIdx = (y * width + pixelX) * 4
-                       if bufferIdx + 3 < rgbaBuffer.count && pixelX < width {
-                           rgbaBuffer[bufferIdx] = color.r
-                           rgbaBuffer[bufferIdx + 1] = color.g
-                           rgbaBuffer[bufferIdx + 2] = color.b
-                           rgbaBuffer[bufferIdx + 3] = 255
-                       }
-                       pixelX += 1
-                   }
-                   
-                   bitIndex += 4
-               }
-           }
-        // Neu Originalbild erzeugen
-            guard let fullImage = createCGImage(from: rgbaBuffer, width: width, height: height) else {
-                return nil
-            }
-
-        // 🔥 NEU: auf halbe Breite skalieren
-            return scaleCGImage(fullImage, to: CGSize(width: 280, height: 192))
         
-        //Originalfunktion zur Augabe
-        //   return createCGImage(from: rgbaBuffer, width: width, height: height)
-       }
+        for y in 0..<height {
+            let base = (y & 0x07) << 10
+            let row = (y >> 3) & 0x07
+            let block = (y >> 6) & 0x03
+            let offset = base | (row << 7) | (block * 40)
+            
+            guard offset + 40 <= 8192 else { continue }
+            
+            var bits: [UInt8] = []
+            for xByte in 0..<40 {
+                let mainByte = mainData[offset + xByte]
+                let auxByte = auxData[offset + xByte]
+                
+                for bitPos in 0..<7 {
+                    bits.append((mainByte >> bitPos) & 0x1)
+                }
+                for bitPos in 0..<7 {
+                    bits.append((auxByte >> bitPos) & 0x1)
+                }
+            }
+            
+            var pixelX = 0
+            var bitIndex = 0
+            
+            while bitIndex + 3 < bits.count && pixelX < width {
+                let bit0 = bits[bitIndex]
+                let bit1 = bits[bitIndex + 1]
+                let bit2 = bits[bitIndex + 2]
+                let bit3 = bits[bitIndex + 3]
+                
+                let colorIndex = Int(bit0 | (bit1 << 1) | (bit2 << 2) | (bit3 << 3))
+                let color = dhgrPalette[colorIndex]
+                
+                for _ in 0..<4 {
+                    let bufferIdx = (y * width + pixelX) * 4
+                    if bufferIdx + 3 < rgbaBuffer.count && pixelX < width {
+                        rgbaBuffer[bufferIdx] = color.r
+                        rgbaBuffer[bufferIdx + 1] = color.g
+                        rgbaBuffer[bufferIdx + 2] = color.b
+                        rgbaBuffer[bufferIdx + 3] = 255
+                    }
+                    pixelX += 1
+                }
+                
+                bitIndex += 4
+            }
+        }
+        
+        guard let fullImage = createCGImage(from: rgbaBuffer, width: width, height: height) else {
+            return nil
+        }
+        
+        return scaleCGImage(fullImage, to: CGSize(width: 280, height: 192))
+    }
     
-    // --- HGR Decoder (280x192, 8KB) - FINAL COLOR POLARITY REVERSAL ---
+    // --- HGR Decoder (280x192, 8KB) ---
     static func decodeHGR(data: Data) -> CGImage? {
         let width = 280
         let height = 192
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
         
-        // Apple II HGR Farben (Standard Palette)
-        // 0:Schwarz, 1:Weiß (Kein Artefakt), 2:Grün, 3:Violett, 4:Orange, 5:Blau
         let hgrColors: [(r: UInt8, g: UInt8, b: UInt8)] = [
             (0, 0, 0),       // 0: Schwarz
             (255, 255, 255), // 1: Weiß
-            (32, 192, 32),   // 2: Grün (etwas dunkler für Retro-Look)
+            (32, 192, 32),   // 2: Grün
             (160, 32, 240),  // 3: Violett
             (255, 100, 0),   // 4: Orange
-            (60, 60, 255)    // 5: Blau (Mittelblau)
+            (60, 60, 255)    // 5: Blau
         ]
         
         guard data.count >= 8192 else { return nil }
 
         for y in 0..<height {
-            // --- 1. KORREKTE ADRESSBERECHNUNG ---
-            let i = y % 8           // Innerhalb des 8er Blocks (Bit 0-2)
-            let j = (y / 8) % 8     // Welcher 8er Block (Bit 3-5)
-            let k = y / 64          // Welches Drittel (Bit 6-7)
+            let i = y % 8
+            let j = (y / 8) % 8
+            let k = y / 64
             
-            // Die "Magie": i springt riesig (1024), j springt klein (128)
             let fileOffset = (i * 1024) + (j * 128) + (k * 40)
             
             guard fileOffset + 40 <= data.count else { continue }
             
-            // Zeile lesen
             for xByte in 0..<40 {
                 let currentByte = data[fileOffset + xByte]
-                
-                // Für das Artefakt-Handling brauchen wir das nächste Byte (für Bit 6 -> Bit 0 Übergang)
                 let nextByte: UInt8 = (xByte + 1 < 40) ? data[fileOffset + xByte + 1] : 0
                 
-                let highBit = (currentByte >> 7) & 0x1 // Palette Switch (0=Violett/Grün, 1=Blau/Orange)
+                let highBit = (currentByte >> 7) & 0x1
                 
                 for bitIndex in 0..<7 {
                     let pixelIndex = (xByte * 7) + bitIndex
                     let bufferIdx = (y * width + pixelIndex) * 4
                     
-                    // --- 2. BIT EXTRAKTION ---
-                    // Apple II stellt Bit 0 links dar -> Bit 6 rechts.
                     let bitA = (currentByte >> bitIndex) & 0x1
                     
-                    // Nachbar-Bit (für Farbe)
                     let bitB: UInt8
                     if bitIndex == 6 {
                         bitB = (nextByte >> 0) & 0x1
@@ -484,28 +748,26 @@ class SHRDecoder {
                         bitB = (currentByte >> (bitIndex + 1)) & 0x1
                     }
                     
-                    // --- 3. FARBESTIMMUNG ---
                     var colorIndex = 0
                     
                     if bitA == 0 && bitB == 0 {
-                        colorIndex = 0 // Schwarz
+                        colorIndex = 0
                     } else if bitA == 1 && bitB == 1 {
-                        colorIndex = 1 // Weiß
+                        colorIndex = 1
                     } else {
-                        // Artefakt-Farbe (Bit-Wechsel)
                         let isEvenColumn = (pixelIndex % 2) == 0
                         
-                        if highBit == 1 { // Palette "High" (Blau/Orange)
+                        if highBit == 1 {
                             if isEvenColumn {
-                                colorIndex = (bitA == 1) ? 5 : 4 // Blau : Orange
+                                colorIndex = (bitA == 1) ? 5 : 4
                             } else {
-                                colorIndex = (bitA == 1) ? 4 : 5 // Orange : Blau
+                                colorIndex = (bitA == 1) ? 4 : 5
                             }
-                        } else { // Palette "Low" (Violett/Grün) -> Standard für Text/Boot
+                        } else {
                             if isEvenColumn {
-                                colorIndex = (bitA == 1) ? 3 : 2 // Violett : Grün
+                                colorIndex = (bitA == 1) ? 3 : 2
                             } else {
-                                colorIndex = (bitA == 1) ? 2 : 3 // Grün : Violett
+                                colorIndex = (bitA == 1) ? 2 : 3
                             }
                         }
                     }
@@ -522,7 +784,7 @@ class SHRDecoder {
         return createCGImage(from: rgbaBuffer, width: width, height: height)
     }
     
-    // --- SHR Decoder (Unchanged) ---
+    // --- SHR Decoder ---
     static func decodeSHR(data: Data, is3200Color: Bool) -> CGImage? {
         let width = 320
         let height = 200
@@ -571,13 +833,13 @@ class SHRDecoder {
             bitmapInfo: image.bitmapInfo.rawValue
         ) else { return nil }
 
-        // Kein Interpolieren = scharfe Pixel!
         ctx.interpolationQuality = .none
 
         ctx.draw(image, in: CGRect(origin: .zero, size: newSize))
         return ctx.makeImage()
     }
-    // --- Decoder Helpers (Unchanged) ---
+    
+    // --- Decoder Helpers ---
     
     static func readPalette(from data: Data, offset: Int, reverseOrder: Bool) -> [(r: UInt8, g: UInt8, b: UInt8)] {
         var colors = [(r: UInt8, g: UInt8, b: UInt8)](repeating: (0,0,0), count: 16)
@@ -638,8 +900,9 @@ class SHRDecoder {
 
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         
+        // Use .noneSkipLast to ignore the alpha channel for opaque images
         let bitmapInfo = CGBitmapInfo(rawValue:
-            CGImageAlphaInfo.premultipliedLast.rawValue |
+            CGImageAlphaInfo.noneSkipLast.rawValue |
             CGBitmapInfo.byteOrder32Big.rawValue)
         
         guard let provider = CGDataProvider(data: Data(buffer) as CFData) else { return nil }
@@ -648,7 +911,7 @@ class SHRDecoder {
             width: width,
             height: height,
             bitsPerComponent: bitsPerComponent,
-            bitsPerPixel: bytesPerPixel * bitsPerComponent, // 32
+            bitsPerPixel: bytesPerPixel * bitsPerComponent,
             bytesPerRow: bytesPerRow,
             space: colorSpace,
             bitmapInfo: bitmapInfo,
