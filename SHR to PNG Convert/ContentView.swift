@@ -679,8 +679,6 @@ class SHRDecoder {
             return decodeC64Hires(data: data)
         case 6912: // ZX Spectrum SCR
             return decodeZXSpectrum(data: data)
-        case 53248: // MacPaint (512 byte header + 51840 bytes image data)
-            return decodeMacPaint(data: data)
         case 16384: // Could be Amstrad CPC or Apple II DHGR
             // Use filename as hint if available
             if fileExtension == "scr" {
@@ -732,6 +730,23 @@ class SHRDecoder {
             break
         }
         
+        // Check for MacPaint format (.MAC, .PNTG)
+        // MacPaint: 512 byte header + compressed PackBits data (variable size, typically 20-100KB)
+        if fileExtension == "mac" || fileExtension == "pntg" {
+            if size >= 512 {
+                return decodeMacPaint(data: data)
+            }
+        }
+        
+        // Also try MacPaint for files in typical size range without extension
+        if size >= 20000 && size <= 100000 && size >= 512 {
+            // Try MacPaint detection - if it decodes successfully, it's MacPaint
+            let result = decodeMacPaint(data: data)
+            if result.image != nil {
+                return result
+            }
+        }
+        
         // Check for Degas format (.PI1, .PI2, .PI3)
         if size >= 34 {
             let resolutionWord = readBigEndianUInt16(data: data, offset: 0)
@@ -781,13 +796,14 @@ class SHRDecoder {
         // Image is 576x720 pixels (1 bit per pixel)
         // Data is compressed using PackBits (Apple's RLE)
         
-        guard data.count >= 53248 else { // Typical size
+        guard data.count >= 512 else {
             return (nil, .Unknown)
         }
         
         let width = 576
         let height = 720
         let bytesPerRow = 72 // 576 pixels / 8 bits per byte
+        let expectedSize = bytesPerRow * height // 51840 bytes uncompressed
         
         // Skip 512-byte header, start decompressing from byte 512
         var compressed = Array(data[512...])
@@ -796,7 +812,7 @@ class SHRDecoder {
         var decompressed: [UInt8] = []
         var offset = 0
         
-        while offset < compressed.count && decompressed.count < (bytesPerRow * height) {
+        while offset < compressed.count && decompressed.count < expectedSize {
             let byte = compressed[offset]
             offset += 1
             
@@ -820,6 +836,12 @@ class SHRDecoder {
                     }
                 }
             }
+        }
+        
+        // Verify we got enough data
+        guard decompressed.count >= expectedSize * 4 / 5 else {
+            // If we got less than 80% of expected data, it's probably not MacPaint
+            return (nil, .Unknown)
         }
         
         // Convert 1-bit bitmap to RGBA
