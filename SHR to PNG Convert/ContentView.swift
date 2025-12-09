@@ -28,6 +28,7 @@ enum AppleIIImageType: Equatable {
     case SHR(mode: String)
     case DHGR
     case HGR
+    case IFF(width: Int, height: Int, colors: String)
     case Unknown
     
     var resolution: (width: Int, height: Int) {
@@ -35,6 +36,7 @@ enum AppleIIImageType: Equatable {
         case .SHR: return (320, 200)
         case .DHGR: return (560, 192)
         case .HGR: return (280, 192)
+        case .IFF(let width, let height, _): return (width, height)
         case .Unknown: return (0, 0)
         }
     }
@@ -44,6 +46,7 @@ enum AppleIIImageType: Equatable {
         case .SHR(let mode): return "SHR (\(mode))"
         case .DHGR: return "DHGR"
         case .HGR: return "HGR"
+        case .IFF(_, _, let colors): return "IFF (\(colors))"
         case .Unknown: return "Unknown"
         }
     }
@@ -179,7 +182,7 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                         Text("Apple II Graphics Converter")
                             .font(.headline)
-                        Text("Supports SHR, HGR, and DHGR formats.")
+                        Text("Supports SHR, HGR, DHGR, and Amiga IFF formats.")
                             .multilineTextAlignment(.center)
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -594,6 +597,15 @@ class SHRDecoder {
     static func decode(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         let size = data.count
         
+        // Check for IFF format first (has FORM header)
+        if size >= 12 {
+            let header = data.subdata(in: 0..<4)
+            if let headerString = String(data: header, encoding: .ascii), headerString == "FORM" {
+                return decodeIFF(data: data)
+            }
+        }
+        
+        // Then check Apple II formats by size
         let type: AppleIIImageType
         let image: CGImage?
         
@@ -616,6 +628,351 @@ class SHRDecoder {
         }
         
         return (image, type)
+    }
+    
+    // --- IFF/ILBM Decoder (Amiga Format) ---
+    static func decodeIFF(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+        guard data.count >= 12 else {
+            return (nil, .Unknown)
+        }
+        
+        // Verify FORM header
+        guard let formHeader = String(data: data.subdata(in: 0..<4), encoding: .ascii),
+              formHeader == "FORM" else {
+            return (nil, .Unknown)
+        }
+        
+        // Read file size (big-endian)
+        let fileSize = readBigEndianUInt32(data: data, offset: 4)
+        
+        // Verify ILBM type
+        guard let ilbmType = String(data: data.subdata(in: 8..<12), encoding: .ascii),
+              ilbmType == "ILBM" else {
+            return (nil, .Unknown)
+        }
+        
+        var offset = 12
+        var width = 0
+        var height = 0
+        var numPlanes = 0
+        var compression: UInt8 = 0
+        var palette: [(r: UInt8, g: UInt8, b: UInt8)] = []
+        var bodyOffset = 0
+        var bodySize = 0
+        var masking: UInt8 = 0
+        
+        // Parse IFF chunks
+        while offset + 8 <= data.count {
+            guard let chunkID = String(data: data.subdata(in: offset..<offset+4), encoding: .ascii) else {
+                break
+            }
+            
+            let chunkSize = Int(readBigEndianUInt32(data: data, offset: offset + 4))
+            offset += 8
+            
+            if offset + chunkSize > data.count {
+                break
+            }
+            
+            switch chunkID {
+            case "BMHD": // Bitmap Header
+                if chunkSize >= 20 {
+                    width = Int(readBigEndianUInt16(data: data, offset: offset))
+                    height = Int(readBigEndianUInt16(data: data, offset: offset + 2))
+                    numPlanes = Int(data[offset + 8])
+                    masking = data[offset + 9]
+                    compression = data[offset + 10]
+                }
+                
+            case "CMAP": // Color Map
+                let numColors = chunkSize / 3
+                for i in 0..<numColors {
+                    let colorOffset = offset + (i * 3)
+                    if colorOffset + 2 < data.count {
+                        let r = data[colorOffset]
+                        let g = data[colorOffset + 1]
+                        let b = data[colorOffset + 2]
+                        palette.append((r, g, b))
+                    }
+                }
+                
+            case "BODY": // Image Data
+                bodyOffset = offset
+                bodySize = chunkSize
+            
+            default:
+                break
+            }
+            
+            // Move to next chunk (aligned to even boundary)
+            offset += chunkSize
+            if chunkSize % 2 == 1 {
+                offset += 1
+            }
+        }
+        
+        // Validate we have all required data
+        guard width > 0, height > 0, numPlanes > 0, bodyOffset > 0 else {
+            return (nil, .Unknown)
+        }
+        
+        // Check if this is 24-bit RGB (24 or 25 planes with masking)
+        let is24Bit = (numPlanes == 24 || numPlanes == 25 || (numPlanes == 32))
+        
+        // Decode the image
+        let cgImage: CGImage?
+        if is24Bit {
+            cgImage = decodeILBM24Body(
+                data: data,
+                bodyOffset: bodyOffset,
+                bodySize: bodySize,
+                width: width,
+                height: height,
+                numPlanes: numPlanes,
+                compression: compression,
+                masking: masking
+            )
+        } else {
+            cgImage = decodeILBMBody(
+                data: data,
+                bodyOffset: bodyOffset,
+                bodySize: bodySize,
+                width: width,
+                height: height,
+                numPlanes: numPlanes,
+                compression: compression,
+                palette: palette
+            )
+        }
+        
+        guard let finalImage = cgImage else {
+            return (nil, .Unknown)
+        }
+        
+        let colorDescription = is24Bit ? "24-bit RGB" : "\(1 << numPlanes) colors"
+        return (finalImage, .IFF(width: width, height: height, colors: colorDescription))
+    }
+    
+    static func decodeILBM24Body(data: Data, bodyOffset: Int, bodySize: Int, width: Int, height: Int, numPlanes: Int, compression: UInt8, masking: UInt8) -> CGImage? {
+        
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+        var srcOffset = bodyOffset
+        
+        let bytesPerRow = ((width + 15) / 16) * 2
+        let planesPerChannel = 8
+        
+        // 24-bit IFF uses interleaved bitplanes per scanline:
+        // For each row: R0-R7, G0-G7, B0-B7 (8 planes per color channel)
+        
+        for y in 0..<height {
+            var planeBits: [[UInt8]] = Array(repeating: [], count: numPlanes)
+            
+            // Read all 24 bitplanes for this scanline
+            for plane in 0..<numPlanes {
+                var rowData: [UInt8] = []
+                
+                if compression == 1 { // RLE compression (ByteRun1)
+                    var bytesRead = 0
+                    while bytesRead < bytesPerRow && srcOffset < bodyOffset + bodySize && srcOffset < data.count {
+                        let cmd = Int8(bitPattern: data[srcOffset])
+                        srcOffset += 1
+                        
+                        if cmd >= 0 {
+                            // Literal run: copy next (cmd + 1) bytes
+                            let count = Int(cmd) + 1
+                            for _ in 0..<count {
+                                if srcOffset < bodyOffset + bodySize && srcOffset < data.count && bytesRead < bytesPerRow {
+                                    rowData.append(data[srcOffset])
+                                    srcOffset += 1
+                                    bytesRead += 1
+                                }
+                            }
+                        } else if cmd != -128 {
+                            // Repeat run: repeat next byte (-cmd + 1) times
+                            let count = Int(-cmd) + 1
+                            if srcOffset < bodyOffset + bodySize && srcOffset < data.count {
+                                let repeatByte = data[srcOffset]
+                                srcOffset += 1
+                                for _ in 0..<count {
+                                    if bytesRead < bytesPerRow {
+                                        rowData.append(repeatByte)
+                                        bytesRead += 1
+                                    }
+                                }
+                            }
+                        }
+                        // cmd == -128 is NOP, skip it
+                    }
+                } else {
+                    // No compression
+                    for _ in 0..<bytesPerRow {
+                        if srcOffset < bodyOffset + bodySize && srcOffset < data.count {
+                            rowData.append(data[srcOffset])
+                            srcOffset += 1
+                        }
+                    }
+                }
+                
+                planeBits[plane] = rowData
+            }
+            
+            // Convert 24 bitplanes to RGB pixels for this scanline
+            for x in 0..<width {
+                let byteIndex = x / 8
+                let bitIndex = 7 - (x % 8)
+                
+                var r: UInt8 = 0
+                var g: UInt8 = 0
+                var b: UInt8 = 0
+                
+                // Extract R, G, B values from their respective 8 bitplanes
+                // Red: planes 0-7 (LSB in plane 0, MSB in plane 7)
+                for bit in 0..<planesPerChannel {
+                    let plane = bit
+                    if plane < planeBits.count && byteIndex < planeBits[plane].count {
+                        let bitVal = (planeBits[plane][byteIndex] >> bitIndex) & 1
+                        r |= bitVal << bit  // LSB first!
+                    }
+                }
+                
+                // Green: planes 8-15 (LSB first)
+                for bit in 0..<planesPerChannel {
+                    let plane = planesPerChannel + bit
+                    if plane < planeBits.count && byteIndex < planeBits[plane].count {
+                        let bitVal = (planeBits[plane][byteIndex] >> bitIndex) & 1
+                        g |= bitVal << bit  // LSB first!
+                    }
+                }
+                
+                // Blue: planes 16-23 (LSB first)
+                for bit in 0..<planesPerChannel {
+                    let plane = 2 * planesPerChannel + bit
+                    if plane < planeBits.count && byteIndex < planeBits[plane].count {
+                        let bitVal = (planeBits[plane][byteIndex] >> bitIndex) & 1
+                        b |= bitVal << bit  // LSB first!
+                    }
+                }
+                
+                let bufferIdx = (y * width + x) * 4
+                rgbaBuffer[bufferIdx] = r
+                rgbaBuffer[bufferIdx + 1] = g
+                rgbaBuffer[bufferIdx + 2] = b
+                rgbaBuffer[bufferIdx + 3] = 255
+            }
+        }
+        
+        return createCGImage(from: rgbaBuffer, width: width, height: height)
+    }
+    
+    static func decodeILBMBody(data: Data, bodyOffset: Int, bodySize: Int, width: Int, height: Int, numPlanes: Int, compression: UInt8, palette: [(r: UInt8, g: UInt8, b: UInt8)]) -> CGImage? {
+        
+        let bytesPerRow = ((width + 15) / 16) * 2 // Round up to word boundary
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+        
+        // Create default palette if none provided
+        var finalPalette = palette
+        let numColors = 1 << numPlanes
+        
+        if finalPalette.isEmpty || finalPalette.count < numColors {
+            // Generate grayscale palette
+            finalPalette = []
+            for i in 0..<numColors {
+                let gray = UInt8((i * 255) / (numColors - 1))
+                finalPalette.append((gray, gray, gray))
+            }
+        }
+        
+        var srcOffset = bodyOffset
+        
+        for y in 0..<height {
+            var planeBits: [[UInt8]] = Array(repeating: [], count: numPlanes)
+            
+            // Read each bitplane for this row
+            for plane in 0..<numPlanes {
+                var rowData: [UInt8] = []
+                
+                if compression == 1 { // RLE compression
+                    var bytesRead = 0
+                    while bytesRead < bytesPerRow && srcOffset < bodyOffset + bodySize {
+                        let cmd = Int8(bitPattern: data[srcOffset])
+                        srcOffset += 1
+                        
+                        if cmd >= 0 {
+                            // Copy next (cmd + 1) bytes literally
+                            let count = Int(cmd) + 1
+                            for _ in 0..<count {
+                                if srcOffset < bodyOffset + bodySize && bytesRead < bytesPerRow {
+                                    rowData.append(data[srcOffset])
+                                    srcOffset += 1
+                                    bytesRead += 1
+                                }
+                            }
+                        } else if cmd != -128 {
+                            // Repeat next byte (-cmd + 1) times
+                            let count = Int(-cmd) + 1
+                            if srcOffset < bodyOffset + bodySize {
+                                let repeatByte = data[srcOffset]
+                                srcOffset += 1
+                                for _ in 0..<count {
+                                    if bytesRead < bytesPerRow {
+                                        rowData.append(repeatByte)
+                                        bytesRead += 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // No compression
+                    for _ in 0..<bytesPerRow {
+                        if srcOffset < bodyOffset + bodySize {
+                            rowData.append(data[srcOffset])
+                            srcOffset += 1
+                        }
+                    }
+                }
+                
+                planeBits[plane] = rowData
+            }
+            
+            // Convert bitplanes to pixels
+            for x in 0..<width {
+                let byteIndex = x / 8
+                let bitIndex = 7 - (x % 8)
+                
+                var colorIndex = 0
+                for plane in 0..<numPlanes {
+                    if byteIndex < planeBits[plane].count {
+                        let bit = (planeBits[plane][byteIndex] >> bitIndex) & 1
+                        colorIndex |= Int(bit) << plane
+                    }
+                }
+                
+                let color = finalPalette[min(colorIndex, finalPalette.count - 1)]
+                let bufferIdx = (y * width + x) * 4
+                
+                rgbaBuffer[bufferIdx] = color.r
+                rgbaBuffer[bufferIdx + 1] = color.g
+                rgbaBuffer[bufferIdx + 2] = color.b
+                rgbaBuffer[bufferIdx + 3] = 255
+            }
+        }
+        
+        return createCGImage(from: rgbaBuffer, width: width, height: height)
+    }
+    
+    // Helper functions for reading big-endian values
+    static func readBigEndianUInt32(data: Data, offset: Int) -> UInt32 {
+        guard offset + 4 <= data.count else { return 0 }
+        return (UInt32(data[offset]) << 24) |
+               (UInt32(data[offset + 1]) << 16) |
+               (UInt32(data[offset + 2]) << 8) |
+               UInt32(data[offset + 3])
+    }
+    
+    static func readBigEndianUInt16(data: Data, offset: Int) -> UInt16 {
+        guard offset + 2 <= data.count else { return 0 }
+        return (UInt16(data[offset]) << 8) | UInt16(data[offset + 1])
     }
     
     // --- DHGR Decoder (560x192, 16KB) ---
