@@ -33,6 +33,7 @@ enum AppleIIImageType: Equatable {
     case C64(format: String)
     case ZXSpectrum
     case AmstradCPC(mode: Int, colors: Int)
+    case PCX(width: Int, height: Int, bitsPerPixel: Int)
     case Unknown
     
     var resolution: (width: Int, height: Int) {
@@ -57,6 +58,7 @@ enum AppleIIImageType: Equatable {
             case 2: return (640, 200)  // Mode 2: 640x200, 2 colors
             default: return (0, 0)
             }
+        case .PCX(let width, let height, _): return (width, height)
         case .Unknown: return (0, 0)
         }
     }
@@ -71,6 +73,7 @@ enum AppleIIImageType: Equatable {
         case .C64(let format): return "C64 (\(format))"
         case .ZXSpectrum: return "ZX Spectrum"
         case .AmstradCPC(let mode, let colors): return "Amstrad CPC (Mode \(mode), \(colors) colors)"
+        case .PCX(let width, let height, let bpp): return "PCX (\(width)x\(height), \(bpp)-bit)"
         case .Unknown: return "Unknown"
         }
     }
@@ -206,7 +209,7 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                         Text("Retro Graphics Converter")
                             .font(.headline)
-                        Text("Supports Apple II, Amiga IFF, Atari ST, C64, ZX Spectrum, and Amstrad CPC.")
+                        Text("Supports Apple II, Amiga IFF, Atari ST, C64, ZX Spectrum, Amstrad CPC, and PCX.")
                             .multilineTextAlignment(.center)
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -621,7 +624,12 @@ class SHRDecoder {
     static func decode(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         let size = data.count
         
-        // Check for IFF format first (has FORM header)
+        // Check for PCX format first (has magic byte 0x0A)
+        if size >= 128 && data[0] == 0x0A {
+            return decodePCX(data: data)
+        }
+        
+        // Check for IFF format (has FORM header)
         if size >= 12 {
             let header = data.subdata(in: 0..<4)
             if let headerString = String(data: header, encoding: .ascii), headerString == "FORM" {
@@ -685,6 +693,244 @@ class SHRDecoder {
         }
         
         return (image, type)
+    }
+    
+    // --- Risk EGA Format Decoder (32KB, 320x200, chunky 4-bit) ---
+    
+    // --- PCX Decoder (ZSoft PC Paintbrush format) ---
+    
+    static func decodePCX(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+        guard data.count >= 128 else {
+            return (nil, .Unknown)
+        }
+        
+        // PCX Header (128 bytes)
+        let manufacturer = data[0]  // Should be 0x0A
+        let version = data[1]       // 0=v2.5, 2=v2.8 with palette, 3=v2.8 w/o palette, 5=v3.0
+        let encoding = data[2]      // 1 = RLE encoding
+        let bitsPerPixel = data[3]
+        
+        guard manufacturer == 0x0A else {
+            return (nil, .Unknown)
+        }
+        
+        // Read image dimensions (little-endian)
+        let xMin = Int(data[4]) | (Int(data[5]) << 8)
+        let yMin = Int(data[6]) | (Int(data[7]) << 8)
+        let xMax = Int(data[8]) | (Int(data[9]) << 8)
+        let yMax = Int(data[10]) | (Int(data[11]) << 8)
+        
+        let width = xMax - xMin + 1
+        let height = yMax - yMin + 1
+        
+        let numPlanes = data[65]
+        let bytesPerLine = Int(data[66]) | (Int(data[67]) << 8)
+        
+        guard width > 0 && height > 0 && width < 10000 && height < 10000 else {
+            return (nil, .Unknown)
+        }
+        
+        // Calculate total bits per pixel
+        // Note: Some old PCX files have numPlanes=0, so we handle that specially
+        var totalBitsPerPixel = Int(bitsPerPixel) * Int(numPlanes)
+        if totalBitsPerPixel == 0 && bitsPerPixel > 0 {
+            // Handle the case where numPlanes is 0 (old format)
+            totalBitsPerPixel = Int(bitsPerPixel)
+        }
+        
+        // Decompress image data (starts at byte 128)
+        var decompressedData: [UInt8] = []
+        var offset = 128
+        
+        // Calculate expected decompressed size
+        // For numPlanes=0 (old format), use bytesPerLine * height
+        let expectedSize: Int
+        if numPlanes == 0 {
+            expectedSize = bytesPerLine * height
+        } else {
+            expectedSize = bytesPerLine * Int(numPlanes) * height
+        }
+        
+        // RLE decompression
+        while offset < data.count && decompressedData.count < expectedSize {
+            let byte = data[offset]
+            offset += 1
+            
+            if (byte & 0xC0) == 0xC0 {
+                // RLE run
+                let count = Int(byte & 0x3F)
+                if offset < data.count {
+                    let value = data[offset]
+                    offset += 1
+                    for _ in 0..<count {
+                        decompressedData.append(value)
+                    }
+                }
+            } else {
+                // Literal byte
+                decompressedData.append(byte)
+            }
+        }
+        
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+        
+        // Check if there's a 256-color palette at the end
+        var palette: [(r: UInt8, g: UInt8, b: UInt8)] = []
+        if totalBitsPerPixel == 8 && data.count >= 769 {
+            // Check for palette marker (0x0C) 769 bytes from end
+            let paletteMarkerOffset = data.count - 769
+            if paletteMarkerOffset >= 0 && data[paletteMarkerOffset] == 0x0C {
+                // Read 256-color palette (768 bytes: 256 * 3)
+                for i in 0..<256 {
+                    let r = data[paletteMarkerOffset + 1 + (i * 3)]
+                    let g = data[paletteMarkerOffset + 1 + (i * 3) + 1]
+                    let b = data[paletteMarkerOffset + 1 + (i * 3) + 2]
+                    palette.append((r, g, b))
+                }
+            }
+        }
+        
+        // If no palette found, use grayscale or header palette
+        if palette.isEmpty {
+            if totalBitsPerPixel <= 4 {
+                // Use 16-color palette from header (bytes 16-63)
+                for i in 0..<16 {
+                    let offset = 16 + (i * 3)
+                    let r = data[offset]
+                    let g = data[offset + 1]
+                    let b = data[offset + 2]
+                    palette.append((r, g, b))
+                }
+            } else {
+                // Generate grayscale palette
+                for i in 0..<256 {
+                    let gray = UInt8(i)
+                    palette.append((gray, gray, gray))
+                }
+            }
+        }
+        
+        // Decode image based on bit depth
+        if totalBitsPerPixel == 8 && numPlanes == 1 {
+            // 8-bit indexed color
+            for y in 0..<height {
+                let lineOffset = y * bytesPerLine
+                for x in 0..<width {
+                    if lineOffset + x < decompressedData.count {
+                        let paletteIndex = Int(decompressedData[lineOffset + x])
+                        let color = palette[min(paletteIndex, palette.count - 1)]
+                        
+                        let bufferIdx = (y * width + x) * 4
+                        rgbaBuffer[bufferIdx] = color.r
+                        rgbaBuffer[bufferIdx + 1] = color.g
+                        rgbaBuffer[bufferIdx + 2] = color.b
+                        rgbaBuffer[bufferIdx + 3] = 255
+                    }
+                }
+            }
+        } else if totalBitsPerPixel == 24 && numPlanes == 3 {
+            // 24-bit RGB (3 planes)
+            for y in 0..<height {
+                for x in 0..<width {
+                    let rOffset = (y * bytesPerLine * 3) + x
+                    let gOffset = (y * bytesPerLine * 3) + bytesPerLine + x
+                    let bOffset = (y * bytesPerLine * 3) + (bytesPerLine * 2) + x
+                    
+                    var r: UInt8 = 0, g: UInt8 = 0, b: UInt8 = 0
+                    if rOffset < decompressedData.count { r = decompressedData[rOffset] }
+                    if gOffset < decompressedData.count { g = decompressedData[gOffset] }
+                    if bOffset < decompressedData.count { b = decompressedData[bOffset] }
+                    
+                    let bufferIdx = (y * width + x) * 4
+                    rgbaBuffer[bufferIdx] = r
+                    rgbaBuffer[bufferIdx + 1] = g
+                    rgbaBuffer[bufferIdx + 2] = b
+                    rgbaBuffer[bufferIdx + 3] = 255
+                }
+            }
+        } else if totalBitsPerPixel == 2 || (Int(bitsPerPixel) == 2 && Int(numPlanes) <= 1) {
+            // 2-bit (4 colors) - CGA mode
+            // Use default CGA palette if header palette is invalid (all same color)
+            var cgaPalette: [(r: UInt8, g: UInt8, b: UInt8)] = []
+            
+            // Check if we need default CGA palette
+            if palette.count >= 4 {
+                let firstFour = Array(palette.prefix(4))
+                
+                // Check if all colors are the same (invalid palette)
+                let allSame = firstFour.dropFirst().allSatisfy {
+                    $0.r == firstFour[0].r &&
+                    $0.g == firstFour[0].g &&
+                    $0.b == firstFour[0].b
+                }
+                
+                if allSame {
+                    // Invalid palette - use default CGA
+                    cgaPalette = [
+                        (0, 0, 0),       // Black
+                        (0, 255, 255),   // Cyan
+                        (255, 0, 255),   // Magenta
+                        (255, 255, 255)  // White
+                    ]
+                } else {
+                    cgaPalette = firstFour
+                }
+            } else {
+                // Default CGA palette
+                cgaPalette = [
+                    (0, 0, 0),       // Black
+                    (0, 255, 255),   // Cyan
+                    (255, 0, 255),   // Magenta
+                    (255, 255, 255)  // White
+                ]
+            }
+            
+            for y in 0..<height {
+                let lineOffset = y * bytesPerLine
+                for x in 0..<width {
+                    let byteIndex = lineOffset + (x / 4)
+                    let pixelInByte = 3 - (x % 4)  // High bits first
+                    
+                    if byteIndex < decompressedData.count {
+                        let byteVal = decompressedData[byteIndex]
+                        let colorIndex = Int((byteVal >> (pixelInByte * 2)) & 0x03)
+                        let color = cgaPalette[min(colorIndex, cgaPalette.count - 1)]
+                        
+                        let bufferIdx = (y * width + x) * 4
+                        rgbaBuffer[bufferIdx] = color.r
+                        rgbaBuffer[bufferIdx + 1] = color.g
+                        rgbaBuffer[bufferIdx + 2] = color.b
+                        rgbaBuffer[bufferIdx + 3] = 255
+                    }
+                }
+            }
+        } else if totalBitsPerPixel <= 4 {
+            // 1-4 bit indexed color
+            for y in 0..<height {
+                let lineOffset = y * bytesPerLine
+                for x in 0..<width {
+                    let byteIndex = lineOffset + (x / 8)
+                    let bitIndex = 7 - (x % 8)
+                    
+                    if byteIndex < decompressedData.count {
+                        let bit = (decompressedData[byteIndex] >> bitIndex) & 1
+                        let color = palette[Int(bit)]
+                        
+                        let bufferIdx = (y * width + x) * 4
+                        rgbaBuffer[bufferIdx] = color.r
+                        rgbaBuffer[bufferIdx + 1] = color.g
+                        rgbaBuffer[bufferIdx + 2] = color.b
+                        rgbaBuffer[bufferIdx + 3] = 255
+                    }
+                }
+            }
+        }
+        
+        guard let cgImage = createCGImage(from: rgbaBuffer, width: width, height: height) else {
+            return (nil, .Unknown)
+        }
+        
+        return (cgImage, .PCX(width: width, height: height, bitsPerPixel: totalBitsPerPixel))
     }
     
     // --- Amstrad CPC SCR Decoder (16384 bytes) ---
