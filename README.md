@@ -10,7 +10,8 @@ Added graphic formats for Amiga, Atari ST and C64.
 <li>Atari ST: Degas PI1/PI2/PI3 (Low/Medium/High Res)</li>
 <li>C64: Koala Painter, Art Studio</li>
 <li>ZX Spectrum: SCR</li>  
-<li>Amstrad CPC</li>  
+<li>Amstrad CPC: Mode 0 (160x200) + Mode 1 (320x200)</li>  
+<li>PCX: 1/2/4/8/24-bit mit RLE (inkl. CGA 2-bit!)</li>
 </ul>
 Features:
 
