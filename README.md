@@ -9,6 +9,7 @@ Added graphic formats for Amiga, Atari ST and C64.
 <li>Amiga: IFF/ILBM (Indexed Colour + 24-bit RGB with LSB-first)</li>
 <li>Atari ST: Degas PI1/PI2/PI3 (Low/Medium/High Res)</li>
 <li>C64: Koala Painter, Art Studio</li>
+<li>ZX Spectrum: SCR</li>  
 </ul>
 Features:
 
@@ -31,3 +32,6 @@ Can now read Atari ST images, PI1,PI2,PI3
 
 C64 Koala and Art Studio support
 <img width="1074" height="755" alt="Bildschirmfoto 2025-12-09 um 17 38 31" src="https://github.com/user-attachments/assets/4a3591b1-aff6-4f2a-932d-1850b9062f5e" />
+
+ZX Spectrum SCR support
+<img width="1074" height="755" alt="Bildschirmfoto 2025-12-09 um 19 11 49" src="https://github.com/user-attachments/assets/36dd5c9c-d223-43d6-a9e7-51ef7b4bd926" />
