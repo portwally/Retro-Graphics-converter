@@ -31,6 +31,7 @@ enum AppleIIImageType: Equatable {
     case IFF(width: Int, height: Int, colors: String)
     case DEGAS(resolution: String, colors: Int)
     case C64(format: String)
+    case ZXSpectrum
     case Unknown
     
     var resolution: (width: Int, height: Int) {
@@ -47,6 +48,7 @@ enum AppleIIImageType: Equatable {
             default: return (0, 0)
             }
         case .C64: return (320, 200)
+        case .ZXSpectrum: return (256, 192)
         case .Unknown: return (0, 0)
         }
     }
@@ -59,6 +61,7 @@ enum AppleIIImageType: Equatable {
         case .IFF(_, _, let colors): return "IFF (\(colors))"
         case .DEGAS(let res, let colors): return "Degas (\(res), \(colors) colors)"
         case .C64(let format): return "C64 (\(format))"
+        case .ZXSpectrum: return "ZX Spectrum"
         case .Unknown: return "Unknown"
         }
     }
@@ -194,7 +197,7 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                         Text("Retro Graphics Converter")
                             .font(.headline)
-                        Text("Supports Apple II (SHR/HGR/DHGR), Amiga IFF, Atari ST Degas, and C64 (Koala/Art Studio).")
+                        Text("Supports Apple II, Amiga IFF, Atari ST, C64, and ZX Spectrum formats.")
                             .multilineTextAlignment(.center)
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -625,6 +628,8 @@ class SHRDecoder {
             return decodeC64ArtStudio(data: data)
         case 9009: // Art Studio HIRES or similar
             return decodeC64Hires(data: data)
+        case 6912: // ZX Spectrum SCR
+            return decodeZXSpectrum(data: data)
         default:
             break
         }
@@ -666,6 +671,113 @@ class SHRDecoder {
         }
         
         return (image, type)
+    }
+    
+    // --- ZX Spectrum SCR Decoder (256x192, 6912 bytes) ---
+    
+    // ZX Spectrum Palette (BRIGHT 0 and BRIGHT 1)
+    static let zxSpectrumPalette: [(r: UInt8, g: UInt8, b: UInt8)] = [
+        // Normal intensity (BRIGHT 0)
+        (0x00, 0x00, 0x00),  // 0: Black
+        (0x00, 0x00, 0xD7),  // 1: Blue
+        (0xD7, 0x00, 0x00),  // 2: Red
+        (0xD7, 0x00, 0xD7),  // 3: Magenta
+        (0x00, 0xD7, 0x00),  // 4: Green
+        (0x00, 0xD7, 0xD7),  // 5: Cyan
+        (0xD7, 0xD7, 0x00),  // 6: Yellow
+        (0xD7, 0xD7, 0xD7),  // 7: White
+        // Bright intensity (BRIGHT 1)
+        (0x00, 0x00, 0x00),  // 8: Black (bright)
+        (0x00, 0x00, 0xFF),  // 9: Blue (bright)
+        (0xFF, 0x00, 0x00),  // 10: Red (bright)
+        (0xFF, 0x00, 0xFF),  // 11: Magenta (bright)
+        (0x00, 0xFF, 0x00),  // 12: Green (bright)
+        (0x00, 0xFF, 0xFF),  // 13: Cyan (bright)
+        (0xFF, 0xFF, 0x00),  // 14: Yellow (bright)
+        (0xFF, 0xFF, 0xFF)   // 15: White (bright)
+    ]
+    
+    static func decodeZXSpectrum(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+        guard data.count == 6912 else {
+            return (nil, .Unknown)
+        }
+        
+        let width = 256
+        let height = 192
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+        
+        // ZX Spectrum memory layout:
+        // 6144 bytes: Bitmap (256x192, 1 bit per pixel)
+        // 768 bytes: Color attributes (32x24 cells, 8x8 pixels each)
+        
+        let bitmapOffset = 0
+        let attributeOffset = 6144
+        
+        // Decode the screen
+        // The bitmap has a weird memory layout for historical reasons:
+        // It's divided into 3 sections of 2048 bytes each (top, middle, bottom third)
+        // Within each section, lines are interleaved in a complex pattern
+        
+        for y in 0..<height {
+            // Calculate the byte offset for this scanline in the weird ZX memory layout
+            // The screen is divided into thirds (each 64 lines)
+            let third = y / 64          // Which third (0, 1, 2)
+            let lineInThird = y % 64
+            let octave = lineInThird / 8   // Which 8-line block within the third
+            let lineInOctave = lineInThird % 8
+            
+            // Calculate bitmap address
+            let bitmapLineOffset = bitmapOffset + (third * 2048) + (lineInOctave * 256) + (octave * 32)
+            
+            // Calculate which attribute row this line belongs to
+            let attrY = y / 8
+            
+            for x in 0..<width {
+                let xByte = x / 8
+                let xBit = 7 - (x % 8)
+                
+                // Get bitmap byte
+                let bitmapByteOffset = bitmapLineOffset + xByte
+                let bitmapByte = data[bitmapByteOffset]
+                let pixelBit = (bitmapByte >> xBit) & 1
+                
+                // Get attribute byte (8x8 cell)
+                let attrX = x / 8
+                let attrIndex = attributeOffset + (attrY * 32) + attrX
+                let attrByte = data[attrIndex]
+                
+                // Decode attribute byte:
+                // Bit 7: FLASH (we'll ignore for static image)
+                // Bit 6: BRIGHT (0 = normal, 1 = bright)
+                // Bits 5-3: PAPER (background) color
+                // Bits 2-0: INK (foreground) color
+                
+                let flash = (attrByte >> 7) & 1
+                let bright = (attrByte >> 6) & 1
+                let paper = (attrByte >> 3) & 0x07
+                let ink = attrByte & 0x07
+                
+                // Add 8 to color index if BRIGHT is set
+                let paperColor = Int(paper) + (bright == 1 ? 8 : 0)
+                let inkColor = Int(ink) + (bright == 1 ? 8 : 0)
+                
+                // Select color based on pixel bit
+                let colorIndex = (pixelBit == 1) ? inkColor : paperColor
+                let rgb = zxSpectrumPalette[colorIndex]
+                
+                let bufferIdx = (y * width + x) * 4
+                rgbaBuffer[bufferIdx] = rgb.r
+                rgbaBuffer[bufferIdx + 1] = rgb.g
+                rgbaBuffer[bufferIdx + 2] = rgb.b
+                rgbaBuffer[bufferIdx + 3] = 255
+            }
+        }
+        
+        guard let cgImage = createCGImage(from: rgbaBuffer, width: width, height: height) else {
+            return (nil, .Unknown)
+        }
+        
+        return (cgImage, .ZXSpectrum)
     }
     
     // C64 HIRES Format - 9009 bytes (Art Studio variant or similar)
