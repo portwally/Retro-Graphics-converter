@@ -22,6 +22,8 @@ Features:
 💾 Batch export (PNG, JPEG, TIFF, GIF, HEIC)<br>
 ⚡ Recursive scanning of subfolders<br>
 🎯 Export single image or all images<br>
+🔍 Upscaling 2x/4x/8x <br>
+🎨 5 Export formats<br>
 
 NEW version 2 now with image browser
 
