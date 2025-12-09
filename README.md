@@ -1,7 +1,7 @@
 I was in search of a tool for MacOS that could batch convert Apple IIgs SHR graphics into png format but could not find anything.
 In the end I decided to code one myself in Swift. It started with SHR uncompressed graphic files to png format.
 Newly added are now HGR and DHGR conversion and output formats like png, jpg, tiff, gif and heic.
-Added graphic formats for Amiga, Atari ST and C64.
+Was bored and added then more graphic formats...
 
 🎨 Supported formats:
 <ul>
@@ -37,3 +37,7 @@ C64 Koala and Art Studio support
 
 ZX Spectrum SCR support
 <img width="1074" height="755" alt="Bildschirmfoto 2025-12-09 um 19 11 49" src="https://github.com/user-attachments/assets/36dd5c9c-d223-43d6-a9e7-51ef7b4bd926" />
+
+PCX Support
+<img width="1074" height="755" alt="Bildschirmfoto 2025-12-09 um 21 17 13" src="https://github.com/user-attachments/assets/35aa1129-a246-45bf-badd-381230f928cb" />
+
