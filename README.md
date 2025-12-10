@@ -110,4 +110,4 @@ In the subsequent dialog box, confirm that you want to open the app by clicking 
 
 The application will now launch and will be trusted by macOS for all future starts.
 
-![Visitor Count](https://profile-counter.glitch.me/portwally/count.svg)
+
