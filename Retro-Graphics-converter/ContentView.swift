@@ -255,11 +255,8 @@ struct ContentView: View {
                         GeometryReader { geometry in
                             ScrollView([.horizontal, .vertical], showsIndicators: true) {
                                 Image(nsImage: selectedImg.image)
-                                    .resizable()
                                     .interpolation(.none)
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: selectedImg.image.size.width * zoomScale,
-                                           height: selectedImg.image.size.height * zoomScale)
+                                    .scaleEffect(zoomScale)
                                     .offset(imageOffset)
                                     .gesture(
                                         MagnificationGesture()
@@ -627,7 +624,8 @@ struct ContentView: View {
                 let result = SHRDecoder.decode(data: data, filename: url.lastPathComponent)
                 
                 if let cgImage = result.image, result.type != .Unknown {
-                    let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: result.type.resolution.width, height: result.type.resolution.height))
+                    // Use actual CGImage dimensions (important for aspect-ratio corrected images)
+                    let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
                     let item = ImageItem(url: url, image: nsImage, type: result.type)
                     newItems.append(item)
                     successCount += 1
@@ -659,19 +657,25 @@ struct ContentView: View {
         savePanel.prompt = "Export"
         savePanel.canCreateDirectories = true
         savePanel.showsHiddenFiles = false
+        savePanel.message = "Export \(item.filename) as \(selectedExportFormat.rawValue)"
         
-        if savePanel.runModal() == .OK, let outputURL = savePanel.url {
-            isProcessing = true
-            DispatchQueue.global(qos: .userInitiated).async {
-                let success = self.saveImage(image: item.image, to: outputURL, format: self.selectedExportFormat)
-                
-                DispatchQueue.main.async {
-                    self.isProcessing = false
-                    if success {
-                        self.statusMessage = "Exported: \(outputURL.lastPathComponent)"
-                        self.progressString = ""
-                    } else {
-                        self.statusMessage = "Export failed!"
+        // Ensure dialog appears in front
+        savePanel.level = .modalPanel
+        
+        savePanel.begin { response in
+            if response == .OK, let outputURL = savePanel.url {
+                self.isProcessing = true
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let success = self.saveImage(image: item.image, to: outputURL, format: self.selectedExportFormat)
+                    
+                    DispatchQueue.main.async {
+                        self.isProcessing = false
+                        if success {
+                            self.statusMessage = "Exported: \(outputURL.lastPathComponent)"
+                            self.progressString = ""
+                        } else {
+                            self.statusMessage = "Export failed!"
+                        }
                     }
                 }
             }
@@ -769,7 +773,6 @@ struct ImageThumbnailView: View {
             Image(nsImage: item.image)
                 .resizable()
                 .interpolation(.none)
-                .aspectRatio(contentMode: .fit)
                 .frame(width: 120, height: 90)
                 .background(Color.black.opacity(0.1))
                 .cornerRadius(8)
@@ -2262,8 +2265,46 @@ class SHRDecoder {
             return (nil, .Unknown)
         }
         
+        // Aspect ratio correction for Amiga interlaced modes with non-square pixels
+        // Low-res interlaced (320x400): pixels are 2x taller than wide
+        // Correct display: double the width (320x400 -> 640x400)
+        let aspectRatio = Double(height) / Double(width)
+        var correctedImage = finalImage
+        
+        if aspectRatio > 1.2 {
+            // Interlaced mode detected - double width to correct aspect ratio
+            let correctedWidth = width * 2
+            
+            // Use NSImage for more reliable scaling
+            let nsImage = NSImage(cgImage: finalImage, size: NSSize(width: width, height: height))
+            let newSize = NSSize(width: correctedWidth, height: height)
+            
+            if let scaledRep = NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: Int(newSize.width),
+                pixelsHigh: Int(newSize.height),
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bytesPerRow: Int(newSize.width) * 4,
+                bitsPerPixel: 32
+            ) {
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: scaledRep)
+                NSGraphicsContext.current?.imageInterpolation = .none
+                nsImage.draw(in: NSRect(origin: .zero, size: newSize))
+                NSGraphicsContext.restoreGraphicsState()
+                
+                if let scaled = scaledRep.cgImage {
+                    correctedImage = scaled
+                }
+            }
+        }
+        
         let colorDescription = is24Bit ? "24-bit RGB" : "\(1 << numPlanes) colors"
-        return (finalImage, .IFF(width: width, height: height, colors: colorDescription))
+        return (correctedImage, .IFF(width: width, height: height, colors: colorDescription))
     }
     
     static func decodeILBM24Body(data: Data, bodyOffset: Int, bodySize: Int, width: Int, height: Int, numPlanes: Int, compression: UInt8, masking: UInt8) -> CGImage? {
