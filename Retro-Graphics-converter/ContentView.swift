@@ -1958,7 +1958,6 @@ struct ContentView: View {
     }
     
     func loadDroppedFiles(_ providers: [NSItemProvider]) {
-       
         
         self.isProcessing = true
         self.statusMessage = "Loading dropped files..."
@@ -1967,7 +1966,6 @@ struct ContentView: View {
         let dispatchGroup = DispatchGroup()
         
         for (index, provider) in providers.enumerated() {
-         
             
             dispatchGroup.enter()
             
@@ -1978,10 +1976,10 @@ struct ContentView: View {
                     do {
                         let data = try Data(contentsOf: url)
                         let fileName = url.lastPathComponent
-                       
+                        
                         filesToProcess.append((data: data, name: fileName, url: url))
                     } catch {
-                      
+                        
                     }
                     dispatchGroup.leave()
                 } else {
@@ -1996,18 +1994,16 @@ struct ContentView: View {
                         
                         if let data = data {
                             let fileName = "dropped_file_\(index).\(typeIdentifier.split(separator: ".").last ?? "bin")"
-                         
+                            
                             filesToProcess.append((data: data, name: fileName, url: nil))
                         }
                     }
                 }
             }
         }
-
-
+        
         
         dispatchGroup.notify(queue: .main) {
-          
             
             if filesToProcess.isEmpty {
                 self.isProcessing = false
@@ -2028,15 +2024,16 @@ struct ContentView: View {
                     let data = file.data
                     let fileName = file.name
                     
-                   
+                    
                     // Check if it's a known image format first (by magic bytes)
                     let isPNG = data.count >= 8 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47
                     let isJPEG = data.count >= 2 && data[0] == 0xFF && data[1] == 0xD8
                     let isGIF = data.count >= 6 && data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46
                     let isBMP = data.count >= 2 && data[0] == 0x42 && data[1] == 0x4D
-
-                    let isModernImage = isPNG || isJPEG || isGIF || isBMP
-
+                    let isPCX = data.count >= 128 && data[0] == 0x0A  // ← PCX MAGIC BYTE!
+                    
+                    let isModernImage = isPNG || isJPEG || isGIF || isBMP || isPCX  // ← PCX HINZUGEFÜGT!
+                    
                     // Only check for disk images if it's NOT a modern image format
                     let possibleDiskImage = !isModernImage && (data.count == 143360 || data.count == 819200 || data.count > 100000)
                     
@@ -2045,7 +2042,7 @@ struct ContentView: View {
                     if possibleDiskImage {
                         // Try catalog browser first
                         if let catalog = DiskImageReader.readDiskCatalog(data: data, filename: fileName) {
-                        
+                            
                             DispatchQueue.main.async {
                                 self.currentCatalog = catalog
                                 self.showCatalogBrowser = true
@@ -2055,7 +2052,7 @@ struct ContentView: View {
                         }
                         
                         // Catalog reading failed - show error and skip this file
-                       
+                        
                         DispatchQueue.main.async {
                             self.statusMessage = "Could not read disk image: \(fileName)"
                         }
@@ -2094,6 +2091,7 @@ struct ContentView: View {
             }
         }
     }
+
     
     func processFilesAndFolders(urls: [URL]) {
         guard !urls.isEmpty else {
@@ -2407,13 +2405,21 @@ class SHRDecoder {
     static func decode(data: Data, filename: String? = nil) -> (image: CGImage?, type: AppleIIImageType) {
         let size = data.count
         
+        
+        
         // Use filename extension as a hint if available
         let fileExtension = filename?.split(separator: ".").last?.lowercased() ?? ""
         
+        
+        // Check first bytes
+        if size >= 4 {
+           
+        }
+        
         // Check for modern image formats first (PNG, JPEG, GIF, TIFF, HEIC)
-        // These should be recognized before retro formats to avoid false positives
         let modernFormats = ["png", "jpg", "jpeg", "gif", "tiff", "tif", "heic", "heif", "webp"]
         if modernFormats.contains(fileExtension) {
+           
             return decodeModernImage(data: data, format: fileExtension)
         }
         
@@ -2421,75 +2427,83 @@ class SHRDecoder {
         if size >= 8 {
             // PNG: starts with 0x89 0x50 0x4E 0x47
             if data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
+               
                 return decodeModernImage(data: data, format: "png")
             }
             // JPEG: starts with 0xFF 0xD8
             if data[0] == 0xFF && data[1] == 0xD8 {
+              
                 return decodeModernImage(data: data, format: "jpeg")
             }
             // GIF: starts with "GIF87a" or "GIF89a"
             if data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 {
+              
                 return decodeModernImage(data: data, format: "gif")
             }
         }
         
         // Check for BMP format (starts with "BM")
         if size >= 14 && data[0] == 0x42 && data[1] == 0x4D {
+           
             return decodeBMP(data: data)
         }
         
         // Check for PCX format first (has magic byte 0x0A)
+      
         if size >= 128 && data[0] == 0x0A {
-            return decodePCX(data: data)
+           
+            let result = decodePCX(data: data)
+          
+            return result
         }
         
         // Check for IFF format (has FORM header)
         if size >= 12 {
             let header = data.subdata(in: 0..<4)
             if let headerString = String(data: header, encoding: .ascii), headerString == "FORM" {
+              
                 return decodeIFF(data: data)
             }
         }
         
         // Check for C64 Koala format (10003 bytes nominal, but sometimes has extra bytes)
         if size >= 10003 && size <= 10010 {
+         
             return decodeC64Koala(data: data)
         }
         
         // Check for other C64 formats and other platforms by exact size
         switch size {
         case 10018: // Art Studio variant
+        
             return decodeC64ArtStudio(data: data)
         case 9009: // Art Studio HIRES or similar
+           
             return decodeC64Hires(data: data)
         case 6912: // ZX Spectrum SCR
+          
             return decodeZXSpectrum(data: data)
         case 16384: // Could be Amstrad CPC or Apple II DHGR
+           
             // Use filename as hint if available
             if fileExtension == "scr" {
-                // .SCR is commonly used for CPC screens
+                
                 return decodeAmstradCPC(data: data)
             } else if fileExtension == "2mg" || fileExtension == "po" || fileExtension == "dsk" {
-                // Apple II disk image extensions
+                
                 return (decodeDHGR(data: data), .DHGR)
             }
             
-            // No clear filename hint, use heuristics
-            // CPC has distinctive patterns (interleaved scanlines, specific byte patterns)
-            // DHGR is more uniform memory layout
-            
+            // Heuristics...
             var cpcScore = 0
             var dhgrScore = 0
             
-            // CPC typically has more varied data in the first few blocks
-            // DHGR has more sequential patterns
             for blockIdx in 0..<8 {
                 let blockStart = blockIdx * 2048
                 if blockStart + 100 < data.count {
                     let blockData = data[blockStart..<(blockStart + 100)]
                     let uniqueBytes = Set(blockData).count
                     
-                    // CPC tends to have more varied bytes per block
                     if uniqueBytes > 50 {
                         cpcScore += 1
                     } else {
@@ -2498,17 +2512,19 @@ class SHRDecoder {
                 }
             }
             
-            // If mostly zeros or very uniform, probably DHGR
             let firstKB = data.prefix(1024)
             let zeroCount = firstKB.filter { $0 == 0 }.count
             if zeroCount > 512 {
-                dhgrScore += 3 // Strong indicator for DHGR (often starts with zeros)
+                dhgrScore += 3
             }
             
-            // Default to DHGR if unclear (more common)
+            
+            
             if cpcScore > dhgrScore + 2 {
+         
                 return decodeAmstradCPC(data: data)
             } else {
+            
                 return (decodeDHGR(data: data), .DHGR)
             }
         default:
@@ -2516,9 +2532,9 @@ class SHRDecoder {
         }
         
         // Check for MacPaint format (.MAC, .PNTG)
-        // Only check by extension first - size-based detection comes later
         if fileExtension == "mac" || fileExtension == "pntg" {
             if size >= 512 {
+              
                 return decodeMacPaint(data: data)
             }
         }
@@ -2533,48 +2549,57 @@ class SHRDecoder {
             )
             
             if isDegas {
+             
                 return decodeDegas(data: data)
             }
         }
         
         // Then check Apple II formats by size
+     
         let type: AppleIIImageType
         let image: CGImage?
         
         switch size {
         case 32768:
+          
             type = .SHR(mode: "Standard")
             image = decodeSHR(data: data, is3200Color: false)
         case 38400...:
+           
             type = .SHR(mode: "3200 Color")
             image = decodeSHR(data: data, is3200Color: true)
-        case 8184...8200:  // HGR images can vary slightly in size
+        case 8184...8200:
+           
             type = .HGR
             image = decodeHGR(data: data)
         case 16384:
-            // If we reach here, it wasn't CPC, try DHGR
+           
             type = .DHGR
             image = decodeDHGR(data: data)
         default:
+           
             type = .Unknown
             image = nil
         }
         
-        // Last resort: Try MacPaint for files in typical size range without extension
-        // This comes AFTER all known formats to avoid false positives
+        // Last resort: Try MacPaint
         if image == nil && type == .Unknown {
+          
             if size >= 20000 && size <= 100000 && size >= 512 {
                 let result = decodeMacPaint(data: data)
                 if result.image != nil {
+               
                     return result
                 }
             }
         }
         
+    
         return (image, type)
     }
+
     
-    // --- Risk EGA Format Decoder (32KB, 320x200, chunky 4-bit) ---
+    
     
     // --- MacPaint Decoder (Classic Macintosh format, 576x720, 1-bit) ---
     
@@ -2842,10 +2867,11 @@ class SHRDecoder {
         return (cgImage, .BMP(width: width, height: height, bitsPerPixel: bitsPerPixel))
     }
     
-    // --- PCX Decoder (ZSoft PC Paintbrush format) ---
-    
+    // --- PCX Decoder (ZSoft PC Paintbrush format) - FIXED VERSION ---
+        
     static func decodePCX(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         guard data.count >= 128 else {
+           
             return (nil, .Unknown)
         }
         
@@ -2856,6 +2882,7 @@ class SHRDecoder {
         let bitsPerPixel = data[3]
         
         guard manufacturer == 0x0A else {
+           
             return (nil, .Unknown)
         }
         
@@ -2871,30 +2898,34 @@ class SHRDecoder {
         let numPlanes = data[65]
         let bytesPerLine = Int(data[66]) | (Int(data[67]) << 8)
         
+      
+        
         guard width > 0 && height > 0 && width < 10000 && height < 10000 else {
+          
             return (nil, .Unknown)
         }
         
         // Calculate total bits per pixel
-        // Note: Some old PCX files have numPlanes=0, so we handle that specially
         var totalBitsPerPixel = Int(bitsPerPixel) * Int(numPlanes)
         if totalBitsPerPixel == 0 && bitsPerPixel > 0 {
-            // Handle the case where numPlanes is 0 (old format)
             totalBitsPerPixel = Int(bitsPerPixel)
         }
+        
+      
         
         // Decompress image data (starts at byte 128)
         var decompressedData: [UInt8] = []
         var offset = 128
         
         // Calculate expected decompressed size
-        // For numPlanes=0 (old format), use bytesPerLine * height
         let expectedSize: Int
         if numPlanes == 0 {
             expectedSize = bytesPerLine * height
         } else {
             expectedSize = bytesPerLine * Int(numPlanes) * height
         }
+        
+     
         
         // RLE decompression
         while offset < data.count && decompressedData.count < expectedSize {
@@ -2917,14 +2948,21 @@ class SHRDecoder {
             }
         }
         
+      
+        
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
         
         // Check if there's a 256-color palette at the end
         var palette: [(r: UInt8, g: UInt8, b: UInt8)] = []
+        
+        // For 8-bit images, check for VGA palette (0x0C marker + 768 bytes)
         if totalBitsPerPixel == 8 && data.count >= 769 {
-            // Check for palette marker (0x0C) 769 bytes from end
             let paletteMarkerOffset = data.count - 769
+            
+          
+            
             if paletteMarkerOffset >= 0 && data[paletteMarkerOffset] == 0x0C {
+             
                 // Read 256-color palette (768 bytes: 256 * 3)
                 for i in 0..<256 {
                     let r = data[paletteMarkerOffset + 1 + (i * 3)]
@@ -2932,12 +2970,16 @@ class SHRDecoder {
                     let b = data[paletteMarkerOffset + 1 + (i * 3) + 2]
                     palette.append((r, g, b))
                 }
+           
+            } else {
+             
             }
         }
         
         // If no palette found, use grayscale or header palette
         if palette.isEmpty {
             if totalBitsPerPixel <= 4 {
+              
                 // Use 16-color palette from header (bytes 16-63)
                 for i in 0..<16 {
                     let offset = 16 + (i * 3)
@@ -2947,6 +2989,7 @@ class SHRDecoder {
                     palette.append((r, g, b))
                 }
             } else {
+             
                 // Generate grayscale palette
                 for i in 0..<256 {
                     let gray = UInt8(i)
@@ -2957,23 +3000,42 @@ class SHRDecoder {
         
         // Decode image based on bit depth
         if totalBitsPerPixel == 8 && numPlanes == 1 {
+           
+            
             // 8-bit indexed color
             for y in 0..<height {
                 let lineOffset = y * bytesPerLine
                 for x in 0..<width {
-                    if lineOffset + x < decompressedData.count {
-                        let paletteIndex = Int(decompressedData[lineOffset + x])
-                        let color = palette[min(paletteIndex, palette.count - 1)]
+                    let dataIndex = lineOffset + x
+                    
+                    if dataIndex < decompressedData.count {
+                        let paletteIndex = Int(decompressedData[dataIndex])
+                        
+                        // Clamp palette index to valid range
+                        let clampedIndex = min(paletteIndex, palette.count - 1)
+                        let color = palette[clampedIndex]
                         
                         let bufferIdx = (y * width + x) * 4
                         rgbaBuffer[bufferIdx] = color.r
                         rgbaBuffer[bufferIdx + 1] = color.g
                         rgbaBuffer[bufferIdx + 2] = color.b
                         rgbaBuffer[bufferIdx + 3] = 255
+                    } else {
+                        // Out of bounds - fill with black
+                        let bufferIdx = (y * width + x) * 4
+                        rgbaBuffer[bufferIdx] = 0
+                        rgbaBuffer[bufferIdx + 1] = 0
+                        rgbaBuffer[bufferIdx + 2] = 0
+                        rgbaBuffer[bufferIdx + 3] = 255
                     }
                 }
             }
+            
+        
+            
         } else if totalBitsPerPixel == 24 && numPlanes == 3 {
+          
+            
             // 24-bit RGB (3 planes)
             for y in 0..<height {
                 for x in 0..<width {
@@ -2993,16 +3055,18 @@ class SHRDecoder {
                     rgbaBuffer[bufferIdx + 3] = 255
                 }
             }
+            
+          
+            
         } else if totalBitsPerPixel == 2 || (Int(bitsPerPixel) == 2 && Int(numPlanes) <= 1) {
+          
+            
             // 2-bit (4 colors) - CGA mode
-            // Use default CGA palette if header palette is invalid (all same color)
             var cgaPalette: [(r: UInt8, g: UInt8, b: UInt8)] = []
             
-            // Check if we need default CGA palette
             if palette.count >= 4 {
                 let firstFour = Array(palette.prefix(4))
                 
-                // Check if all colors are the same (invalid palette)
                 let allSame = firstFour.dropFirst().allSatisfy {
                     $0.r == firstFour[0].r &&
                     $0.g == firstFour[0].g &&
@@ -3010,23 +3074,21 @@ class SHRDecoder {
                 }
                 
                 if allSame {
-                    // Invalid palette - use default CGA
                     cgaPalette = [
-                        (0, 0, 0),       // Black
-                        (0, 255, 255),   // Cyan
-                        (255, 0, 255),   // Magenta
-                        (255, 255, 255)  // White
+                        (0, 0, 0),
+                        (0, 255, 255),
+                        (255, 0, 255),
+                        (255, 255, 255)
                     ]
                 } else {
                     cgaPalette = firstFour
                 }
             } else {
-                // Default CGA palette
                 cgaPalette = [
-                    (0, 0, 0),       // Black
-                    (0, 255, 255),   // Cyan
-                    (255, 0, 255),   // Magenta
-                    (255, 255, 255)  // White
+                    (0, 0, 0),
+                    (0, 255, 255),
+                    (255, 0, 255),
+                    (255, 255, 255)
                 ]
             }
             
@@ -3034,7 +3096,7 @@ class SHRDecoder {
                 let lineOffset = y * bytesPerLine
                 for x in 0..<width {
                     let byteIndex = lineOffset + (x / 4)
-                    let pixelInByte = 3 - (x % 4)  // High bits first
+                    let pixelInByte = 3 - (x % 4)
                     
                     if byteIndex < decompressedData.count {
                         let byteVal = decompressedData[byteIndex]
@@ -3049,7 +3111,12 @@ class SHRDecoder {
                     }
                 }
             }
+            
+           
+            
         } else if totalBitsPerPixel <= 4 {
+          
+            
             // 1-4 bit indexed color
             for y in 0..<height {
                 let lineOffset = y * bytesPerLine
@@ -3069,14 +3136,24 @@ class SHRDecoder {
                     }
                 }
             }
+            
+          
+            
+        } else {
+           
         }
         
         guard let cgImage = createCGImage(from: rgbaBuffer, width: width, height: height) else {
+    
             return (nil, .Unknown)
         }
         
+      
+        
         return (cgImage, .PCX(width: width, height: height, bitsPerPixel: totalBitsPerPixel))
     }
+
+
     
     // --- Amstrad CPC SCR Decoder (16384 bytes) ---
     
@@ -4566,9 +4643,7 @@ struct DiskCatalogBrowserView: View {
                 
                 Button("Select All Images") {
                     let imageEntries = catalog.allEntries.filter { $0.isImage }
-                    print("🔵 Total entries: \(catalog.allEntries.count)")
-                    print("🔵 Image entries: \(imageEntries.count)")
-                    print("🔵 Images found: \(imageEntries.map { $0.name })")
+                 
                     selectedEntries = Set(imageEntries.map { $0.id })
                 }
                 
@@ -4799,13 +4874,11 @@ struct CatalogEntryRow: View {
             .padding(.horizontal, 8)
             .background(isSelected(entry) ? Color.blue.opacity(0.1) : Color.clear)
             .contentShape(Rectangle())
-            .onTapGesture {  // <-- HIER!
-                if entry.isDirectory {
-                    isExpanded.toggle()
-                } else {
-                    onToggle(entry)
-                }
+            .onTapGesture {
+                onToggle(entry)
             }
+            
+    
             
             // Kinder anzeigen wenn expanded
                 if entry.isDirectory && isExpanded, let children = entry.children {
