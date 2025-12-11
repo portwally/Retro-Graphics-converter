@@ -1544,6 +1544,7 @@ struct ContentView: View {
     @State private var showCatalogBrowser = false
     @State private var currentCatalog: DiskCatalog? = nil
     
+    
     var filteredImages: [ImageItem] {
         if filterFormat == "All" {
             return imageItems
@@ -4442,9 +4443,10 @@ struct DiskCatalogBrowserView: View {
     let onCancel: () -> Void
     
     @State private var selectedEntries: Set<UUID> = []
-    @State private var searchText: String = ""
-    @State private var showImagesOnly: Bool = false
-    @State private var expandAllTrigger: Bool = true
+        @State private var searchText: String = ""
+        @State private var showImagesOnly: Bool = false
+        @State private var expandAllTrigger: Bool = false
+        @State private var expandAllToggleId = UUID()  // NEU!
     
     var filteredEntries: [DiskCatalogEntry] {
         var entries = showImagesOnly || !searchText.isEmpty
@@ -4575,10 +4577,12 @@ struct DiskCatalogBrowserView: View {
                 }
                 Button("Expand All") {
                     expandAllTrigger = true
+                    expandAllToggleId = UUID()  // Force refresh
                 }
 
                 Button("Collapse All") {
                     expandAllTrigger = false
+                    expandAllToggleId = UUID()  // Force refresh
                 }
 
             }
@@ -4597,11 +4601,12 @@ struct DiskCatalogBrowserView: View {
                             isSelected: self.isSelected,
                             onToggle: self.toggleSelection,
                             level: 0,
-                            expandAllTrigger: expandAllTrigger  // NEU!
+                            expandAllTrigger: expandAllTrigger
                         )
                     }
                 }
             }
+            .id(expandAllToggleId)  // NEU! Force refresh
 
             
             Divider()
@@ -4706,10 +4711,19 @@ struct CatalogEntryRow: View {
     let isSelected: (DiskCatalogEntry) -> Bool
     let onToggle: (DiskCatalogEntry) -> Void
     let level: Int
-    let expandAllTrigger: Bool  // NEU!
+    let expandAllTrigger: Bool
     
-    @State private var isExpanded: Bool = true
-
+    @State private var isExpanded: Bool
+    
+    // NEU: Initialisierung
+    init(entry: DiskCatalogEntry, isSelected: @escaping (DiskCatalogEntry) -> Bool, onToggle: @escaping (DiskCatalogEntry) -> Void, level: Int, expandAllTrigger: Bool) {
+        self.entry = entry
+        self.isSelected = isSelected
+        self.onToggle = onToggle
+        self.level = level
+        self.expandAllTrigger = expandAllTrigger
+        _isExpanded = State(initialValue: expandAllTrigger)
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -4736,13 +4750,14 @@ struct CatalogEntryRow: View {
                 }
                 .buttonStyle(.plain)
                 .frame(width: 30)
-                
-                // Expand/Collapse für Ordner (unchanged)
+                // Expand/Collapse für Ordner
                 if entry.isDirectory && entry.children != nil && !entry.children!.isEmpty {
                     Button(action: { isExpanded.toggle() }) {
                         Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                            .frame(width: 20, height: 20)  // NEU: Größerer Klickbereich
+                            .contentShape(Rectangle())     // NEU: Ganzer Frame ist klickbar
                     }
                     .buttonStyle(.plain)
                 }
@@ -4784,7 +4799,13 @@ struct CatalogEntryRow: View {
             .padding(.horizontal, 8)
             .background(isSelected(entry) ? Color.blue.opacity(0.1) : Color.clear)
             .contentShape(Rectangle())
-            .onTapGesture(perform: { onToggle(entry) })
+            .onTapGesture {  // <-- HIER!
+                if entry.isDirectory {
+                    isExpanded.toggle()
+                } else {
+                    onToggle(entry)
+                }
+            }
             
             // Kinder anzeigen wenn expanded
                 if entry.isDirectory && isExpanded, let children = entry.children {
