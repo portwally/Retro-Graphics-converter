@@ -3,6 +3,11 @@ In the end I decided to code one myself in Swift. It started with SHR uncompress
 Newly added are now HGR and DHGR conversion and output formats like png, jpg, tiff, gif and heic.
 Was bored and added then more graphic formats...
 
+<b>NEW, now with files browser for .2mg, .po and .hdv volumes</>
+Just drag and drop your disk images in the app and extract your pics from there. You also can export any file from within the app to your Mac.
+<img width="1414" height="912" alt="filebrowser" src="https://github.com/user-attachments/assets/1ad90ea1-316e-440a-9d98-abf9bc4357e9" />
+
+
 📂 Supported Formats (10 Platforms)
 Retro Platforms
 
