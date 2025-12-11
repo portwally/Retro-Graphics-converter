@@ -109,3 +109,5 @@ Select Open from the context menu.
 In the subsequent dialog box, confirm that you want to open the app by clicking Open again.
 
 The application will now launch and will be trusted by macOS for all future starts.
+
+
