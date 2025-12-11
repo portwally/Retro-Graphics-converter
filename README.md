@@ -110,4 +110,11 @@ In the subsequent dialog box, confirm that you want to open the app by clicking 
 
 The application will now launch and will be trusted by macOS for all future starts.
 
+if this does not work then
+1. Open Terminal
+You can find it in:
+Applications → Utilities → Terminal
+2. Run the following command (in case you installed it in the Applications directory):<br>
+```xattr -cr /Applications/Retro-Graphics-Converter.app```
+
 
