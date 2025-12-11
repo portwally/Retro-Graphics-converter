@@ -4,7 +4,7 @@ import CoreGraphics
 import ImageIO
 import AppKit
 
-// MARK: - New Types and Enums
+// MARK: - Export Format Enum
 
 enum ExportFormat: String, CaseIterable {
     case png = "PNG"
@@ -23,6 +23,8 @@ enum ExportFormat: String, CaseIterable {
         }
     }
 }
+
+// MARK: - Apple II Image Type Enum
 
 enum AppleIIImageType: Equatable {
     case SHR(mode: String)
@@ -56,9 +58,9 @@ enum AppleIIImageType: Equatable {
         case .ZXSpectrum: return (256, 192)
         case .AmstradCPC(let mode, _):
             switch mode {
-            case 0: return (160, 200)  // Mode 0: 160x200, 16 colors
-            case 1: return (320, 200)  // Mode 1: 320x200, 4 colors
-            case 2: return (640, 200)  // Mode 2: 640x200, 2 colors
+            case 0: return (160, 200)
+            case 1: return (320, 200)
+            case 2: return (640, 200)
             default: return (0, 0)
             }
         case .PCX(let width, let height, _): return (width, height)
@@ -88,6 +90,948 @@ enum AppleIIImageType: Equatable {
     }
 }
 
+// MARK: - ProDOS FileType Detection
+
+// ============================================================================
+// OFFICIAL PRODOS FILETYPE & AUXTYPE DETECTION
+// Based on official Apple ProDOS Technical Reference
+// ============================================================================
+
+struct ProDOSFileTypeInfo {
+    let shortName: String
+    let description: String
+    let category: String
+    let icon: String
+    let isGraphics: Bool
+    
+    static func getFileTypeInfo(fileType: UInt8, auxType: Int? = nil) -> ProDOSFileTypeInfo {
+        
+        // Helper function for auxType matching
+        func matchesAux(_ expected: Int) -> Bool {
+            guard let aux = auxType else { return false }
+            return aux == expected
+        }
+        
+        switch fileType {
+            
+        // MARK: - Graphics Files
+            
+        case 0x08: // FOT - Graphics
+            if let aux = auxType {
+                switch aux {
+                case 0x4000:
+                    return ProDOSFileTypeInfo(shortName: "HGR", description: "Packed Hi-Res", category: "Graphics", icon: "🖼️", isGraphics: true)
+                case 0x4001:
+                    return ProDOSFileTypeInfo(shortName: "DHGR", description: "Packed Double Hi-Res", category: "Graphics", icon: "🖼️", isGraphics: true)
+                case 0x8001:
+                    return ProDOSFileTypeInfo(shortName: "HGR", description: "Printographer Packed HGR", category: "Graphics", icon: "🖼️", isGraphics: true)
+                case 0x8002:
+                    return ProDOSFileTypeInfo(shortName: "DHGR", description: "Printographer Packed DHGR", category: "Graphics", icon: "🖼️", isGraphics: true)
+                case 0x8003:
+                    return ProDOSFileTypeInfo(shortName: "HGR", description: "Softdisk Hi-Res", category: "Graphics", icon: "🖼️", isGraphics: true)
+                case 0x8004:
+                    return ProDOSFileTypeInfo(shortName: "DHGR", description: "Softdisk Double Hi-Res", category: "Graphics", icon: "🖼️", isGraphics: true)
+                case 0x2000:
+                    return ProDOSFileTypeInfo(shortName: "HGR", description: "Hi-Res Graphics", category: "Graphics", icon: "🖼️", isGraphics: true)
+                default:
+                    break
+                }
+            }
+            return ProDOSFileTypeInfo(shortName: "FOT", description: "Apple II Graphics", category: "Graphics", icon: "🖼️", isGraphics: true)
+            
+        case 0xC0: // PNT - Packed Super Hi-Res
+            if let aux = auxType {
+                switch aux {
+                case 0x0000:
+                    return ProDOSFileTypeInfo(shortName: "PNT", description: "Paintworks Packed", category: "Graphics", icon: "🎨", isGraphics: true)
+                case 0x0001:
+                    return ProDOSFileTypeInfo(shortName: "SHR", description: "Packed Super Hi-Res", category: "Graphics", icon: "🖼️", isGraphics: true)
+                case 0x0002:
+                    return ProDOSFileTypeInfo(shortName: "PIC", description: "Apple Preferred Format", category: "Graphics", icon: "🖼️", isGraphics: true)
+                case 0x0003:
+                    return ProDOSFileTypeInfo(shortName: "PICT", description: "Packed QuickDraw II PICT", category: "Graphics", icon: "🖼️", isGraphics: true)
+                case 0x8001:
+                    return ProDOSFileTypeInfo(shortName: "PIC", description: "GTv Background", category: "Graphics", icon: "🖼️", isGraphics: true)
+                case 0x8005:
+                    return ProDOSFileTypeInfo(shortName: "DGX", description: "DreamGrafix", category: "Graphics", icon: "🎨", isGraphics: true)
+                case 0x8006:
+                    return ProDOSFileTypeInfo(shortName: "GIF", description: "GIF Image", category: "Graphics", icon: "🖼️", isGraphics: true)
+                default:
+                    break
+                }
+            }
+            return ProDOSFileTypeInfo(shortName: "PNT", description: "Packed Super Hi-Res", category: "Graphics", icon: "🖼️", isGraphics: true)
+            
+        case 0xC1: // PIC - Super Hi-Res
+            if let aux = auxType {
+                switch aux {
+                case 0x0000:
+                    return ProDOSFileTypeInfo(shortName: "SHR", description: "Super Hi-Res Screen", category: "Graphics", icon: "🖼️", isGraphics: true)
+                case 0x0001:
+                    return ProDOSFileTypeInfo(shortName: "PICT", description: "QuickDraw PICT", category: "Graphics", icon: "🖼️", isGraphics: true)
+                case 0x0002:
+                    return ProDOSFileTypeInfo(shortName: "SHR", description: "SHR 3200 Color", category: "Graphics", icon: "🌈", isGraphics: true)
+                case 0x8001:
+                    return ProDOSFileTypeInfo(shortName: "IMG", description: "Allison Raw Image", category: "Graphics", icon: "🖼️", isGraphics: true)
+                case 0x8002:
+                    return ProDOSFileTypeInfo(shortName: "IMG", description: "ThunderScan", category: "Graphics", icon: "📸", isGraphics: true)
+                case 0x8003:
+                    return ProDOSFileTypeInfo(shortName: "DGX", description: "DreamGrafix", category: "Graphics", icon: "🎨", isGraphics: true)
+                default:
+                    break
+                }
+            }
+            return ProDOSFileTypeInfo(shortName: "PIC", description: "Super Hi-Res Picture", category: "Graphics", icon: "🖼️", isGraphics: true)
+            
+        case 0xC2:
+            return ProDOSFileTypeInfo(shortName: "ANI", description: "Paintworks Animation", category: "Graphics", icon: "🎬", isGraphics: true)
+        case 0xC3:
+            return ProDOSFileTypeInfo(shortName: "PAL", description: "Paintworks Palette", category: "Graphics", icon: "🎨", isGraphics: false)
+            
+        case 0x53: // DRW - Drawing
+            if matchesAux(0x8010) {
+                return ProDOSFileTypeInfo(shortName: "DRW", description: "AppleWorks GS Graphics", category: "Graphics", icon: "📐", isGraphics: true)
+            }
+            return ProDOSFileTypeInfo(shortName: "DRW", description: "Drawing", category: "Graphics", icon: "📐", isGraphics: true)
+            
+        case 0xC5: // OOG - Object Oriented Graphics
+            if let aux = auxType {
+                switch aux {
+                case 0x8000:
+                    return ProDOSFileTypeInfo(shortName: "DRW", description: "Draw Plus", category: "Graphics", icon: "📐", isGraphics: true)
+                case 0xC000:
+                    return ProDOSFileTypeInfo(shortName: "ARC", description: "DYOH Architecture", category: "Graphics", icon: "🏠", isGraphics: true)
+                case 0xC006:
+                    return ProDOSFileTypeInfo(shortName: "LND", description: "DYOH Landscape", category: "Graphics", icon: "🏞️", isGraphics: true)
+                case 0xC007:
+                    return ProDOSFileTypeInfo(shortName: "PYW", description: "PyWare", category: "Graphics", icon: "📐", isGraphics: true)
+                default:
+                    break
+                }
+            }
+            return ProDOSFileTypeInfo(shortName: "OOG", description: "Object Graphics", category: "Graphics", icon: "📐", isGraphics: true)
+            
+        // MARK: - Text & Code
+            
+        case 0x00:
+            return ProDOSFileTypeInfo(shortName: "NON", description: "Unknown", category: "General", icon: "❓", isGraphics: false)
+        case 0x01:
+            return ProDOSFileTypeInfo(shortName: "BAD", description: "Bad Blocks", category: "System", icon: "⚠️", isGraphics: false)
+        case 0x04:
+            return ProDOSFileTypeInfo(shortName: "TXT", description: "Text File", category: "Text", icon: "📄", isGraphics: false)
+        case 0x06:
+            return ProDOSFileTypeInfo(shortName: "BIN", description: "Binary", category: "Code", icon: "⚙️", isGraphics: false)
+        case 0x07:
+            return ProDOSFileTypeInfo(shortName: "FNT", description: "Apple III Font", category: "Font", icon: "🔤", isGraphics: false)
+            
+        case 0x02:
+            return ProDOSFileTypeInfo(shortName: "PCD", description: "Pascal Code (SOS)", category: "Code", icon: "💻", isGraphics: false)
+        case 0x03:
+            return ProDOSFileTypeInfo(shortName: "PTX", description: "Pascal Text (SOS)", category: "Text", icon: "📄", isGraphics: false)
+        case 0x05:
+            return ProDOSFileTypeInfo(shortName: "PDA", description: "Pascal Data (SOS)", category: "Data", icon: "📄", isGraphics: false)
+        case 0x09:
+            return ProDOSFileTypeInfo(shortName: "BA3", description: "Apple III BASIC", category: "Code", icon: "💻", isGraphics: false)
+        case 0x0A:
+            return ProDOSFileTypeInfo(shortName: "DA3", description: "Apple III Data", category: "Data", icon: "📄", isGraphics: false)
+            
+        case 0x0B: // WPF - Word Processor
+            if let aux = auxType {
+                switch aux {
+                case 0x8001:
+                    return ProDOSFileTypeInfo(shortName: "WTW", description: "Write This Way", category: "Productivity", icon: "📝", isGraphics: false)
+                case 0x8002:
+                    return ProDOSFileTypeInfo(shortName: "W&P", description: "Writing & Publishing", category: "Productivity", icon: "📝", isGraphics: false)
+                default:
+                    break
+                }
+            }
+            return ProDOSFileTypeInfo(shortName: "WPF", description: "Word Processor", category: "Productivity", icon: "📝", isGraphics: false)
+            
+        case 0x0C:
+            return ProDOSFileTypeInfo(shortName: "SOS", description: "Apple III SOS System", category: "System", icon: "🗂️", isGraphics: false)
+        case 0x0F:
+            return ProDOSFileTypeInfo(shortName: "DIR", description: "Folder", category: "System", icon: "📁", isGraphics: false)
+            
+        case 0x10:
+            return ProDOSFileTypeInfo(shortName: "RPD", description: "RPS Data", category: "Data", icon: "📄", isGraphics: false)
+        case 0x11:
+            return ProDOSFileTypeInfo(shortName: "RPI", description: "RPS Index", category: "Data", icon: "📄", isGraphics: false)
+        case 0x12:
+            return ProDOSFileTypeInfo(shortName: "AFD", description: "AppleFile Discard", category: "Data", icon: "📄", isGraphics: false)
+        case 0x13:
+            return ProDOSFileTypeInfo(shortName: "AFM", description: "AppleFile Model", category: "Data", icon: "📄", isGraphics: false)
+        case 0x14:
+            return ProDOSFileTypeInfo(shortName: "AFR", description: "AppleFile Report", category: "Data", icon: "📄", isGraphics: false)
+        case 0x15:
+            return ProDOSFileTypeInfo(shortName: "SCL", description: "Screen Library", category: "Data", icon: "📚", isGraphics: false)
+            
+        case 0x16: // PFS
+            if let aux = auxType {
+                switch aux {
+                case 0x0001:
+                    return ProDOSFileTypeInfo(shortName: "PFS", description: "PFS:File", category: "Productivity", icon: "📄", isGraphics: false)
+                case 0x0002:
+                    return ProDOSFileTypeInfo(shortName: "PFS", description: "PFS:Write", category: "Productivity", icon: "📝", isGraphics: false)
+                case 0x0003:
+                    return ProDOSFileTypeInfo(shortName: "PFS", description: "PFS:Graph", category: "Productivity", icon: "📊", isGraphics: false)
+                case 0x0004:
+                    return ProDOSFileTypeInfo(shortName: "PFS", description: "PFS:Plan", category: "Productivity", icon: "📊", isGraphics: false)
+                default:
+                    break
+                }
+            }
+            return ProDOSFileTypeInfo(shortName: "PFS", description: "PFS Document", category: "Productivity", icon: "📄", isGraphics: false)
+            
+        // MARK: - AppleWorks (8-bit)
+            
+        case 0x19:
+            return ProDOSFileTypeInfo(shortName: "ADB", description: "AppleWorks Database", category: "Productivity", icon: "🗂️", isGraphics: false)
+        case 0x1A:
+            return ProDOSFileTypeInfo(shortName: "AWP", description: "AppleWorks Word Proc", category: "Productivity", icon: "📝", isGraphics: false)
+        case 0x1B:
+            return ProDOSFileTypeInfo(shortName: "ASP", description: "AppleWorks Spreadsheet", category: "Productivity", icon: "📊", isGraphics: false)
+            
+        case 0x20:
+            return ProDOSFileTypeInfo(shortName: "TDM", description: "Desktop Manager", category: "Productivity", icon: "🖥️", isGraphics: false)
+            
+        // MARK: - Apple II Source/Object Code
+            
+        case 0x2A:
+            return ProDOSFileTypeInfo(shortName: "8SC", description: "Apple II Source Code", category: "Code", icon: "💻", isGraphics: false)
+        case 0x2B:
+            if matchesAux(0x8001) {
+                return ProDOSFileTypeInfo(shortName: "8OB", description: "GBBS Pro Object", category: "Code", icon: "⚙️", isGraphics: false)
+            }
+            return ProDOSFileTypeInfo(shortName: "8OB", description: "Apple II Object Code", category: "Code", icon: "⚙️", isGraphics: false)
+        case 0x2C:
+            return ProDOSFileTypeInfo(shortName: "8IC", description: "Apple II Interpreted", category: "Code", icon: "💻", isGraphics: false)
+        case 0x2D:
+            return ProDOSFileTypeInfo(shortName: "8LD", description: "Apple II Language Data", category: "Code", icon: "📄", isGraphics: false)
+        case 0x2E:
+            return ProDOSFileTypeInfo(shortName: "P8C", description: "ProDOS 8 Module", category: "Code", icon: "⚙️", isGraphics: false)
+            
+        case 0x40:
+            return ProDOSFileTypeInfo(shortName: "DIC", description: "Dictionary", category: "Data", icon: "📚", isGraphics: false)
+        case 0x41:
+            return ProDOSFileTypeInfo(shortName: "OCR", description: "OCR Data", category: "Data", icon: "📄", isGraphics: false)
+        case 0x42:
+            return ProDOSFileTypeInfo(shortName: "FTD", description: "File Type Names", category: "System", icon: "📋", isGraphics: false)
+            
+        // MARK: - Apple IIgs Productivity
+            
+        case 0x50: // GWP - GS Word Processing
+            if let aux = auxType {
+                switch aux {
+                case 0x8010:
+                    return ProDOSFileTypeInfo(shortName: "GWP", description: "AppleWorks GS WP", category: "Productivity", icon: "📝", isGraphics: false)
+                case 0x5445:
+                    return ProDOSFileTypeInfo(shortName: "TCH", description: "Teach Document", category: "Productivity", icon: "📝", isGraphics: false)
+                case 0x8001:
+                    return ProDOSFileTypeInfo(shortName: "DWR", description: "DeluxeWrite", category: "Productivity", icon: "📝", isGraphics: false)
+                case 0x8003:
+                    return ProDOSFileTypeInfo(shortName: "PJN", description: "Personal Journal", category: "Productivity", icon: "📔", isGraphics: false)
+                default:
+                    break
+                }
+            }
+            return ProDOSFileTypeInfo(shortName: "GWP", description: "GS Word Processing", category: "Productivity", icon: "📝", isGraphics: false)
+            
+        case 0x51: // GSS - GS Spreadsheet
+            if matchesAux(0x8010) {
+                return ProDOSFileTypeInfo(shortName: "GSS", description: "AppleWorks GS SS", category: "Productivity", icon: "📊", isGraphics: false)
+            }
+            return ProDOSFileTypeInfo(shortName: "GSS", description: "GS Spreadsheet", category: "Productivity", icon: "📊", isGraphics: false)
+            
+        case 0x52: // GDB - GS Database
+            if let aux = auxType {
+                switch aux {
+                case 0x8010:
+                    return ProDOSFileTypeInfo(shortName: "GDB", description: "AppleWorks GS DB", category: "Productivity", icon: "🗂️", isGraphics: false)
+                case 0x8013, 0x8014:
+                    return ProDOSFileTypeInfo(shortName: "GSA", description: "GSAS Accounting", category: "Productivity", icon: "💰", isGraphics: false)
+                default:
+                    break
+                }
+            }
+            return ProDOSFileTypeInfo(shortName: "GDB", description: "GS Database", category: "Productivity", icon: "🗂️", isGraphics: false)
+            
+        case 0x54: // GDP - Desktop Publishing
+            if let aux = auxType {
+                switch aux {
+                case 0x8010:
+                    return ProDOSFileTypeInfo(shortName: "GDP", description: "AppleWorks GS DTP", category: "Productivity", icon: "📰", isGraphics: false)
+                case 0xDD3E:
+                    return ProDOSFileTypeInfo(shortName: "MED", description: "Medley", category: "Productivity", icon: "📰", isGraphics: false)
+                default:
+                    break
+                }
+            }
+            return ProDOSFileTypeInfo(shortName: "GDP", description: "Desktop Publishing", category: "Productivity", icon: "📰", isGraphics: false)
+            
+        // MARK: - Hypermedia & Education
+            
+        case 0x55: // HMD - Hypermedia
+            if let aux = auxType {
+                switch aux {
+                case 0x0001:
+                    return ProDOSFileTypeInfo(shortName: "HYP", description: "HyperCard GS Stack", category: "Hypermedia", icon: "📚", isGraphics: false)
+                case 0x8002:
+                    return ProDOSFileTypeInfo(shortName: "HYP", description: "HyperStudio", category: "Hypermedia", icon: "📚", isGraphics: false)
+                case 0x8003:
+                    return ProDOSFileTypeInfo(shortName: "NEX", description: "Nexus", category: "Hypermedia", icon: "📚", isGraphics: false)
+                default:
+                    break
+                }
+            }
+            return ProDOSFileTypeInfo(shortName: "HMD", description: "Hypermedia", category: "Hypermedia", icon: "📚", isGraphics: false)
+            
+        case 0x56:
+            return ProDOSFileTypeInfo(shortName: "EDU", description: "Educational Data", category: "Education", icon: "🎓", isGraphics: false)
+        case 0x57:
+            return ProDOSFileTypeInfo(shortName: "STN", description: "Stationery", category: "Productivity", icon: "📄", isGraphics: false)
+        case 0x58:
+            return ProDOSFileTypeInfo(shortName: "HLP", description: "Help File", category: "System", icon: "❓", isGraphics: false)
+        case 0x59:
+            return ProDOSFileTypeInfo(shortName: "COM", description: "Communications", category: "Communications", icon: "📡", isGraphics: false)
+        case 0x5A:
+            return ProDOSFileTypeInfo(shortName: "CFG", description: "Configuration", category: "System", icon: "⚙️", isGraphics: false)
+            
+        // MARK: - Multimedia & Animation
+            
+        case 0x5B:
+            return ProDOSFileTypeInfo(shortName: "ANM", description: "Animation", category: "Multimedia", icon: "🎬", isGraphics: false)
+        case 0x5C:
+            return ProDOSFileTypeInfo(shortName: "MUM", description: "Multimedia", category: "Multimedia", icon: "🎭", isGraphics: false)
+        case 0x5D:
+            return ProDOSFileTypeInfo(shortName: "ENT", description: "Game/Entertainment", category: "Entertainment", icon: "🎮", isGraphics: false)
+        case 0x5E:
+            return ProDOSFileTypeInfo(shortName: "DVU", description: "Development Utility", category: "Development", icon: "🔧", isGraphics: false)
+        case 0x5F:
+            return ProDOSFileTypeInfo(shortName: "FIN", description: "Financial", category: "Productivity", icon: "💰", isGraphics: false)
+            
+        // MARK: - PC Transporter
+            
+        case 0x6B:
+            return ProDOSFileTypeInfo(shortName: "BIO", description: "PC Transporter BIOS", category: "System", icon: "💾", isGraphics: false)
+        case 0x6D:
+            return ProDOSFileTypeInfo(shortName: "TDR", description: "PC Transporter Driver", category: "System", icon: "⚙️", isGraphics: false)
+        case 0x6E:
+            return ProDOSFileTypeInfo(shortName: "PRE", description: "PC Transporter Pre-boot", category: "System", icon: "💾", isGraphics: false)
+        case 0x6F:
+            return ProDOSFileTypeInfo(shortName: "HDV", description: "PC Transporter Volume", category: "System", icon: "💾", isGraphics: false)
+            
+        // MARK: - WordPerfect
+            
+        case 0xA0:
+            return ProDOSFileTypeInfo(shortName: "WP", description: "WordPerfect", category: "Productivity", icon: "📝", isGraphics: false)
+            
+        // MARK: - BASIC
+            
+        case 0xAB:
+            return ProDOSFileTypeInfo(shortName: "GSB", description: "IIGS BASIC Program", category: "Code", icon: "💻", isGraphics: false)
+        case 0xAC:
+            return ProDOSFileTypeInfo(shortName: "TDF", description: "IIGS BASIC TDF", category: "Code", icon: "📄", isGraphics: false)
+        case 0xAD:
+            return ProDOSFileTypeInfo(shortName: "BDF", description: "IIGS BASIC Data", category: "Data", icon: "📄", isGraphics: false)
+            
+        case 0xFA:
+            return ProDOSFileTypeInfo(shortName: "INT", description: "Integer BASIC", category: "Code", icon: "💻", isGraphics: false)
+        case 0xFB:
+            return ProDOSFileTypeInfo(shortName: "IVR", description: "Integer Variables", category: "Data", icon: "📄", isGraphics: false)
+        case 0xFC:
+            return ProDOSFileTypeInfo(shortName: "BAS", description: "Applesoft BASIC", category: "Code", icon: "💻", isGraphics: false)
+        case 0xFD:
+            return ProDOSFileTypeInfo(shortName: "VAR", description: "Applesoft Variables", category: "Data", icon: "📄", isGraphics: false)
+            
+        // MARK: - Source Code & Development
+            
+        case 0xB0: // SRC - GS Source Code
+            if let aux = auxType {
+                switch aux {
+                case 0x0001:
+                    return ProDOSFileTypeInfo(shortName: "TXT", description: "APW Text", category: "Code", icon: "📄", isGraphics: false)
+                case 0x0003:
+                    return ProDOSFileTypeInfo(shortName: "ASM", description: "APW Assembly", category: "Code", icon: "💻", isGraphics: false)
+                case 0x0005:
+                    return ProDOSFileTypeInfo(shortName: "PAS", description: "ORCA Pascal", category: "Code", icon: "💻", isGraphics: false)
+                case 0x0008:
+                    return ProDOSFileTypeInfo(shortName: "C", description: "ORCA C", category: "Code", icon: "💻", isGraphics: false)
+                case 0x000A:
+                    return ProDOSFileTypeInfo(shortName: "C", description: "APW C", category: "Code", icon: "💻", isGraphics: false)
+                case 0x0719:
+                    return ProDOSFileTypeInfo(shortName: "PS", description: "PostScript", category: "Code", icon: "📄", isGraphics: false)
+                default:
+                    break
+                }
+            }
+            return ProDOSFileTypeInfo(shortName: "SRC", description: "GS Source Code", category: "Code", icon: "💻", isGraphics: false)
+            
+        case 0xB1:
+            return ProDOSFileTypeInfo(shortName: "OBJ", description: "GS Object Code", category: "Code", icon: "⚙️", isGraphics: false)
+        case 0xB2:
+            return ProDOSFileTypeInfo(shortName: "LIB", description: "GS Library", category: "Code", icon: "📚", isGraphics: false)
+        case 0xB3:
+            return ProDOSFileTypeInfo(shortName: "S16", description: "GS/OS Application", category: "System", icon: "📱", isGraphics: false)
+        case 0xB4:
+            return ProDOSFileTypeInfo(shortName: "RTL", description: "GS Runtime Library", category: "System", icon: "📚", isGraphics: false)
+        case 0xB5:
+            return ProDOSFileTypeInfo(shortName: "EXE", description: "GS Shell Application", category: "System", icon: "💻", isGraphics: false)
+        case 0xB6:
+            return ProDOSFileTypeInfo(shortName: "PIF", description: "Permanent Init File", category: "System", icon: "⚙️", isGraphics: false)
+        case 0xB7:
+            return ProDOSFileTypeInfo(shortName: "TIF", description: "Temporary Init File", category: "System", icon: "⚙️", isGraphics: false)
+        case 0xB8:
+            return ProDOSFileTypeInfo(shortName: "NDA", description: "New Desk Accessory", category: "System", icon: "🔧", isGraphics: false)
+        case 0xB9:
+            return ProDOSFileTypeInfo(shortName: "CDA", description: "Classic Desk Accessory", category: "System", icon: "🔧", isGraphics: false)
+        case 0xBA:
+            return ProDOSFileTypeInfo(shortName: "TOL", description: "Tool", category: "System", icon: "🔧", isGraphics: false)
+        case 0xBB:
+            return ProDOSFileTypeInfo(shortName: "DVR", description: "Device Driver", category: "System", icon: "⚙️", isGraphics: false)
+        case 0xBC:
+            return ProDOSFileTypeInfo(shortName: "LDF", description: "Load File", category: "System", icon: "📦", isGraphics: false)
+        case 0xBD:
+            return ProDOSFileTypeInfo(shortName: "FST", description: "File System Translator", category: "System", icon: "💾", isGraphics: false)
+        case 0xBF:
+            return ProDOSFileTypeInfo(shortName: "DOC", description: "GS/OS Document", category: "Document", icon: "📄", isGraphics: false)
+            
+        // MARK: - Scripts & Control Panels
+            
+        case 0xC6:
+            return ProDOSFileTypeInfo(shortName: "SCR", description: "Script", category: "Code", icon: "📜", isGraphics: false)
+        case 0xC7:
+            return ProDOSFileTypeInfo(shortName: "CDV", description: "Control Panel", category: "System", icon: "⚙️", isGraphics: false)
+            
+        // MARK: - Fonts & Icons
+            
+        case 0xC8:
+            if matchesAux(0x0001) {
+                return ProDOSFileTypeInfo(shortName: "TTF", description: "TrueType Font", category: "Font", icon: "🔤", isGraphics: false)
+            }
+            return ProDOSFileTypeInfo(shortName: "FON", description: "Font", category: "Font", icon: "🔤", isGraphics: false)
+        case 0xC9:
+            return ProDOSFileTypeInfo(shortName: "FND", description: "Finder Data", category: "System", icon: "🔍", isGraphics: false)
+        case 0xCA:
+            return ProDOSFileTypeInfo(shortName: "ICN", description: "Icons", category: "Graphics", icon: "🎨", isGraphics: false)
+            
+        // MARK: - Sound & Music
+            
+        case 0xD5: // MUS - Music Sequence
+            if let aux = auxType {
+                switch aux {
+                case 0x0000:
+                    return ProDOSFileTypeInfo(shortName: "MCS", description: "Music Construction Set", category: "Multimedia", icon: "🎵", isGraphics: false)
+                case 0x0007:
+                    return ProDOSFileTypeInfo(shortName: "SND", description: "SoundSmith", category: "Multimedia", icon: "🎵", isGraphics: false)
+                case 0x8003:
+                    return ProDOSFileTypeInfo(shortName: "MTJ", description: "Master Tracks Jr", category: "Multimedia", icon: "🎵", isGraphics: false)
+                default:
+                    break
+                }
+            }
+            return ProDOSFileTypeInfo(shortName: "MUS", description: "Music Sequence", category: "Multimedia", icon: "🎵", isGraphics: false)
+            
+        case 0xD6:
+            return ProDOSFileTypeInfo(shortName: "INS", description: "Instrument", category: "Multimedia", icon: "🎹", isGraphics: false)
+        case 0xD7:
+            return ProDOSFileTypeInfo(shortName: "MDI", description: "MIDI Data", category: "Multimedia", icon: "🎵", isGraphics: false)
+        case 0xD8:
+            return ProDOSFileTypeInfo(shortName: "SND", description: "Sampled Sound", category: "Multimedia", icon: "🔊", isGraphics: false)
+            
+        // MARK: - Database
+            
+        case 0xDB:
+            return ProDOSFileTypeInfo(shortName: "DBM", description: "DB Master", category: "Productivity", icon: "🗂️", isGraphics: false)
+            
+        // MARK: - Archives
+            
+        case 0xE0: // LBR - Archives
+            if let aux = auxType {
+                switch aux {
+                case 0x8002:
+                    return ProDOSFileTypeInfo(shortName: "SHK", description: "ShrinkIt (NuFX)", category: "Archive", icon: "📦", isGraphics: false)
+                case 0x0005:
+                    return ProDOSFileTypeInfo(shortName: "DC", description: "DiskCopy Image", category: "Archive", icon: "💾", isGraphics: false)
+                case 0x8000:
+                    return ProDOSFileTypeInfo(shortName: "BNY", description: "Binary II", category: "Archive", icon: "📦", isGraphics: false)
+                default:
+                    break
+                }
+            }
+            return ProDOSFileTypeInfo(shortName: "LBR", description: "Archival Library", category: "Archive", icon: "📦", isGraphics: false)
+            
+        case 0xE2:
+            return ProDOSFileTypeInfo(shortName: "ATK", description: "AppleTalk Data", category: "Communications", icon: "📡", isGraphics: false)
+            
+        // MARK: - Misc System
+            
+        case 0xEE:
+            return ProDOSFileTypeInfo(shortName: "R16", description: "EDASM 816 Relocatable", category: "Code", icon: "⚙️", isGraphics: false)
+        case 0xEF:
+            return ProDOSFileTypeInfo(shortName: "PAS", description: "Pascal Area", category: "System", icon: "💾", isGraphics: false)
+        case 0xF0:
+            return ProDOSFileTypeInfo(shortName: "CMD", description: "BASIC Command", category: "Code", icon: "💻", isGraphics: false)
+            
+        // User Types
+        case 0xF1:
+            return ProDOSFileTypeInfo(shortName: "US1", description: "User #1", category: "User", icon: "👤", isGraphics: false)
+        case 0xF2:
+            return ProDOSFileTypeInfo(shortName: "US2", description: "User #2", category: "User", icon: "👤", isGraphics: false)
+        case 0xF3:
+            return ProDOSFileTypeInfo(shortName: "US3", description: "User #3", category: "User", icon: "👤", isGraphics: false)
+        case 0xF4:
+            return ProDOSFileTypeInfo(shortName: "US4", description: "User #4", category: "User", icon: "👤", isGraphics: false)
+        case 0xF5:
+            return ProDOSFileTypeInfo(shortName: "US5", description: "User #5", category: "User", icon: "👤", isGraphics: false)
+        case 0xF6:
+            return ProDOSFileTypeInfo(shortName: "US6", description: "User #6", category: "User", icon: "👤", isGraphics: false)
+        case 0xF7:
+            return ProDOSFileTypeInfo(shortName: "US7", description: "User #7", category: "User", icon: "👤", isGraphics: false)
+        case 0xF8:
+            return ProDOSFileTypeInfo(shortName: "US8", description: "User #8", category: "User", icon: "👤", isGraphics: false)
+            
+        // MARK: - System Files
+            
+        case 0xF9:
+            return ProDOSFileTypeInfo(shortName: "OS", description: "GS/OS System", category: "System", icon: "🗂️", isGraphics: false)
+        case 0xFE:
+            return ProDOSFileTypeInfo(shortName: "REL", description: "Relocatable Code", category: "Code", icon: "⚙️", isGraphics: false)
+        case 0xFF:
+            return ProDOSFileTypeInfo(shortName: "SYS", description: "ProDOS 8 Application", category: "System", icon: "🗂️", isGraphics: false)
+            
+        // MARK: - Unknown
+            
+        default:
+            return ProDOSFileTypeInfo(shortName: String(format: "$%02X", fileType), description: String(format: "Type $%02X", fileType), category: "Unknown", icon: "❓", isGraphics: false)
+        }
+    }
+}
+
+
+// MARK: - Disk Catalog Structures
+
+struct DiskCatalogEntry: Identifiable {
+    let id = UUID()
+    let name: String
+    let fileType: UInt8
+    let fileTypeString: String
+    let size: Int
+    let blocks: Int?
+    let loadAddress: Int?
+    let length: Int?
+    let data: Data
+    let isImage: Bool
+    let imageType: AppleIIImageType
+    let isDirectory: Bool
+    let children: [DiskCatalogEntry]?
+    
+    var sizeString: String {
+        if size < 1024 {
+            return "\(size) B"
+        } else if size < 1024 * 1024 {
+            return String(format: "%.1f KB", Double(size) / 1024.0)
+        } else {
+            return String(format: "%.1f MB", Double(size) / (1024.0 * 1024.0))
+        }
+    }
+}
+extension DiskCatalogEntry {
+    var fileTypeInfo: ProDOSFileTypeInfo {
+        return ProDOSFileTypeInfo.getFileTypeInfo(fileType: fileType, auxType: loadAddress)
+    }
+    
+    // Ersetze die alten computed properties:
+    var icon: String {
+        if isDirectory { return "📁" }
+        return fileTypeInfo.icon
+    }
+    
+    var typeDescription: String {
+        if isDirectory { return "Folder" }
+        return fileTypeInfo.shortName
+    }
+}
+
+
+struct DiskCatalog {
+    let diskName: String
+    let diskFormat: String
+    let diskSize: Int
+    let entries: [DiskCatalogEntry]
+    
+    var totalFiles: Int {
+        countFiles(in: entries)
+    }
+    
+    var imageFiles: Int {
+        countImages(in: entries)
+    }
+    
+    var allEntries: [DiskCatalogEntry] {
+        return flattenEntries(entries)
+    }
+    
+    private func countFiles(in entries: [DiskCatalogEntry]) -> Int {
+        var count = 0
+        for entry in entries {
+            if !entry.isDirectory { count += 1 }
+            if let children = entry.children {
+                count += countFiles(in: children)
+            }
+        }
+        return count
+    }
+    
+    private func countImages(in entries: [DiskCatalogEntry]) -> Int {
+        var count = 0
+        for entry in entries {
+            if entry.isImage { count += 1 }
+            if let children = entry.children {
+                count += countImages(in: children)
+            }
+        }
+        return count
+    }
+    
+    private func flattenEntries(_ entries: [DiskCatalogEntry]) -> [DiskCatalogEntry] {
+        var result: [DiskCatalogEntry] = []
+        for entry in entries {
+            result.append(entry)
+            if let children = entry.children {
+                result.append(contentsOf: flattenEntries(children))
+            }
+        }
+        return result
+    }
+}
+
+
+// MARK: - Disk Image Support
+
+struct DiskImageFile {
+    let name: String
+    let data: Data
+    let type: AppleIIImageType
+}
+
+class DiskImageReader {
+    
+    static func readDiskImage(data: Data) -> [DiskImageFile] {
+        var files: [DiskImageFile] = []
+        
+        if let twoImgFiles = read2IMG(data: data) {
+            files.append(contentsOf: twoImgFiles)
+        }
+        else if let proDOSFiles = readProDOSDSK(data: data) {
+            files.append(contentsOf: proDOSFiles)
+        }
+        else if let dos33Files = readDOS33DSK(data: data) {
+            files.append(contentsOf: dos33Files)
+        }
+        else if let hdvFiles = readHDV(data: data) {
+            files.append(contentsOf: hdvFiles)
+        }
+        
+        return files
+    }
+  
+    
+    
+    // MARK: - 2IMG Format
+    
+    static func read2IMG(data: Data) -> [DiskImageFile]? {
+        guard data.count >= 64 else {
+            return nil
+        }
+        
+        let signature = String(data: data.subdata(in: 0..<4), encoding: .ascii)
+        guard signature == "2IMG" else {
+            return nil
+        }
+        
+        let imageFormat = data[12]
+        
+        let dataOffset = Int(data[24]) | (Int(data[25]) << 8) | (Int(data[26]) << 16) | (Int(data[27]) << 24)
+        let dataLength = Int(data[28]) | (Int(data[29]) << 8) | (Int(data[30]) << 16) | (Int(data[31]) << 24)
+        
+        // For large disk images, use what's available
+        let actualDataLength: Int
+        if dataLength == 0 {
+            actualDataLength = data.count - dataOffset
+        } else {
+            actualDataLength = min(dataLength, data.count - dataOffset)
+        }
+        
+        guard dataOffset < data.count else {
+            return nil
+        }
+        
+        let endOffset = min(dataOffset + actualDataLength, data.count)
+        let diskData = data.subdata(in: dataOffset..<endOffset)
+        
+        if imageFormat == 0 {
+            return readDOS33DSK(data: diskData)
+        } else if imageFormat == 1 {
+            return readProDOSDSK(data: diskData)
+        }
+        
+        return nil
+    }
+    
+    // MARK: - ProDOS DSK Format
+    
+    static func readProDOSDSK(data: Data) -> [DiskImageFile]? {
+        let blockSize = 512
+        
+        guard data.count >= blockSize * 2 else {
+            return nil
+        }
+        
+        let volumeDirBlock = 2
+        let volumeDirOffset = volumeDirBlock * blockSize
+        
+        guard volumeDirOffset + blockSize <= data.count else {
+            return nil
+        }
+        
+        let storageType = (data[volumeDirOffset + 4] & 0xF0) >> 4
+        guard storageType == 0x0F else {
+            return nil
+        }
+        
+        var files: [DiskImageFile] = []
+        
+        let entriesPerBlock = 13
+        var currentBlock = volumeDirBlock
+        
+        for _ in 0..<10 {
+            let blockOffset = currentBlock * blockSize
+            guard blockOffset + blockSize <= data.count else { break }
+            
+            let startEntry = (currentBlock == volumeDirBlock) ? 1 : 0
+            
+            for entryIdx in startEntry..<entriesPerBlock {
+                let entryOffset = blockOffset + 4 + (entryIdx * 39)
+                guard entryOffset + 39 <= data.count else { continue }
+                
+                let entryStorageType = (data[entryOffset] & 0xF0) >> 4
+                guard entryStorageType > 0 else { continue }
+                
+                let nameLength = Int(data[entryOffset] & 0x0F)
+                guard nameLength > 0 && nameLength <= 15 else { continue }
+                
+                let fileName = String(data: data.subdata(in: (entryOffset + 1)..<(entryOffset + 1 + nameLength)), encoding: .ascii) ?? ""
+                
+                let fileType = data[entryOffset + 16]
+                let keyBlock = Int(data[entryOffset + 17]) | (Int(data[entryOffset + 18]) << 8)
+                let blocksUsed = Int(data[entryOffset + 19]) | (Int(data[entryOffset + 20]) << 8)
+                let eof = Int(data[entryOffset + 21]) | (Int(data[entryOffset + 22]) << 8) | (Int(data[entryOffset + 23]) << 16)
+                
+                if fileType == 0xC0 || fileType == 0xC1 || fileType == 0x08 || fileType == 0x06 {
+                    if let fileData = extractProDOSFile(data: data, keyBlock: keyBlock, blocksUsed: blocksUsed, eof: eof, storageType: Int(entryStorageType)) {
+                        let result = SHRDecoder.decode(data: fileData, filename: fileName)
+                        if result.type != AppleIIImageType.Unknown, let _ = result.image {
+                            files.append(DiskImageFile(name: fileName, data: fileData, type: result.type))
+                        }
+                    }
+                }
+            }
+            
+            let nextBlock = Int(data[blockOffset + 2]) | (Int(data[blockOffset + 3]) << 8)
+            if nextBlock == 0 { break }
+            currentBlock = nextBlock
+        }
+        
+        return files.isEmpty ? nil : files
+    }
+    
+    static func extractProDOSFile(data: Data, keyBlock: Int, blocksUsed: Int, eof: Int, storageType: Int) -> Data? {
+        let blockSize = 512
+        var fileData = Data()
+        
+        if storageType == 1 {
+            let offset = keyBlock * blockSize
+            guard offset + blockSize <= data.count else { return nil }
+            fileData = data.subdata(in: offset..<min(offset + eof, offset + blockSize))
+        } else if storageType == 2 {
+            let indexOffset = keyBlock * blockSize
+            guard indexOffset + blockSize <= data.count else { return nil }
+            
+            for i in 0..<256 {
+                let blockNum = Int(data[indexOffset + i]) | (Int(data[indexOffset + i + 256]) << 8)
+                if blockNum == 0 { break }
+                
+                let blockOffset = blockNum * blockSize
+                guard blockOffset + blockSize <= data.count else { continue }
+                
+                let bytesToRead = min(blockSize, eof - fileData.count)
+                if bytesToRead > 0 {
+                    fileData.append(data.subdata(in: blockOffset..<(blockOffset + bytesToRead)))
+                }
+                
+                if fileData.count >= eof { break }
+            }
+        } else if storageType == 3 {
+            let masterIndexOffset = keyBlock * blockSize
+            guard masterIndexOffset + blockSize <= data.count else { return nil }
+            
+            for masterIdx in 0..<256 {
+                let indexBlockNum = Int(data[masterIndexOffset + masterIdx]) | (Int(data[masterIndexOffset + masterIdx + 256]) << 8)
+                if indexBlockNum == 0 { break }
+                
+                let indexOffset = indexBlockNum * blockSize
+                guard indexOffset + blockSize <= data.count else { continue }
+                
+                for i in 0..<256 {
+                    let blockNum = Int(data[indexOffset + i]) | (Int(data[indexOffset + i + 256]) << 8)
+                    if blockNum == 0 { break }
+                    
+                    let blockOffset = blockNum * blockSize
+                    guard blockOffset + blockSize <= data.count else { continue }
+                    
+                    let bytesToRead = min(blockSize, eof - fileData.count)
+                    if bytesToRead > 0 {
+                        fileData.append(data.subdata(in: blockOffset..<(blockOffset + bytesToRead)))
+                    }
+                    
+                    if fileData.count >= eof { break }
+                }
+                
+                if fileData.count >= eof { break }
+            }
+        }
+        
+        return fileData.isEmpty ? nil : fileData
+    }
+    
+    // MARK: - DOS 3.3 DSK Format
+    
+    static func readDOS33DSK(data: Data) -> [DiskImageFile]? {
+        let sectorSize = 256
+        let sectorsPerTrack = 16
+        let tracks = 35
+        
+        guard data.count >= sectorSize * sectorsPerTrack * tracks else {
+            return nil
+        }
+        
+        let vtocTrack = 17
+        let vtocSector = 0
+        let vtocOffset = (vtocTrack * sectorsPerTrack + vtocSector) * sectorSize
+        
+        guard vtocOffset + sectorSize <= data.count else {
+            return nil
+        }
+        
+        let catalogTrack = Int(data[vtocOffset + 1])
+        guard catalogTrack == 17 else {
+            return nil
+        }
+        
+        var files: [DiskImageFile] = []
+        
+        var currentTrack = 17
+        var currentSector = 15
+        
+        for _ in 0..<100 {
+            let catalogOffset = (currentTrack * sectorsPerTrack + currentSector) * sectorSize
+            guard catalogOffset + sectorSize <= data.count else { break }
+            
+            for entryIdx in 0..<7 {
+                let entryOffset = catalogOffset + 11 + (entryIdx * 35)
+                guard entryOffset + 35 <= data.count else { continue }
+                
+                let trackList = Int(data[entryOffset])
+                let sectorList = Int(data[entryOffset + 1])
+                
+                if trackList == 0 || trackList == 0xFF { continue }
+                
+                var fileName = ""
+                for i in 0..<30 {
+                    let char = data[entryOffset + 3 + i] & 0x7F
+                    if char == 0 || char == 0x20 { break }
+                    if char > 0 {
+                        fileName.append(Character(UnicodeScalar(char)))
+                    }
+                }
+                fileName = fileName.trimmingCharacters(in: .whitespaces)
+                
+                let fileType = data[entryOffset + 2] & 0x7F
+                
+                // Accept: B (0x42), I (0x49), A (0x41), and binary (0x04)
+                if fileType == 0x42 || fileType == 0x49 || fileType == 0x41 || fileType == 0x04 {
+                    if let fileData = extractDOS33File(data: data, trackList: trackList, sectorList: sectorList, sectorsPerTrack: sectorsPerTrack, sectorSize: sectorSize) {
+                        let result = SHRDecoder.decode(data: fileData, filename: fileName)
+                        if result.type != AppleIIImageType.Unknown, let _ = result.image {
+                            files.append(DiskImageFile(name: fileName, data: fileData, type: result.type))
+                        }
+                    }
+                }
+            }
+            
+            let nextTrack = Int(data[catalogOffset + 1])
+            let nextSector = Int(data[catalogOffset + 2])
+            
+            if nextTrack == 0 { break }
+            currentTrack = nextTrack
+            currentSector = nextSector
+        }
+        
+        return files.isEmpty ? nil : files
+    }
+    
+    static func extractDOS33File(data: Data, trackList: Int, sectorList: Int, sectorsPerTrack: Int, sectorSize: Int) -> Data? {
+        var fileData = Data()
+        var currentTrack = trackList
+        var currentSector = sectorList
+        
+        for _ in 0..<1000 {
+            let tsListOffset = (currentTrack * sectorsPerTrack + currentSector) * sectorSize
+            guard tsListOffset + sectorSize <= data.count else { break }
+            
+            for pairIdx in 0..<122 {
+                let track = Int(data[tsListOffset + 12 + (pairIdx * 2)])
+                let sector = Int(data[tsListOffset + 12 + (pairIdx * 2) + 1])
+                
+                if track == 0 { break }
+                
+                let dataOffset = (track * sectorsPerTrack + sector) * sectorSize
+                guard dataOffset + sectorSize <= data.count else { continue }
+                
+                fileData.append(data.subdata(in: dataOffset..<(dataOffset + sectorSize)))
+            }
+            
+            let nextTrack = Int(data[tsListOffset + 1])
+            let nextSector = Int(data[tsListOffset + 2])
+            
+            if nextTrack == 0 { break }
+            currentTrack = nextTrack
+            currentSector = nextSector
+        }
+        
+        // Strip DOS 3.3 binary header (4 bytes: load address + length)
+        if fileData.count > 4 {
+            let loadAddr = Int(fileData[0]) | (Int(fileData[1]) << 8)
+            let length = Int(fileData[2]) | (Int(fileData[3]) << 8)
+            
+            // Check if this looks like a valid binary header
+            // Valid load addresses are typically in ranges: 0x0800-0x6000
+            if length > 100 && length <= fileData.count - 4 && loadAddr >= 0x0800 && loadAddr <= 0xBFFF {
+                fileData = fileData.subdata(in: 4..<(4 + length))
+            }
+        }
+        
+        return fileData.isEmpty ? nil : fileData
+    }
+    
+    // MARK: - HDV Format
+    
+    static func readHDV(data: Data) -> [DiskImageFile]? {
+        return readProDOSDSK(data: data)
+    }
+}
+
 // MARK: - Image Item Model
 
 struct ImageItem: Identifiable {
@@ -99,7 +1043,475 @@ struct ImageItem: Identifiable {
     var filename: String {
         url.lastPathComponent
     }
+    
 }
+// MARK: - Catalog Reading Extension
+
+extension DiskImageReader {
+    static func readDiskCatalog(data: Data, filename: String = "Unknown") -> DiskCatalog? {
+     
+        
+        // 2IMG Format
+        if let catalog = read2IMGCatalogFull(data: data, filename: filename) {
+        
+            return catalog
+        }
+        
+      
+        
+        // Direkte Disk Images mit Order Detection
+        let result = readDiskCatalogWithOrderDetection(data: data, filename: filename)
+        
+        if result != nil {
+    
+        } else {
+     
+        }
+        
+        return result
+    }
+    
+    static func read2IMGCatalogFull(data: Data, filename: String) -> DiskCatalog? {
+        guard data.count >= 64 else { return nil }
+        
+        let signature = String(data: data.subdata(in: 0..<4), encoding: .ascii)
+        guard signature == "2IMG" else { return nil }
+        
+        let imageFormat = data[12]
+        let dataOffset = Int(data[24]) | (Int(data[25]) << 8) | (Int(data[26]) << 16) | (Int(data[27]) << 24)
+        let dataLength = Int(data[28]) | (Int(data[29]) << 8) | (Int(data[30]) << 16) | (Int(data[31]) << 24)
+        
+        let actualDataLength: Int
+        if dataLength == 0 {
+            actualDataLength = data.count - dataOffset  // Berechne aus Dateigröße
+        } else {
+            actualDataLength = min(dataLength, data.count - dataOffset)
+        }
+        guard dataOffset < data.count else { return nil }
+        
+        let endOffset = min(dataOffset + actualDataLength, data.count)
+        let diskData = data.subdata(in: dataOffset..<endOffset)
+        
+        if imageFormat == 0 {
+            return readDOS33CatalogFull(data: diskData, filename: filename)
+        } else if imageFormat == 1 {
+            return readProDOSCatalogFull(data: diskData, filename: filename)
+        }
+        
+        return nil
+    }
+    
+    static func readProDOSCatalogFull(data: Data, filename: String) -> DiskCatalog? {
+        let blockSize = 512
+        guard data.count >= blockSize * 3 else { return nil }
+        
+        // Try both block 2 (standard) and block 1 (some non-standard disks)
+        for volumeDirBlock in [2, 1] {
+            let volumeDirOffset = volumeDirBlock * blockSize
+            guard volumeDirOffset + blockSize <= data.count else { continue }
+            
+            let storageType = (data[volumeDirOffset + 4] & 0xF0) >> 4
+            guard storageType == 0x0F else { continue }
+            
+            let volumeNameLength = Int(data[volumeDirOffset + 4] & 0x0F)
+            guard volumeNameLength > 0 && volumeNameLength <= 15 else { continue }
+            
+            var volumeName = ""
+            for i in 0..<volumeNameLength {
+                volumeName.append(Character(UnicodeScalar(data[volumeDirOffset + 5 + i])))
+            }
+            
+            let entries = readProDOSDirectoryForCatalog(data: data, startBlock: volumeDirBlock, blockSize: blockSize, parentPath: "")
+            
+            // Only return if we found files
+            if !entries.isEmpty {
+                return DiskCatalog(
+                    diskName: volumeName.isEmpty ? filename : volumeName,
+                    diskFormat: "ProDOS",
+                    diskSize: data.count,
+                    entries: entries
+                )
+            }
+        }
+        
+        return nil
+    }
+    
+    static func readProDOSDirectoryForCatalog(data: Data, startBlock: Int, blockSize: Int, parentPath: String) -> [DiskCatalogEntry] {
+        var entries: [DiskCatalogEntry] = []
+        var currentBlock = startBlock
+        
+        for _ in 0..<100 {
+            let blockOffset = currentBlock * blockSize
+            guard blockOffset + blockSize <= data.count else { break }
+            
+            let entriesPerBlock = currentBlock == startBlock ? 12 : 13
+            let entryStart = currentBlock == startBlock ? 4 + 39 : 4
+            
+            for entryIdx in 0..<entriesPerBlock {
+                let entryOffset = blockOffset + entryStart + (entryIdx * 39)
+                guard entryOffset + 39 <= data.count else { continue }
+                
+                let entryStorageType = (data[entryOffset] & 0xF0) >> 4
+                if entryStorageType == 0 { continue }
+                
+                let nameLength = Int(data[entryOffset] & 0x0F)
+                var fileName = ""
+                for i in 0..<nameLength {
+                    fileName.append(Character(UnicodeScalar(data[entryOffset + 1 + i])))
+                }
+                
+                let fileType = data[entryOffset + 16]
+                let keyPointer = Int(data[entryOffset + 17]) | (Int(data[entryOffset + 18]) << 8)
+                let blocksUsed = Int(data[entryOffset + 19]) | (Int(data[entryOffset + 20]) << 8)
+                let eof = Int(data[entryOffset + 21]) | (Int(data[entryOffset + 22]) << 8) | (Int(data[entryOffset + 23]) << 16)
+                
+                let fullPath = parentPath.isEmpty ? fileName : "\(parentPath)/\(fileName)"
+                
+                if entryStorageType == 0x0D {
+                    // Directory
+                    let subEntries = readProDOSDirectoryForCatalog(data: data, startBlock: keyPointer, blockSize: blockSize, parentPath: fullPath)
+                    
+                    let dirEntry = DiskCatalogEntry(
+                        name: fileName,
+                        fileType: 0x0F,
+                        fileTypeString: "DIR",
+                        size: subEntries.reduce(0) { $0 + $1.size },
+                        blocks: blocksUsed,
+                        loadAddress: nil,
+                        length: nil,
+                        data: Data(),
+                        isImage: false,
+                        imageType: .Unknown,
+                        isDirectory: true,
+                        children: subEntries
+                    )
+                    entries.append(dirEntry)
+                } else {
+                    // Regular file
+                    if let fileData = extractProDOSFile(data: data, keyBlock: keyPointer, blocksUsed: blocksUsed, eof: eof, storageType: Int(entryStorageType)) {
+                        // Check if this could be an image based on file type and size
+                        var loadAddr: Int? = nil
+                        var length: Int? = nil
+                        if fileData.count > 4 && (fileType == 0x04 || fileType == 0x06) {
+                            let potentialLoadAddr = Int(fileData[0]) | (Int(fileData[1]) << 8)
+                            let potentialLength = Int(fileData[2]) | (Int(fileData[3]) << 8)
+                            
+                            // Validate load address (should be reasonable)
+                            if potentialLoadAddr < 0xC000 && potentialLength > 0 && potentialLength < 0x8000 {
+                                loadAddr = potentialLoadAddr
+                                length = potentialLength
+                            }
+                        }
+
+                        // ProDOS Graphics Detection - check by file size if no valid header
+                        let couldBeGraphics = (fileType == 0x04 || fileType == 0x06) && (
+                            fileData.count == 8192 ||     // HGR
+                            fileData.count == 16384 ||    // DHGR
+                            fileData.count == 32768 ||    // SHR
+                            fileData.count == 8196 ||     // HGR + header
+                            fileData.count == 16388 ||    // DHGR + header
+                            fileData.count == 32772       // SHR + header
+                        )
+
+                        // Use FileType info for icon/description, but override isGraphics check
+                        let fileTypeInfo = ProDOSFileTypeInfo.getFileTypeInfo(fileType: fileType, auxType: loadAddr)
+
+                        // Only decode if size suggests graphics
+                        let result: (image: CGImage?, type: AppleIIImageType)
+                        if couldBeGraphics || fileTypeInfo.isGraphics {
+                            result = SHRDecoder.decode(data: fileData, filename: fileName)
+                        } else {
+                            result = (image: nil, type: .Unknown)
+                        }
+
+                       
+
+                        let isImage = result.image != nil && result.type != .Unknown
+                        
+                        // Use mapped type for graphics recognition, differentiate by size
+                        let displayFileType: UInt8
+                        if couldBeGraphics && isImage {
+                            // Differentiate HGR vs DHGR by file size
+                            if fileData.count >= 16380 && fileData.count <= 16400 {
+                                // DHGR size range
+                                displayFileType = 0x08  // FOT with auxType for DHGR
+                            } else {
+                                // HGR or SHR
+                                displayFileType = 0x08  // FOT
+                            }
+                        } else {
+                            displayFileType = fileType
+                        }
+
+                        // Set appropriate auxType for FileType detection
+                        let displayAuxType: Int?
+                        if couldBeGraphics && isImage {
+                            if fileData.count >= 16380 && fileData.count <= 16400 {
+                                displayAuxType = 0x4000  // DHGR
+                            } else if fileData.count >= 8180 && fileData.count <= 8200 {
+                                displayAuxType = 0x2000  // HGR
+                            } else {
+                                displayAuxType = loadAddr
+                            }
+                        } else {
+                            displayAuxType = loadAddr
+                        }
+
+                        let entry = DiskCatalogEntry(
+                            name: fileName,
+                            fileType: displayFileType,
+                            fileTypeString: String(format: "$%02X", fileType),
+                            size: fileData.count,
+                            blocks: blocksUsed,
+                            loadAddress: displayAuxType,  // <-- Use displayAuxType!
+                            length: length,
+                            data: fileData,
+                            isImage: isImage,
+                            imageType: result.type,
+                            isDirectory: false,
+                            children: nil
+                        )
+                        entries.append(entry)
+                    }
+                }
+            }
+            
+            let nextBlock = Int(data[blockOffset + 2]) | (Int(data[blockOffset + 3]) << 8)
+            if nextBlock == 0 { break }
+            currentBlock = nextBlock
+        }
+        
+        return entries
+    }
+    
+    static func readDOS33CatalogFull(data: Data, filename: String) -> DiskCatalog? {
+      
+        
+        let sectorSize = 256
+        let sectorsPerTrack = 16
+        let tracks = 35
+        
+        guard data.count >= sectorSize * sectorsPerTrack * tracks else {
+           
+            return nil
+        }
+        
+        let vtocTrack = 17
+        let vtocSector = 0
+        let vtocOffset = (vtocTrack * sectorsPerTrack + vtocSector) * sectorSize
+        
+        guard vtocOffset + sectorSize <= data.count else {
+           
+            return nil
+        }
+        
+        let catalogTrack = Int(data[vtocOffset + 1])
+       
+        
+        guard catalogTrack == 17 else {
+          
+            return nil
+        }
+        
+        var entries: [DiskCatalogEntry] = []
+        var currentTrack = 17
+        var currentSector = 15
+        
+        for _ in 0..<100 {
+            let catalogOffset = (currentTrack * sectorsPerTrack + currentSector) * sectorSize
+            guard catalogOffset + sectorSize <= data.count else { break }
+            
+            for entryIdx in 0..<7 {
+                let entryOffset = catalogOffset + 11 + (entryIdx * 35)
+                guard entryOffset + 35 <= data.count else { continue }
+                
+                let trackList = Int(data[entryOffset])
+                let sectorList = Int(data[entryOffset + 1])
+                
+                if trackList == 0 || trackList == 0xFF { continue }
+                
+                var fileName = ""
+                for i in 0..<30 {
+                    let char = data[entryOffset + 3 + i] & 0x7F
+                    if char == 0 || char == 0x20 { break }
+                    if char > 0 {
+                        fileName.append(Character(UnicodeScalar(char)))
+                    }
+                }
+                fileName = fileName.trimmingCharacters(in: .whitespaces)
+                
+                let fileType = data[entryOffset + 2]
+                let sectorsUsed = Int(data[entryOffset + 33]) | (Int(data[entryOffset + 34]) << 8)
+                
+                if let fileData = extractDOS33File(data: data, trackList: trackList, sectorList: sectorList, sectorsPerTrack: sectorsPerTrack, sectorSize: sectorSize) {
+                    // Check if this could be an image based on file type and size
+                  
+
+                    var loadAddr: Int? = nil
+                    var length: Int? = nil
+                    if fileData.count > 4 && (fileType & 0x7F == 0x04 || fileType & 0x7F == 0x06) {
+                        loadAddr = Int(fileData[0]) | (Int(fileData[1]) << 8)
+                        length = Int(fileData[2]) | (Int(fileData[3]) << 8)
+                    }
+
+                    // DOS 3.3 Graphics Detection
+                    // Be more flexible with file sizes (allow header + data)
+                    let couldBeGraphics = (fileType & 0x7F == 0x04 || fileType & 0x7F == 0x06) && (
+                        // Exact sizes
+                        fileData.count == 8192 ||     // HGR exact
+                        fileData.count == 16384 ||    // DHGR exact
+                        fileData.count == 32768 ||    // SHR exact
+                        // Sizes with 4-byte header
+                        fileData.count == 8196 ||     // HGR + header
+                        fileData.count == 16388 ||    // DHGR + header
+                        fileData.count == 32772 ||    // SHR + header
+                        // Sizes in range (some files have padding/extra data)
+                        (fileData.count >= 8180 && fileData.count <= 8200) ||   // HGR range
+                        (fileData.count >= 16380 && fileData.count <= 16400) || // DHGR range
+                        (fileData.count >= 32760 && fileData.count <= 32780) || // SHR range
+                        // Standard load addresses
+                        (loadAddr == 0x2000 && fileData.count >= 8180) ||  // HGR load address
+                        (loadAddr == 0x4000 && fileData.count >= 16380)    // DHGR load address
+                    )
+
+                    // Only decode if it looks like graphics
+                    let result: (image: CGImage?, type: AppleIIImageType)
+                    if couldBeGraphics {
+                        result = SHRDecoder.decode(data: fileData, filename: fileName)
+                    } else {
+                        result = (image: nil, type: .Unknown)
+                    }
+
+                    let isImage = result.image != nil && result.type != .Unknown
+
+
+                    // Use the mapped ProDOS file type for better type detection
+                    let proDOSFileType: UInt8 = couldBeGraphics ? 0x08 : (fileType & 0x7F)
+
+                    // Set appropriate auxType for FileType detection
+                    let displayAuxType: Int?
+                    if couldBeGraphics && isImage {
+                        if fileData.count >= 16380 && fileData.count <= 16400 {
+                            displayAuxType = 0x4000  // DHGR
+                        } else if fileData.count >= 8180 && fileData.count <= 8200 {
+                            displayAuxType = 0x2000  // HGR
+                        } else {
+                            displayAuxType = loadAddr
+                        }
+                    } else {
+                        displayAuxType = loadAddr
+                    }
+
+                    let entry = DiskCatalogEntry(
+                        name: fileName,
+                        fileType: proDOSFileType,
+                        fileTypeString: String(format: "$%02X", fileType & 0x7F),
+                        size: fileData.count,
+                        blocks: sectorsUsed,
+                        loadAddress: displayAuxType,  // <-- Use displayAuxType!
+                        length: length,
+                        data: fileData,
+                        isImage: isImage,
+                        imageType: result.type,
+                        isDirectory: false,
+                        children: nil
+                    )
+                    entries.append(entry)
+                }
+            }
+            
+            let nextTrack = Int(data[catalogOffset + 1])
+            let nextSector = Int(data[catalogOffset + 2])
+            
+            if nextTrack == 0 { break }
+            currentTrack = nextTrack
+            currentSector = nextSector
+        }
+        
+        return DiskCatalog(
+            diskName: filename,
+            diskFormat: "DOS 3.3",
+            diskSize: data.count,
+            entries: entries
+        )
+    }
+}
+extension DiskImageReader {
+    
+    /// Konvertiert DOS 3.3 Sector Order zu ProDOS Block Order
+    /// Nötig für .dsk Dateien die ProDOS enthalten aber DOS Order nutzen
+    static func convertDOSOrderToProDOSOrder(data: Data) -> Data? {
+        guard data.count == 143360 else { return nil } // 35 tracks * 16 sectors * 256 bytes
+        
+        var proDOSData = Data(count: data.count)
+        
+        // DOS to ProDOS physical sector mapping
+        let dosToProDOS: [Int] = [
+            0x0, 0x7, 0xE, 0x6, 0xD, 0x5, 0xC, 0x4,
+            0xB, 0x3, 0xA, 0x2, 0x9, 0x1, 0x8, 0xF
+        ]
+        
+        let sectorsPerTrack = 16
+        let sectorSize = 256
+        let tracks = 35
+        
+        for track in 0..<tracks {
+            for dosSector in 0..<sectorsPerTrack {
+                let proDOSSector = dosToProDOS[dosSector]
+                
+                let dosOffset = (track * sectorsPerTrack + dosSector) * sectorSize
+                let proDOSOffset = (track * sectorsPerTrack + proDOSSector) * sectorSize
+                
+                // Copy sector from DOS position to ProDOS position
+                proDOSData[proDOSOffset..<(proDOSOffset + sectorSize)] = data[dosOffset..<(dosOffset + sectorSize)]
+            }
+        }
+        
+        return proDOSData
+    }
+    
+    /// Prüft ob eine Disk Image DOS Order nutzt und konvertiert wenn nötig
+    static func readDiskCatalogWithOrderDetection(data: Data, filename: String) -> DiskCatalog? {
+       
+        
+        // Zuerst: Versuche direkt als ProDOS
+    
+        if let catalog = readProDOSCatalogFull(data: data, filename: filename) {
+            // Prüfe ob wirklich Dateien gefunden wurden
+            if catalog.totalFiles > 0 {
+              
+                return catalog
+            } else {
+                
+            }
+        }
+        
+        // Zweiter Versuch: DOS 3.3
+      
+        if let catalog = readDOS33CatalogFull(data: data, filename: filename) {
+            
+            return catalog
+        }
+        
+        // Dritter Versuch: Konvertiere DOS Order → ProDOS Order und versuche nochmal
+        if data.count == 143360 {
+          
+            if let convertedData = convertDOSOrderToProDOSOrder(data: data) {
+                if let catalog = readProDOSCatalogFull(data: convertedData, filename: filename) {
+                    if catalog.totalFiles > 0 {
+                       
+                        return catalog
+                    }
+                }
+            }
+        }
+        
+        return nil
+    }
+}
+
+
 
 // MARK: - Main App Entry Point
 
@@ -113,6 +1525,7 @@ struct SHRConverterApp: App {
     }
 }
 
+
 // MARK: - UI View with Image Browser
 
 struct ContentView: View {
@@ -124,10 +1537,12 @@ struct ContentView: View {
     @State private var isProcessing = false
     @State private var progressString = ""
     @State private var showBrowser = false
-    @State private var upscaleFactor: Int = 1 // 1 = no upscaling, 2/4/8 = upscale
+    @State private var upscaleFactor: Int = 1
     @State private var zoomScale: CGFloat = 1.0
     @State private var imageOffset: CGSize = .zero
     @State private var filterFormat: String = "All"
+    @State private var showCatalogBrowser = false
+    @State private var currentCatalog: DiskCatalog? = nil
     
     var filteredImages: [ImageItem] {
         if filterFormat == "All" {
@@ -163,20 +1578,33 @@ struct ContentView: View {
     
     var body: some View {
         HSplitView {
-            // Left Panel: Browser
             if showBrowser && !imageItems.isEmpty {
                 browserPanel
                     .frame(minWidth: 250, idealWidth: 300)
             }
             
-            // Right Panel: Main View
             mainPanel
                 .frame(minWidth: 500)
         }
         .padding()
+        .sheet(isPresented: $showCatalogBrowser) {
+            if let catalog = currentCatalog {
+                DiskCatalogBrowserView(
+                    catalog: catalog,
+                    onImport: { selectedEntries in
+                        importCatalogEntries(selectedEntries)
+                        showCatalogBrowser = false
+                    },
+                    onCancel: {
+                        showCatalogBrowser = false
+                    }
+                )
+            }
+        }
+
     }
     
-    // MARK: - Browser Panel
+    
     
     var browserPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -190,7 +1618,6 @@ struct ContentView: View {
                 .help("Clear all images")
             }
             
-            // Format Filter
             HStack {
                 Text("Filter:")
                     .font(.caption)
@@ -223,7 +1650,8 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 5)
             }
-            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            .onDrop(of: [.fileURL, .url, .data], isTargeted: nil) { providers in
+              
                 loadDroppedFiles(providers)
                 return true
             }
@@ -238,11 +1666,8 @@ struct ContentView: View {
         .background(Color(NSColor.controlBackgroundColor))
     }
     
-    // MARK: - Main Panel
-    
     var mainPanel: some View {
         VStack(spacing: 20) {
-            // Image Display Area
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(style: StrokeStyle(lineWidth: 2, dash: [10]))
@@ -251,7 +1676,6 @@ struct ContentView: View {
                 
                 if let selectedImg = selectedImage {
                     VStack(spacing: 10) {
-                        // Zoomable/Pannable Image
                         GeometryReader { geometry in
                             ScrollView([.horizontal, .vertical], showsIndicators: true) {
                                 Image(nsImage: selectedImg.image)
@@ -269,7 +1693,6 @@ struct ContentView: View {
                         }
                         .frame(maxHeight: 400)
                         
-                        // Zoom Controls
                         HStack(spacing: 10) {
                             Button("Zoom Out") {
                                 zoomScale = max(0.5, zoomScale / 1.5)
@@ -312,7 +1735,7 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                         Text("Retro Graphics Converter")
                             .font(.headline)
-                        Text("Supports Apple II, Amiga IFF, Atari ST, C64, ZX Spectrum, Amstrad CPC, PCX, BMP, MacPaint, plus modern formats (PNG, JPEG, GIF).")
+                        Text("Supports Apple II (including disk images: 2IMG, DSK, HDV), Amiga IFF, Atari ST, C64, ZX Spectrum, Amstrad CPC, PCX, BMP, MacPaint, plus modern formats.")
                             .multilineTextAlignment(.center)
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -345,12 +1768,12 @@ struct ContentView: View {
                 }
             }
             .frame(height: 450)
-            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            .onDrop(of: [.fileURL, .url, .data], isTargeted: nil) { providers in
+         
                 loadDroppedFiles(providers)
                 return true
             }
             
-            // Controls Bar
             VStack(spacing: 10) {
                 HStack {
                     Button("Open Files...") {
@@ -403,7 +1826,6 @@ struct ContentView: View {
                 }
             }
             
-            // Status Bar
             VStack(alignment: .leading, spacing: 5) {
                 Text(statusMessage)
                     .font(.headline)
@@ -419,7 +1841,33 @@ struct ContentView: View {
     }
     
     // MARK: - File Handling
-    
+    func importCatalogEntries(_ entries: [DiskCatalogEntry]) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            var newItems: [ImageItem] = []
+            
+            for entry in entries {
+                if entry.isImage, let cgImage = SHRDecoder.decode(data: entry.data, filename: entry.name).image {
+                    let url = URL(fileURLWithPath: "/catalog/\(entry.name)")
+                    let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                    let item = ImageItem(url: url, image: nsImage, type: entry.imageType)
+                    newItems.append(item)
+                }
+            }
+            
+            DispatchQueue.main.async {
+                self.imageItems.append(contentsOf: newItems)
+                
+                if !newItems.isEmpty {
+                    self.showBrowser = true
+                    if self.selectedImage == nil {
+                        self.selectedImage = newItems.first
+                    }
+                }
+                
+                self.statusMessage = "Imported \(newItems.count) image(s) from catalog"
+            }
+        }
+    }
     func clearAllImages() {
         imageItems = []
         selectedImage = nil
@@ -432,7 +1880,7 @@ struct ContentView: View {
     func showBatchRename() {
         let alert = NSAlert()
         alert.messageText = "Batch Export with Custom Names"
-        alert.informativeText = "Export all images with custom names. Use {n} for number, {name} for original name.\nExample: converted_{n} → converted_1.png, converted_2.png, etc."
+        alert.informativeText = "Export all images with custom names. Use {n} for number, {name} for original name.\nExample: converted_{n} тЖТ converted_1.png, converted_2.png, etc."
         alert.alertStyle = .informational
         alert.addButton(withTitle: "Export")
         alert.addButton(withTitle: "Cancel")
@@ -453,7 +1901,6 @@ struct ContentView: View {
     func batchExportWithRename(pattern: String) {
         guard !imageItems.isEmpty else { return }
         
-        // Ask for output folder
         let openPanel = NSOpenPanel()
         openPanel.canChooseFiles = false
         openPanel.canChooseDirectories = true
@@ -475,7 +1922,6 @@ struct ContentView: View {
                     
                     let originalName = item.url.deletingPathExtension().lastPathComponent
                     
-                    // Replace placeholders
                     var newName = pattern
                     newName = newName.replacingOccurrences(of: "{n}", with: "\(index + 1)")
                     newName = newName.replacingOccurrences(of: "{name}", with: originalName)
@@ -499,7 +1945,7 @@ struct ContentView: View {
     
     func openFiles() {
         let openPanel = NSOpenPanel()
-        openPanel.allowedContentTypes = [.data]
+        openPanel.allowsOtherFileTypes = true
         openPanel.allowsMultipleSelection = true
         openPanel.canChooseDirectories = true
         openPanel.canChooseFiles = true
@@ -511,26 +1957,140 @@ struct ContentView: View {
     }
     
     func loadDroppedFiles(_ providers: [NSItemProvider]) {
+       
+        
         self.isProcessing = true
         self.statusMessage = "Loading dropped files..."
         
-        let group = DispatchGroup()
-        var collectedURLs: [URL] = []
+        var filesToProcess: [(data: Data, name: String, url: URL?)] = []
+        let dispatchGroup = DispatchGroup()
         
-        for provider in providers {
-            group.enter()
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { (item, error) in
-                if let urlData = item as? Data, let url = URL(dataRepresentation: urlData, relativeTo: nil) {
-                    collectedURLs.append(url)
-                } else if let url = item as? URL {
-                    collectedURLs.append(url)
+        for (index, provider) in providers.enumerated() {
+         
+            
+            dispatchGroup.enter()
+            
+            // Versuche zuerst fileURL zu laden
+            provider.loadFileRepresentation(forTypeIdentifier: UTType.data.identifier) { url, error in
+                if let url = url {
+                    // Wir haben eine echte URL mit Dateinamen!
+                    do {
+                        let data = try Data(contentsOf: url)
+                        let fileName = url.lastPathComponent
+                       
+                        filesToProcess.append((data: data, name: fileName, url: url))
+                    } catch {
+                      
+                    }
+                    dispatchGroup.leave()
+                } else {
+                    // Fallback: Lade als Data
+                    guard let typeIdentifier = provider.registeredTypeIdentifiers.first else {
+                        dispatchGroup.leave()
+                        return
+                    }
+                    
+                    provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, error in
+                        defer { dispatchGroup.leave() }
+                        
+                        if let data = data {
+                            let fileName = "dropped_file_\(index).\(typeIdentifier.split(separator: ".").last ?? "bin")"
+                         
+                            filesToProcess.append((data: data, name: fileName, url: nil))
+                        }
+                    }
                 }
-                group.leave()
             }
         }
+
+
         
-        group.notify(queue: .main) {
-            self.processFilesAndFolders(urls: collectedURLs)
+        dispatchGroup.notify(queue: .main) {
+          
+            
+            if filesToProcess.isEmpty {
+                self.isProcessing = false
+                self.statusMessage = "No files received"
+                return
+            }
+            
+            // Process the dropped data directly
+            DispatchQueue.global(qos: .userInitiated).async {
+                var newItems: [ImageItem] = []
+                var successCount = 0
+                
+                for (fileIndex, file) in filesToProcess.enumerated() {
+                    DispatchQueue.main.async {
+                        self.progressString = "Processing \(fileIndex + 1) of \(filesToProcess.count): \(file.name)"
+                    }
+                    
+                    let data = file.data
+                    let fileName = file.name
+                    
+                   
+                    // Check if it's a known image format first (by magic bytes)
+                    let isPNG = data.count >= 8 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47
+                    let isJPEG = data.count >= 2 && data[0] == 0xFF && data[1] == 0xD8
+                    let isGIF = data.count >= 6 && data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46
+                    let isBMP = data.count >= 2 && data[0] == 0x42 && data[1] == 0x4D
+
+                    let isModernImage = isPNG || isJPEG || isGIF || isBMP
+
+                    // Only check for disk images if it's NOT a modern image format
+                    let possibleDiskImage = !isModernImage && (data.count == 143360 || data.count == 819200 || data.count > 100000)
+                    
+                    var processedAsDiskImage = false
+                    
+                    if possibleDiskImage {
+                        // Try catalog browser first
+                        if let catalog = DiskImageReader.readDiskCatalog(data: data, filename: fileName) {
+                        
+                            DispatchQueue.main.async {
+                                self.currentCatalog = catalog
+                                self.showCatalogBrowser = true
+                                self.isProcessing = false
+                            }
+                            continue
+                        }
+                        
+                        // Catalog reading failed - show error and skip this file
+                       
+                        DispatchQueue.main.async {
+                            self.statusMessage = "Could not read disk image: \(fileName)"
+                        }
+                        processedAsDiskImage = true  // Mark as processed so it doesn't try as regular file
+                    }
+                    
+                    // Only try as regular file if it wasn't a disk image
+                    if !processedAsDiskImage {
+                        let result = SHRDecoder.decode(data: data, filename: fileName)
+                        if let cgImage = result.image, result.type != .Unknown {
+                            let fileURL = file.url ?? URL(fileURLWithPath: "/\(fileName)")
+                            let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                            let item = ImageItem(url: fileURL, image: nsImage, type: result.type)
+                            newItems.append(item)
+                            successCount += 1
+                        }
+                    }
+                }
+                
+                DispatchQueue.main.async {
+                    self.imageItems.append(contentsOf: newItems)
+                    self.isProcessing = false
+                    
+                    if successCount > 0 {
+                        self.statusMessage = "Loaded \(successCount) image(s) from \(filesToProcess.count) file(s)"
+                        self.showBrowser = true
+                        if self.selectedImage == nil {
+                            self.selectedImage = newItems.first
+                        }
+                    } else {
+                        self.statusMessage = "No valid images found"
+                    }
+                    
+                    self.progressString = ""
+                }
+            }
         }
     }
     
@@ -546,17 +2106,14 @@ struct ContentView: View {
         DispatchQueue.global(qos: .userInitiated).async {
             var allFileURLs: [URL] = []
             
-            // Recursively collect all files from folders
             for url in urls {
                 var isDirectory: ObjCBool = false
                 if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) {
                     if isDirectory.boolValue {
-                        // It's a folder - scan it
                         if let files = self.scanFolder(url: url) {
                             allFileURLs.append(contentsOf: files)
                         }
                     } else {
-                        // It's a file - add directly
                         allFileURLs.append(url)
                     }
                 }
@@ -588,7 +2145,6 @@ struct ContentView: View {
             do {
                 let fileAttributes = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
                 if fileAttributes.isRegularFile == true {
-                    // Optional: Filter by file size (Apple II images are typically 8KB, 16KB, or 32KB+)
                     let fileSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
                     if fileSize > 0 {
                         fileURLs.append(fileURL)
@@ -621,21 +2177,50 @@ struct ContentView: View {
                 }
                 
                 guard let data = try? Data(contentsOf: url) else { continue }
-                let result = SHRDecoder.decode(data: data, filename: url.lastPathComponent)
                 
-                if let cgImage = result.image, result.type != .Unknown {
-                    // Use actual CGImage dimensions (important for aspect-ratio corrected images)
-                    let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-                    let item = ImageItem(url: url, image: nsImage, type: result.type)
-                    newItems.append(item)
-                    successCount += 1
+                // Check if this is a disk image
+                let fileExtension = url.pathExtension.lowercased()
+                if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" {
+                    // Try catalog first
+                    if let catalog = DiskImageReader.readDiskCatalog(data: data, filename: url.lastPathComponent) {
+                        DispatchQueue.main.async {
+                            self.currentCatalog = catalog
+                            self.showCatalogBrowser = true
+                            self.isProcessing = false
+                        }
+                        continue
+                    }
+
+                    // Try to extract images from disk image
+                    let diskFiles = DiskImageReader.readDiskImage(data: data)
+                    
+                    for diskFile in diskFiles {
+                        if let cgImage = SHRDecoder.decode(data: diskFile.data, filename: diskFile.name).image {
+                            // Create a virtual URL for this file
+                            let virtualURL = url.appendingPathComponent(diskFile.name)
+                            let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                            let item = ImageItem(url: virtualURL, image: nsImage, type: diskFile.type)
+                            newItems.append(item)
+                            successCount += 1
+                        }
+                    }
+                } else {
+                    // Regular file
+                    let result = SHRDecoder.decode(data: data, filename: url.lastPathComponent)
+                    
+                    if let cgImage = result.image, result.type != .Unknown {
+                        let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                        let item = ImageItem(url: url, image: nsImage, type: result.type)
+                        newItems.append(item)
+                        successCount += 1
+                    }
                 }
             }
             
             DispatchQueue.main.async {
                 self.imageItems.append(contentsOf: newItems)
                 self.isProcessing = false
-                self.statusMessage = "Loaded \(successCount) of \(urls.count) file(s)"
+                self.statusMessage = "Loaded \(successCount) image(s) from \(urls.count) file(s)"
                 self.progressString = ""
                 
                 if !newItems.isEmpty {
@@ -658,8 +2243,6 @@ struct ContentView: View {
         savePanel.canCreateDirectories = true
         savePanel.showsHiddenFiles = false
         savePanel.message = "Export \(item.filename) as \(selectedExportFormat.rawValue)"
-        
-        // Ensure dialog appears in front
         savePanel.level = .modalPanel
         
         savePanel.begin { response in
@@ -720,7 +2303,6 @@ struct ContentView: View {
     }
     
     func saveImage(image: NSImage, to outputURL: URL, format: ExportFormat) -> Bool {
-        // Apply upscaling if factor > 1
         var finalImage = image
         if upscaleFactor > 1 {
             if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
@@ -756,7 +2338,7 @@ struct ContentView: View {
             try finalData.write(to: outputURL)
             return true
         } catch {
-            print("Error saving to \(outputURL.path): \(error)")
+          
             return false
         }
     }
@@ -815,6 +2397,7 @@ class HEICConverter {
         return mutableData as Data
     }
 }
+
 
 // MARK: - SHRDecoder
 
@@ -964,7 +2547,7 @@ class SHRDecoder {
         case 38400...:
             type = .SHR(mode: "3200 Color")
             image = decodeSHR(data: data, is3200Color: true)
-        case 8192:
+        case 8184...8200:  // HGR images can vary slightly in size
             type = .HGR
             image = decodeHGR(data: data)
         case 16384:
@@ -2629,7 +4212,7 @@ class SHRDecoder {
             (60, 60, 255)    // 5: Blau
         ]
         
-        guard data.count >= 8192 else { return nil }
+        guard data.count >= 8184 else { return nil }
 
         for y in 0..<height {
             let i = y % 8
@@ -2842,4 +4425,410 @@ class SHRDecoder {
             intent: .defaultIntent
         )
     }
+    
 }
+// MARK: - Disk Catalog Browser View
+
+// ===============================================
+// 1. DiskCatalogBrowserView (Top-Level View)
+//    - Defines the @State for selection.
+//    - Defines the global selection/toggle functions.
+//    - Calls CatalogEntryRow using these functions.
+// ===============================================
+
+struct DiskCatalogBrowserView: View {
+    let catalog: DiskCatalog
+    let onImport: ([DiskCatalogEntry]) -> Void
+    let onCancel: () -> Void
+    
+    @State private var selectedEntries: Set<UUID> = []
+    @State private var searchText: String = ""
+    @State private var showImagesOnly: Bool = false
+    @State private var expandAllTrigger: Bool = true
+    
+    var filteredEntries: [DiskCatalogEntry] {
+        var entries = showImagesOnly || !searchText.isEmpty
+             ? catalog.allEntries
+             : catalog.entries
+        
+        if !searchText.isEmpty {
+            entries = entries.filter { entry in
+                entry.name.localizedCaseInsensitiveContains(searchText) ||
+                entry.typeDescription.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+        
+        if showImagesOnly {
+            entries = entries.filter { $0.isImage }
+        }
+        
+        return entries
+    }
+    
+    var selectedCount: Int {
+        selectedEntries.count
+    }
+    
+    var selectedImagesCount: Int {
+        catalog.allEntries.filter { selectedEntries.contains($0.id) && $0.isImage }.count
+    }
+
+    // Function to handle toggling selection for ANY entry (top-level or child)
+    func toggleSelection(_ entry: DiskCatalogEntry) {
+        if selectedEntries.contains(entry.id) {
+            selectedEntries.remove(entry.id)
+        } else {
+            selectedEntries.insert(entry.id)
+        }
+    }
+
+    // Function to check selection status for ANY entry (passed as `isSelected` closure)
+    func isSelected(entry: DiskCatalogEntry) -> Bool {
+        selectedEntries.contains(entry.id)
+    }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header (unchanged)
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("💾 \(catalog.diskName)")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text("(\(catalog.diskFormat))")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    HStack(spacing: 16) {
+                        Label("\(catalog.totalFiles) files", systemImage: "doc.text")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Label("\(catalog.imageFiles) images", systemImage: "photo")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                        
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(catalog.diskSize), countStyle: .file))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                Button(action: onCancel) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding()
+            .background(Color(NSColor.controlBackgroundColor))
+            
+            Divider()
+            
+            // Toolbar (unchanged)
+            HStack(spacing: 12) {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                    TextField("Search files...", text: $searchText)
+                        .textFieldStyle(.plain)
+                    
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(6)
+                .background(Color(NSColor.textBackgroundColor))
+                .cornerRadius(6)
+                .frame(width: 250)
+                
+                Toggle(isOn: $showImagesOnly) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "photo")
+                        Text("Images Only")
+                    }
+                }
+                .toggleStyle(.checkbox)
+                
+                Spacer()
+                
+                Button("Select All Images") {
+                    let imageEntries = catalog.allEntries.filter { $0.isImage }
+                    print("🔵 Total entries: \(catalog.allEntries.count)")
+                    print("🔵 Image entries: \(imageEntries.count)")
+                    print("🔵 Images found: \(imageEntries.map { $0.name })")
+                    selectedEntries = Set(imageEntries.map { $0.id })
+                }
+                
+                Button("Clear Selection") {
+                    selectedEntries.removeAll()
+                }
+                Button("Expand All") {
+                    expandAllTrigger = true
+                }
+
+                Button("Collapse All") {
+                    expandAllTrigger = false
+                }
+
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            
+            Divider()
+            
+            // Table
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(filteredEntries) { entry in
+                        CatalogEntryRow(
+                            entry: entry,
+                            isSelected: self.isSelected,
+                            onToggle: self.toggleSelection,
+                            level: 0,
+                            expandAllTrigger: expandAllTrigger  // NEU!
+                        )
+                    }
+                }
+            }
+
+            
+            Divider()
+            
+            // Footer (unchanged)
+            HStack {
+                HStack(spacing: 16) {
+                    Text("\(selectedCount) selected")
+                        .foregroundColor(.secondary)
+                    
+                    if selectedImagesCount > 0 {
+                        Text("(\(selectedImagesCount) images)")
+                            .foregroundColor(.blue)
+                            .fontWeight(.medium)
+                    }
+                }
+                
+                Spacer()
+                
+                Button("Cancel") {
+                    onCancel()
+                }
+                .keyboardShortcut(.cancelAction)
+                
+                Button("Export Files") {
+                    exportSelectedFiles()
+                }
+                .disabled(selectedCount == 0)
+                
+                Button("Import Selected") {
+                    let entriesToImport = catalog.allEntries.filter { selectedEntries.contains($0.id) }
+                    onImport(entriesToImport)
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(selectedCount == 0)
+            }
+            .padding()
+            .background(Color(NSColor.controlBackgroundColor))
+        }
+        .frame(width: 900, height: 600)
+        .onAppear {
+            selectedEntries = []  // Keine Vorauswahl
+        }
+    }
+    
+    // exportSelectedFiles function (unchanged)
+    func exportSelectedFiles() {
+        let entriesToExport = catalog.allEntries.filter { selectedEntries.contains($0.id) }
+        
+        guard !entriesToExport.isEmpty else { return }
+        
+        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd_HHmmss"
+        let timestamp = dateFormatter.string(from: Date())
+        let exportFolder = downloadsURL.appendingPathComponent("\(catalog.diskName)_export_\(timestamp)")
+        
+        do {
+            try FileManager.default.createDirectory(at: exportFolder, withIntermediateDirectories: true)
+            
+            var exportedCount = 0
+            
+            for entry in entriesToExport {
+                guard !entry.isDirectory else { continue }
+                
+                var filename = entry.name
+                
+                if !filename.contains(".") {
+                    switch entry.fileType {
+                    case 0x00, 0x01: filename += ".txt"
+                    case 0x02: filename += ".bas"
+                    case 0x04, 0x06: filename += ".bin"
+                    case 0xFA, 0xFC: filename += ".bas"
+                    default: filename += ".dat"
+                    }
+                }
+                
+                let fileURL = exportFolder.appendingPathComponent(filename)
+                try entry.data.write(to: fileURL)
+                exportedCount += 1
+            }
+            
+            
+            NSWorkspace.shared.activateFileViewerSelecting([exportFolder])
+            
+        } catch {
+            
+        }
+    }
+}
+
+
+// ===============================================
+// 2. CatalogEntryRow (Main Row View)
+//    - Updated signatures and usage of isSelected/onToggle closures.
+//    - Recursively calls CatalogEntryRowRecursive.
+// ===============================================
+
+struct CatalogEntryRow: View {
+    let entry: DiskCatalogEntry
+    let isSelected: (DiskCatalogEntry) -> Bool
+    let onToggle: (DiskCatalogEntry) -> Void
+    let level: Int
+    let expandAllTrigger: Bool  // NEU!
+    
+    @State private var isExpanded: Bool = true
+
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Haupt-Row
+            HStack(spacing: 8) {
+                // Einrückung für Hierarchie (unchanged)
+                if level > 0 {
+                    ForEach(0..<level, id: \.self) { _ in
+                        Text("  ")
+                    }
+                    Text("└─")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                   
+
+                
+                // Checkbox
+                Button(action: {
+                    onToggle(entry)
+                }) {
+                    Image(systemName: isSelected(entry) ? "checkmark.square.fill" : "square")
+                        .foregroundColor(isSelected(entry) ? .blue : .secondary)
+                }
+                .buttonStyle(.plain)
+                .frame(width: 30)
+                
+                // Expand/Collapse für Ordner (unchanged)
+                if entry.isDirectory && entry.children != nil && !entry.children!.isEmpty {
+                    Button(action: { isExpanded.toggle() }) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                
+                Text(entry.icon)
+                    .font(.title3)
+                
+                Text(entry.name)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fontWeight(entry.isDirectory ? .semibold : .regular)
+                
+                // Rest bleibt gleich... (unchanged)
+                Text(entry.typeDescription)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(width: 120, alignment: .leading)
+                
+                Text(entry.sizeString)
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundColor(.secondary)
+                    .frame(width: 80, alignment: .trailing)
+                
+                if let loadAddr = entry.loadAddress {
+                    Text(String(format: "$%04X", loadAddr))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundColor(.secondary)
+                        .frame(width: 80, alignment: .trailing)
+                } else {
+                    Text("-")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 80, alignment: .trailing)
+                }
+            }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 8)
+            .background(isSelected(entry) ? Color.blue.opacity(0.1) : Color.clear)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: { onToggle(entry) })
+            
+            // Kinder anzeigen wenn expanded
+                if entry.isDirectory && isExpanded, let children = entry.children {
+                               ForEach(children) { child in
+                                   CatalogEntryRowRecursive(
+                                       entry: child,
+                                       isSelected: isSelected,
+                                       onToggle: onToggle,
+                                       level: level + 1,
+                                       expandAllTrigger: expandAllTrigger  // NEU!
+                                   )
+                               }
+                           }
+                       }
+                       .onChange(of: expandAllTrigger) { newValue in  // NEU!
+                           isExpanded = newValue
+                       }
+                   }
+               }
+
+
+// ===============================================
+// 3. CatalogEntryRowRecursive (Wrapper for Recursion)
+//    - Updated signatures to match CatalogEntryRow.
+// ===============================================
+
+// Rekursive Version
+    struct CatalogEntryRowRecursive: View {
+        let entry: DiskCatalogEntry
+        let isSelected: (DiskCatalogEntry) -> Bool
+        let onToggle: (DiskCatalogEntry) -> Void
+        let level: Int
+        let expandAllTrigger: Bool  // NEU!
+        
+        var body: some View {
+            CatalogEntryRow(
+                entry: entry,
+                isSelected: isSelected,
+                onToggle: onToggle,
+                level: level,
+                expandAllTrigger: expandAllTrigger  // NEU!
+            )
+        }
+    }
+
+    
+
