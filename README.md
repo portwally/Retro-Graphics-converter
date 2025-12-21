@@ -126,4 +126,9 @@ Applications → Utilities → Terminal
 2. Run the following command (in case you installed it in the Applications directory):<br>
 ```xattr -cr /Applications/Retro-Graphics-Converter.app```
 
+[![Visits](https://img.shields.io/badge/dynamic/json?style=flat&color=6c757d&label=visits&query=value&url=https://api.countapi.xyz/hit/portwally-retro-graphics-converter/readme)](https://github.com/portwally/Retro-Graphics-converter)
+[![Downloads](https://img.shields.io/github/downloads/portwally/Retro-Graphics-converter/total?style=flat&color=0d6efd)](https://github.com/portwally/Retro-Graphics-converter/releases)
+[![Stars](https://img.shields.io/github/stars/portwally/Retro-Graphics-converter?style=flat&color=f1c40f)](https://github.com/portwally/Retro-Graphics-converter/stargazers)
+[![Forks](https://img.shields.io/github/forks/portwally/Retro-Graphics-converter?style=flat&color=2ecc71)](https://github.com/portwally/Retro-Graphics-converter/network/members)
+[![Homepage](https://img.shields.io/badge/homepage-GitHub-8e44ad?style=flat)](https://github.com/portwally/Retro-Graphics-converter)
 
