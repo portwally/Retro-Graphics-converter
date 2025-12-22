@@ -108,22 +108,20 @@ You may see a message stating: "The app cannot be opened because it is from an u
 How to bypass this warning (one-time process):
 
 Close the warning window.
-
 Go to the app in Finder (e.g., in your Applications Folder).
-
 Hold the Control key and click on the app icon (or use the Right-Click menu).
-
 Select Open from the context menu.
-
 In the subsequent dialog box, confirm that you want to open the app by clicking Open again.
-
 The application will now launch and will be trusted by macOS for all future starts.
-
-if this does not work then
+If this does not work then
 1. Open Terminal
 You can find it in:
 Applications → Utilities → Terminal
 2. Run the following command (in case you installed it in the Applications directory):<br>
 ```xattr -cr /Applications/Retro-Graphics-Converter.app```
 
+
+[![Downloads](https://img.shields.io/github/downloads/portwally/Retro-Graphics-converter/total?style=flat&color=0d6efd)](https://github.com/portwally/Retro-Graphics-converter/releases)
+[![Stars](https://img.shields.io/github/stars/portwally/Retro-Graphics-converter?style=flat&color=f1c40f)](https://github.com/portwally/Retro-Graphics-converter/stargazers)
+[![Forks](https://img.shields.io/github/forks/portwally/Retro-Graphics-converter?style=flat&color=2ecc71)](https://github.com/portwally/Retro-Graphics-converter/network/members)
 
