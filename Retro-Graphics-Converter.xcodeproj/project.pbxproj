@@ -6,6 +6,29 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		3E75F2362F11204400C49434 /* PCImageDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2242F11204400C49434 /* PCImageDecoder.swift */; };
+		3E75F2372F11204400C49434 /* DiskCatalogBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2312F11204400C49434 /* DiskCatalogBrowserView.swift */; };
+		3E75F2382F11204400C49434 /* ModernImageDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2222F11204400C49434 /* ModernImageDecoder.swift */; };
+		3E75F2392F11204400C49434 /* SHRConverterApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2342F11204400C49434 /* SHRConverterApp.swift */; };
+		3E75F23A2F11204400C49434 /* ImageTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2292F11204400C49434 /* ImageTypes.swift */; };
+		3E75F23B2F11204400C49434 /* ImageHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F22D2F11204400C49434 /* ImageHelpers.swift */; };
+		3E75F23C2F11204400C49434 /* AmigaIFFDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F21D2F11204400C49434 /* AmigaIFFDecoder.swift */; };
+		3E75F23D2F11204400C49434 /* PackedSHRDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2232F11204400C49434 /* PackedSHRDecoder.swift */; };
+		3E75F23E2F11204400C49434 /* HEICConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F22C2F11204400C49434 /* HEICConverter.swift */; };
+		3E75F23F2F11204400C49434 /* C64Decoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2202F11204400C49434 /* C64Decoder.swift */; };
+		3E75F2402F11204400C49434 /* DiskCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2282F11204400C49434 /* DiskCatalog.swift */; };
+		3E75F2412F11204400C49434 /* UTTypeExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F22E2F11204400C49434 /* UTTypeExtensions.swift */; };
+		3E75F2422F11204400C49434 /* DiskImageReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2212F11204400C49434 /* DiskImageReader.swift */; };
+		3E75F2432F11204400C49434 /* ProDOSFileTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F22A2F11204400C49434 /* ProDOSFileTypes.swift */; };
+		3E75F2442F11204400C49434 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2302F11204400C49434 /* ContentView.swift */; };
+		3E75F2452F11204400C49434 /* ImageThumbnailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2322F11204400C49434 /* ImageThumbnailView.swift */; };
+		3E75F2462F11204400C49434 /* AtariSTDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F21F2F11204400C49434 /* AtariSTDecoder.swift */; };
+		3E75F2472F11204400C49434 /* SHRDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2262F11204400C49434 /* SHRDecoder.swift */; };
+		3E75F2482F11204400C49434 /* RetroDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2252F11204400C49434 /* RetroDecoder.swift */; };
+		3E75F2492F11204400C49434 /* AppleIIDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F21E2F11204400C49434 /* AppleIIDecoder.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		3E9C9EA82EE37BE000DEE453 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,6 +47,26 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		3E75F21D2F11204400C49434 /* AmigaIFFDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmigaIFFDecoder.swift; sourceTree = "<group>"; };
+		3E75F21E2F11204400C49434 /* AppleIIDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIIDecoder.swift; sourceTree = "<group>"; };
+		3E75F21F2F11204400C49434 /* AtariSTDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtariSTDecoder.swift; sourceTree = "<group>"; };
+		3E75F2202F11204400C49434 /* C64Decoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = C64Decoder.swift; sourceTree = "<group>"; };
+		3E75F2212F11204400C49434 /* DiskImageReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskImageReader.swift; sourceTree = "<group>"; };
+		3E75F2222F11204400C49434 /* ModernImageDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModernImageDecoder.swift; sourceTree = "<group>"; };
+		3E75F2232F11204400C49434 /* PackedSHRDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackedSHRDecoder.swift; sourceTree = "<group>"; };
+		3E75F2242F11204400C49434 /* PCImageDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PCImageDecoder.swift; sourceTree = "<group>"; };
+		3E75F2252F11204400C49434 /* RetroDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetroDecoder.swift; sourceTree = "<group>"; };
+		3E75F2262F11204400C49434 /* SHRDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SHRDecoder.swift; sourceTree = "<group>"; };
+		3E75F2282F11204400C49434 /* DiskCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskCatalog.swift; sourceTree = "<group>"; };
+		3E75F2292F11204400C49434 /* ImageTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageTypes.swift; sourceTree = "<group>"; };
+		3E75F22A2F11204400C49434 /* ProDOSFileTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProDOSFileTypes.swift; sourceTree = "<group>"; };
+		3E75F22C2F11204400C49434 /* HEICConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HEICConverter.swift; sourceTree = "<group>"; };
+		3E75F22D2F11204400C49434 /* ImageHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageHelpers.swift; sourceTree = "<group>"; };
+		3E75F22E2F11204400C49434 /* UTTypeExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UTTypeExtensions.swift; sourceTree = "<group>"; };
+		3E75F2302F11204400C49434 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		3E75F2312F11204400C49434 /* DiskCatalogBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskCatalogBrowserView.swift; sourceTree = "<group>"; };
+		3E75F2322F11204400C49434 /* ImageThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageThumbnailView.swift; sourceTree = "<group>"; };
+		3E75F2342F11204400C49434 /* SHRConverterApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SHRConverterApp.swift; sourceTree = "<group>"; };
 		3E9C9E9A2EE37BDF00DEE453 /* Retro-Graphics-Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Retro-Graphics-Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E9C9EA72EE37BE000DEE453 /* Retro-Graphics-ConverterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Retro-Graphics-ConverterTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E9C9EB12EE37BE000DEE453 /* Retro-Graphics-ConverterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Retro-Graphics-ConverterUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -33,16 +76,6 @@
 		3E9C9E9C2EE37BDF00DEE453 /* Retro-Graphics-converter */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "Retro-Graphics-converter";
-			sourceTree = "<group>";
-		};
-		3E9C9EAA2EE37BE000DEE453 /* SHR to PNG ConvertTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "SHR to PNG ConvertTests";
-			sourceTree = "<group>";
-		};
-		3E9C9EB42EE37BE000DEE453 /* SHR to PNG ConvertUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "SHR to PNG ConvertUITests";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -72,12 +105,70 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		3E75F2272F11204400C49434 /* Decoders */ = {
+			isa = PBXGroup;
+			children = (
+				3E75F21D2F11204400C49434 /* AmigaIFFDecoder.swift */,
+				3E75F21E2F11204400C49434 /* AppleIIDecoder.swift */,
+				3E75F21F2F11204400C49434 /* AtariSTDecoder.swift */,
+				3E75F2202F11204400C49434 /* C64Decoder.swift */,
+				3E75F2212F11204400C49434 /* DiskImageReader.swift */,
+				3E75F2222F11204400C49434 /* ModernImageDecoder.swift */,
+				3E75F2232F11204400C49434 /* PackedSHRDecoder.swift */,
+				3E75F2242F11204400C49434 /* PCImageDecoder.swift */,
+				3E75F2252F11204400C49434 /* RetroDecoder.swift */,
+				3E75F2262F11204400C49434 /* SHRDecoder.swift */,
+			);
+			path = Decoders;
+			sourceTree = "<group>";
+		};
+		3E75F22B2F11204400C49434 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				3E75F2282F11204400C49434 /* DiskCatalog.swift */,
+				3E75F2292F11204400C49434 /* ImageTypes.swift */,
+				3E75F22A2F11204400C49434 /* ProDOSFileTypes.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		3E75F22F2F11204400C49434 /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				3E75F22C2F11204400C49434 /* HEICConverter.swift */,
+				3E75F22D2F11204400C49434 /* ImageHelpers.swift */,
+				3E75F22E2F11204400C49434 /* UTTypeExtensions.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		3E75F2332F11204400C49434 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				3E75F2302F11204400C49434 /* ContentView.swift */,
+				3E75F2312F11204400C49434 /* DiskCatalogBrowserView.swift */,
+				3E75F2322F11204400C49434 /* ImageThumbnailView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		3E75F2352F11204400C49434 /* SHRConverter */ = {
+			isa = PBXGroup;
+			children = (
+				3E75F2272F11204400C49434 /* Decoders */,
+				3E75F22B2F11204400C49434 /* Models */,
+				3E75F22F2F11204400C49434 /* Utilities */,
+				3E75F2332F11204400C49434 /* Views */,
+				3E75F2342F11204400C49434 /* SHRConverterApp.swift */,
+			);
+			path = SHRConverter;
+			sourceTree = "<group>";
+		};
 		3E9C9E912EE37BDF00DEE453 = {
 			isa = PBXGroup;
 			children = (
 				3E9C9E9C2EE37BDF00DEE453 /* Retro-Graphics-converter */,
-				3E9C9EAA2EE37BE000DEE453 /* SHR to PNG ConvertTests */,
-				3E9C9EB42EE37BE000DEE453 /* SHR to PNG ConvertUITests */,
+				3E75F2352F11204400C49434 /* SHRConverter */,
 				3E9C9E9B2EE37BDF00DEE453 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -130,9 +221,6 @@
 			dependencies = (
 				3E9C9EA92EE37BE000DEE453 /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				3E9C9EAA2EE37BE000DEE453 /* SHR to PNG ConvertTests */,
-			);
 			name = "Retro-Graphics-ConverterTests";
 			packageProductDependencies = (
 			);
@@ -152,9 +240,6 @@
 			);
 			dependencies = (
 				3E9C9EB32EE37BE000DEE453 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				3E9C9EB42EE37BE000DEE453 /* SHR to PNG ConvertUITests */,
 			);
 			name = "Retro-Graphics-ConverterUITests";
 			packageProductDependencies = (
@@ -236,6 +321,26 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3E75F2362F11204400C49434 /* PCImageDecoder.swift in Sources */,
+				3E75F2372F11204400C49434 /* DiskCatalogBrowserView.swift in Sources */,
+				3E75F2382F11204400C49434 /* ModernImageDecoder.swift in Sources */,
+				3E75F2392F11204400C49434 /* SHRConverterApp.swift in Sources */,
+				3E75F23A2F11204400C49434 /* ImageTypes.swift in Sources */,
+				3E75F23B2F11204400C49434 /* ImageHelpers.swift in Sources */,
+				3E75F23C2F11204400C49434 /* AmigaIFFDecoder.swift in Sources */,
+				3E75F23D2F11204400C49434 /* PackedSHRDecoder.swift in Sources */,
+				3E75F23E2F11204400C49434 /* HEICConverter.swift in Sources */,
+				3E75F23F2F11204400C49434 /* C64Decoder.swift in Sources */,
+				3E75F2402F11204400C49434 /* DiskCatalog.swift in Sources */,
+				3E75F2412F11204400C49434 /* UTTypeExtensions.swift in Sources */,
+				3E75F2422F11204400C49434 /* DiskImageReader.swift in Sources */,
+				3E75F2432F11204400C49434 /* ProDOSFileTypes.swift in Sources */,
+				3E75F2442F11204400C49434 /* ContentView.swift in Sources */,
+				3E75F2452F11204400C49434 /* ImageThumbnailView.swift in Sources */,
+				3E75F2462F11204400C49434 /* AtariSTDecoder.swift in Sources */,
+				3E75F2472F11204400C49434 /* SHRDecoder.swift in Sources */,
+				3E75F2482F11204400C49434 /* RetroDecoder.swift in Sources */,
+				3E75F2492F11204400C49434 /* AppleIIDecoder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
