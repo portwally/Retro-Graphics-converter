@@ -136,14 +136,16 @@ class PackedSHRDecoder {
         
         // Render image
         let image: CGImage?
+        let modeString: String
         if let palettes = palettes3200, palettes.count >= mainData.numScanLines {
             image = renderSHR3200(mainData: mainData, palettes: palettes)
+            modeString = "APF 3200"
         } else {
             image = renderSHRStandard(mainData: mainData)
+            modeString = "APF"
         }
         
-        let modeString = palettes3200 != nil ? "APF 3200" : "APF"
-        return (image, .SHR(mode: modeString))
+        return (image, .SHR(mode: modeString, width: mainData.pixelsPerScanLine, height: mainData.numScanLines))
     }
     
     // MARK: - Structures
@@ -453,7 +455,7 @@ class PackedSHRDecoder {
         return ["MAIN", "PATS", "SCIB", "PALETTES", "MASK", "MULTIPAL", "NOTE"].contains(blockName)
     }
     
-    private static func isPaintworksFormat(_ data: Data) -> Bool {
+    static func isPaintworksFormat(_ data: Data) -> Bool {
         guard data.count >= 0x222 else { return false }
         for i in 0..<16 {
             if (data[i * 2 + 1] & 0xF0) != 0 { return false }
@@ -462,11 +464,12 @@ class PackedSHRDecoder {
     }
     
     // MARK: - PNT/$0000 (Paintworks)
-    // Note: Paintworks uses standard PackBits (MacPaint format), not PackBytes!
+    // Paintworks can use different compression methods or even store uncompressed data
     
     static func decodePNT0000(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         guard data.count >= 0x222 else { return (nil, .Unknown) }
         
+        // Read Super Hi-Res Palette (offset +$00 to +$1F)
         var palette: [(r: UInt8, g: UInt8, b: UInt8)] = []
         for i in 0..<16 {
             let low = data[i * 2]
@@ -477,24 +480,71 @@ class PackedSHRDecoder {
             palette.append((r: red * 17, g: green * 17, b: blue * 17))
         }
         
-        let packedData = data.subdata(in: 0x222..<data.count)
-        // Paintworks uses PackBits, not PackBytes
-        let unpackedData = unpackBits(data: packedData, maxOutputSize: 64000)
+        // Skip background color (offset +$20 to +$21) and patterns (offset +$22 to +$221)
+        // Data starts at offset +$222
+        let startOffset = 0x222
+        guard data.count > startOffset else { return (nil, .Unknown) }
         
-        let height = unpackedData.count >= 63000 ? 396 : 200
+        let remainingData = data.subdata(in: startOffset..<data.count)
         let width = 320
         let bytesPerLine = 160
+        
+        // Try different decompression methods
+        var unpackedData: Data?
+        var decodedHeight = 200
+        
+        // Method 1: Check if data is already uncompressed (32000 bytes = 320x200)
+        if remainingData.count >= 32000 {
+            // Might be uncompressed
+            unpackedData = remainingData.prefix(32000)
+            decodedHeight = 200
+        }
+        
+        // Method 2: Try Apple IIgs PackBytes decompression
+        if unpackedData == nil || unpackedData!.count < 1000 {
+            let packed = unpackBytes(data: remainingData, maxOutputSize: 64000)
+            if packed.count >= 16000 {  // At least half a screen
+                unpackedData = packed
+                decodedHeight = min(packed.count / bytesPerLine, 396)
+            }
+        }
+        
+        // Method 3: Try PackBits (older MacPaint-style compression)
+        if unpackedData == nil || unpackedData!.count < 1000 {
+            let packed = unpackBits(data: remainingData, maxOutputSize: 64000)
+            if packed.count >= 16000 {
+                unpackedData = packed
+                decodedHeight = min(packed.count / bytesPerLine, 396)
+            }
+        }
+        
+        // Method 4: Try QuickDraw II PackBytes (another variant)
+        if unpackedData == nil || unpackedData!.count < 1000 {
+            let packed = unpackQuickDrawII(data: remainingData, maxOutputSize: 64000)
+            if packed.count >= 16000 {
+                unpackedData = packed
+                decodedHeight = min(packed.count / bytesPerLine, 396)
+            }
+        }
+        
+        guard let finalData = unpackedData, finalData.count >= bytesPerLine else {
+            return (nil, .Unknown)
+        }
+        
+        let height = min(decodedHeight, finalData.count / bytesPerLine)
+        guard height > 0 else { return (nil, .Unknown) }
         
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
         
         for y in 0..<height {
             for xByte in 0..<bytesPerLine {
                 let dataIndex = y * bytesPerLine + xByte
-                guard dataIndex < unpackedData.count else { continue }
-                let byte = unpackedData[dataIndex]
+                guard dataIndex < finalData.count else { continue }
+                let byte = finalData[dataIndex]
                 
                 let x = xByte * 2
                 
+                // First pixel (high nibble)
                 let color1 = palette[Int((byte >> 4) & 0x0F)]
                 let bufIdx1 = (y * width + x) * 4
                 rgbaBuffer[bufIdx1] = color1.0
@@ -502,6 +552,7 @@ class PackedSHRDecoder {
                 rgbaBuffer[bufIdx1 + 2] = color1.2
                 rgbaBuffer[bufIdx1 + 3] = 255
                 
+                // Second pixel (low nibble)
                 let color2 = palette[Int(byte & 0x0F)]
                 let bufIdx2 = (y * width + x + 1) * 4
                 rgbaBuffer[bufIdx2] = color2.0
@@ -515,7 +566,45 @@ class PackedSHRDecoder {
             return (nil, .Unknown)
         }
         
-        return (cgImage, .SHR(mode: "Paintworks"))
+        return (cgImage, .SHR(mode: "Paintworks", width: width, height: height))
+    }
+    
+    // MARK: - QuickDraw II PackBytes (alternative variant used in some Paintworks files)
+    // This variant is similar to PackBits but uses different byte ranges
+    
+    static func unpackQuickDrawII(data: Data, maxOutputSize: Int = 65536) -> Data {
+        var output = Data()
+        output.reserveCapacity(min(maxOutputSize, data.count * 2))
+        
+        var pos = 0
+        
+        while pos < data.count && output.count < maxOutputSize {
+            guard pos < data.count else { break }
+            let flag = data[pos]
+            pos += 1
+            
+            if flag <= 127 {
+                // Literal: copy next (flag + 1) bytes
+                let count = Int(flag) + 1
+                let bytesToCopy = min(count, data.count - pos, maxOutputSize - output.count)
+                if bytesToCopy > 0 {
+                    output.append(data.subdata(in: pos..<(pos + bytesToCopy)))
+                    pos += bytesToCopy
+                }
+            } else if flag >= 129 {
+                // Repeat: repeat next byte (257 - flag) times
+                let count = 257 - Int(flag)
+                if pos < data.count {
+                    let repeatByte = data[pos]
+                    pos += 1
+                    let bytesToWrite = min(count, maxOutputSize - output.count)
+                    output.append(contentsOf: repeatElement(repeatByte, count: bytesToWrite))
+                }
+            }
+            // flag == 128: no-op
+        }
+        
+        return output
     }
     
     // MARK: - PackBits (MacPaint format) - for Paintworks compatibility
@@ -567,7 +656,7 @@ class PackedSHRDecoder {
         guard unpackedData.count >= 32000 else { return nil }
         
         if let image = AppleIIDecoder.decodeSHR(data: unpackedData, is3200Color: false) {
-            return (image, .SHR(mode: "Packed"))
+            return (image, .SHR(mode: "Packed", width: 320, height: 200))
         }
         return nil
     }
