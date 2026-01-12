@@ -27,6 +27,7 @@
 		3E75F2472F11204400C49434 /* SHRDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2262F11204400C49434 /* SHRDecoder.swift */; };
 		3E75F2482F11204400C49434 /* RetroDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2252F11204400C49434 /* RetroDecoder.swift */; };
 		3E75F2492F11204400C49434 /* AppleIIDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F21E2F11204400C49434 /* AppleIIDecoder.swift */; };
+		3E9F97B22F156505009196E9 /* ImageCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9F97B12F156505009196E9 /* ImageCropView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -70,6 +71,7 @@
 		3E9C9E9A2EE37BDF00DEE453 /* Retro-Graphics-Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Retro-Graphics-Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E9C9EA72EE37BE000DEE453 /* Retro-Graphics-ConverterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Retro-Graphics-ConverterTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E9C9EB12EE37BE000DEE453 /* Retro-Graphics-ConverterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Retro-Graphics-ConverterUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3E9F97B12F156505009196E9 /* ImageCropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -170,6 +172,7 @@
 				3E9C9E9C2EE37BDF00DEE453 /* Retro-Graphics-converter */,
 				3E75F2352F11204400C49434 /* SHRConverter */,
 				3E9C9E9B2EE37BDF00DEE453 /* Products */,
+				3E9F97B12F156505009196E9 /* ImageCropView.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -326,6 +329,7 @@
 				3E75F2382F11204400C49434 /* ModernImageDecoder.swift in Sources */,
 				3E75F2392F11204400C49434 /* SHRConverterApp.swift in Sources */,
 				3E75F23A2F11204400C49434 /* ImageTypes.swift in Sources */,
+				3E9F97B22F156505009196E9 /* ImageCropView.swift in Sources */,
 				3E75F23B2F11204400C49434 /* ImageHelpers.swift in Sources */,
 				3E75F23C2F11204400C49434 /* AmigaIFFDecoder.swift in Sources */,
 				3E75F23D2F11204400C49434 /* PackedSHRDecoder.swift in Sources */,

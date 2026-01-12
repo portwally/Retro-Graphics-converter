@@ -109,11 +109,20 @@ struct DiskImageFile {
 // MARK: - Image Item Model
 
 struct ImageItem: Identifiable {
-    let id = UUID()
+    let id: UUID
     let url: URL
     let image: NSImage
     let type: AppleIIImageType
     let originalData: Data?
+    
+    // Initializer mit optionaler ID - wenn keine ID übergeben wird, wird eine neue erstellt
+    init(id: UUID = UUID(), url: URL, image: NSImage, type: AppleIIImageType, originalData: Data?) {
+        self.id = id
+        self.url = url
+        self.image = image
+        self.type = type
+        self.originalData = originalData
+    }
     
     var filename: String {
         url.lastPathComponent
