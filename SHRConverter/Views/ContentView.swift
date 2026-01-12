@@ -89,15 +89,36 @@ struct ContentView: View {
         VStack(spacing: 12) {
             if !imageItems.isEmpty && selectedImage != nil {
                 HStack {
-                    Spacer()
                     if let selectedImg = selectedImage {
                         HStack(spacing: 12) {
+                            // Linke Seite: Filename und Type
                             HStack(spacing: 6) {
                                 Text(selectedImg.filename).font(.caption).fontWeight(.medium)
                                 Text("•").foregroundColor(.secondary)
                                 Text(selectedImg.type.displayName).font(.caption).padding(.horizontal, 6).padding(.vertical, 2).background(Color.blue.opacity(0.2)).cornerRadius(4)
                             }
+                            
                             Divider().frame(height: 16)
+                            
+                            // Mitte: Auflösung und Farbtiefe
+                            HStack(spacing: 6) {
+                                let resolution = selectedImg.type.resolution
+                                Image(systemName: "rectangle.grid.2x2").font(.caption).foregroundColor(.secondary)
+                                Text("\(resolution.width)×\(resolution.height)").font(.caption).monospacedDigit()
+                                Text("•").foregroundColor(.secondary)
+                                Image(systemName: "paintpalette").font(.caption).foregroundColor(.secondary)
+                                Text(selectedImg.type.colorDepth).font(.caption)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.15))
+                            .cornerRadius(4)
+                            
+                            Spacer()
+                            
+                            Divider().frame(height: 16)
+                            
+                            // Rechte Seite: Zoom Controls
                             HStack(spacing: 6) {
                                 Button(action: { zoomScale = max(0.5, zoomScale / 1.5) }) { Image(systemName: "minus.magnifyingglass") }.help("Zoom Out")
                                 Text("\(Int(zoomScale * 100))%").font(.caption).monospacedDigit().frame(width: 50)

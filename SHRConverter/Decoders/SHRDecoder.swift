@@ -147,9 +147,11 @@ class SHRDecoder {
     private static func decodeAppleIIBySize(data: Data, size: Int) -> (image: CGImage?, type: AppleIIImageType) {
         switch size {
         case 32768:
-            return (AppleIIDecoder.decodeSHR(data: data, is3200Color: false), .SHR(mode: "Standard"))
+            // Standard SHR: 32KB file
+            return (AppleIIDecoder.decodeSHR(data: data, is3200Color: false), .SHR(mode: "Standard", width: 320, height: 200))
         case 38400...:
-            return (AppleIIDecoder.decodeSHR(data: data, is3200Color: true), .SHR(mode: "3200 Color"))
+            // 3200 color SHR: needs full palette data
+            return (AppleIIDecoder.decodeSHR(data: data, is3200Color: true), .SHR(mode: "3200", width: 320, height: 200))
         case 8184...8200:
             return (AppleIIDecoder.decodeHGR(data: data), .HGR)
         case 16384:

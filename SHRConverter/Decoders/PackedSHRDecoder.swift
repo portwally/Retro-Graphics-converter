@@ -136,14 +136,16 @@ class PackedSHRDecoder {
         
         // Render image
         let image: CGImage?
+        let modeString: String
         if let palettes = palettes3200, palettes.count >= mainData.numScanLines {
             image = renderSHR3200(mainData: mainData, palettes: palettes)
+            modeString = "APF 3200"
         } else {
             image = renderSHRStandard(mainData: mainData)
+            modeString = "APF"
         }
         
-        let modeString = palettes3200 != nil ? "APF 3200" : "APF"
-        return (image, .SHR(mode: modeString))
+        return (image, .SHR(mode: modeString, width: mainData.pixelsPerScanLine, height: mainData.numScanLines))
     }
     
     // MARK: - Structures
@@ -515,7 +517,7 @@ class PackedSHRDecoder {
             return (nil, .Unknown)
         }
         
-        return (cgImage, .SHR(mode: "Paintworks"))
+        return (cgImage, .SHR(mode: "Paintworks", width: width, height: height))
     }
     
     // MARK: - PackBits (MacPaint format) - for Paintworks compatibility
@@ -567,7 +569,7 @@ class PackedSHRDecoder {
         guard unpackedData.count >= 32000 else { return nil }
         
         if let image = AppleIIDecoder.decodeSHR(data: unpackedData, is3200Color: false) {
-            return (image, .SHR(mode: "Packed"))
+            return (image, .SHR(mode: "Packed", width: 320, height: 200))
         }
         return nil
     }

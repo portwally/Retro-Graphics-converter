@@ -25,7 +25,7 @@ enum ExportFormat: String, CaseIterable {
 // MARK: - Apple II Image Type Enum
 
 enum AppleIIImageType: Equatable {
-    case SHR(mode: String)
+    case SHR(mode: String, width: Int?, height: Int?)
     case DHGR
     case HGR
     case IFF(width: Int, height: Int, colors: String)
@@ -41,7 +41,8 @@ enum AppleIIImageType: Equatable {
     
     var resolution: (width: Int, height: Int) {
         switch self {
-        case .SHR: return (320, 200)
+        case .SHR(_, let width, let height): 
+            return (width ?? 320, height ?? 200)
         case .DHGR: return (560, 192)
         case .HGR: return (280, 192)
         case .IFF(let width, let height, _): return (width, height)
@@ -71,7 +72,15 @@ enum AppleIIImageType: Equatable {
     
     var displayName: String {
         switch self {
-        case .SHR(let mode): return "SHR (\(mode))"
+        case .SHR(let mode, _, _): 
+            // Format SHR names consistently
+            if mode == "3200" {
+                return "SHR 3200"
+            } else if mode.contains("APF") {
+                return "SHR (\(mode))"
+            } else {
+                return "SHR (\(mode))"
+            }
         case .DHGR: return "DHGR"
         case .HGR: return "HGR"
         case .IFF(_, _, let colors): return "IFF (\(colors))"
@@ -83,6 +92,42 @@ enum AppleIIImageType: Equatable {
         case .BMP(let width, let height, let bpp): return "BMP (\(width)x\(height), \(bpp)-bit)"
         case .MacPaint: return "MacPaint (576x720, 1-bit)"
         case .ModernImage(let format, let width, let height): return "\(format) (\(width)x\(height))"
+        case .Unknown: return "Unknown"
+        }
+    }
+    
+    var colorDepth: String {
+        switch self {
+        case .SHR(let mode, _, _):
+            if mode.contains("3200") {
+                return "12-bit (3200 colors)"
+            } else if mode.contains("640") {
+                return "2-bit (4 colors)"
+            } else {
+                return "4-bit (16 colors)"
+            }
+        case .DHGR: return "4-bit (16 colors)"
+        case .HGR: return "1-bit (6 colors)"
+        case .IFF(_, _, let colors): return colors
+        case .DEGAS(_, let colors): return "\(colors) colors"
+        case .C64(let format):
+            if format.contains("FLI") || format.contains("Multicolor") {
+                return "4-bit (16 colors)"
+            } else {
+                return "1-bit (2 colors)"
+            }
+        case .ZXSpectrum: return "3-bit (8 colors)"
+        case .AmstradCPC(_, let colors): return "\(colors) colors"
+        case .PCX(_, _, let bpp): return "\(bpp)-bit"
+        case .BMP(_, _, let bpp): return "\(bpp)-bit"
+        case .MacPaint: return "1-bit (2 colors)"
+        case .ModernImage(let format, _, _):
+            switch format.uppercased() {
+            case "PNG", "TIFF": return "24-bit/32-bit"
+            case "JPEG": return "24-bit"
+            case "GIF": return "8-bit (256 colors)"
+            default: return "24-bit"
+            }
         case .Unknown: return "Unknown"
         }
     }
