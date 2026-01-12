@@ -32,7 +32,6 @@ Modern Formats
 🎬 GIF: Graphics Interchange Format<br>
 📄 TIFF: Tagged Image File Format<br>
 📱 HEIC/HEIF: High Efficiency Image Format<br>
-🌐 WebP: Google's web format<br>
 
 ✨ Features
 File Management
