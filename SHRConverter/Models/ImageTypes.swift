@@ -8,6 +8,7 @@ enum ExportFormat: String, CaseIterable {
     case tiff = "TIFF"
     case gif = "GIF"
     case heic = "HEIC (HEIF)"
+    case original = "Original"
     
     var fileExtension: String {
         switch self {
@@ -16,6 +17,7 @@ enum ExportFormat: String, CaseIterable {
         case .tiff: return "tiff"
         case .gif: return "gif"
         case .heic: return "heic"
+        case .original: return "bin" // wird dynamisch basierend auf Dateityp gesetzt
         }
     }
 }

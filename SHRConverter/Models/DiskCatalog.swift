@@ -113,8 +113,35 @@ struct ImageItem: Identifiable {
     let url: URL
     let image: NSImage
     let type: AppleIIImageType
+    let originalData: Data?
     
     var filename: String {
         url.lastPathComponent
+    }
+    
+    var originalFileExtension: String {
+        // Versuche die Original-Dateierweiterung zu ermitteln
+        let ext = url.pathExtension.lowercased()
+        if !ext.isEmpty {
+            return ext
+        }
+        
+        // Fallback basierend auf Bildtyp
+        switch type {
+        case .SHR: return "shr"
+        case .HGR: return "hgr"
+        case .DHGR: return "dhgr"
+        case .IFF: return "iff"
+        case .DEGAS: return "pi1"
+        case .C64: return "c64"
+        case .ZXSpectrum: return "scr"
+        case .AmstradCPC: return "cpc"
+        case .PCX: return "pcx"
+        case .BMP: return "bmp"
+        case .MacPaint: return "mac"
+        case .ModernImage(let format, _, _):
+            return format.lowercased()
+        case .Unknown: return "bin"
+        }
     }
 }

@@ -44,7 +44,7 @@ struct ContentView: View {
             if showBrowser && !imageItems.isEmpty { browserPanel.frame(minWidth: 250, idealWidth: 300) }
             mainPanel.frame(minWidth: 500)
         }
-        .padding()
+        .padding(8)
         .sheet(isPresented: $showCatalogBrowser) {
             if let catalog = currentCatalog {
                 DiskCatalogBrowserView(catalog: catalog, onImport: { selectedEntries in importCatalogEntries(selectedEntries); showCatalogBrowser = false }, onCancel: { showCatalogBrowser = false })
@@ -53,7 +53,7 @@ struct ContentView: View {
     }
     
     var browserPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Image Browser").font(.headline)
                 Spacer()
@@ -82,23 +82,23 @@ struct ContentView: View {
                 }.padding(.horizontal, 5)
             }
             .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
-        }.padding().background(Color(NSColor.controlBackgroundColor))
+        }.padding(8).background(Color(NSColor.controlBackgroundColor))
     }
     
     var mainPanel: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 12) {
             if !imageItems.isEmpty && selectedImage != nil {
                 HStack {
                     Spacer()
                     if let selectedImg = selectedImage {
-                        HStack(spacing: 15) {
-                            HStack(spacing: 8) {
+                        HStack(spacing: 12) {
+                            HStack(spacing: 6) {
                                 Text(selectedImg.filename).font(.caption).fontWeight(.medium)
                                 Text("•").foregroundColor(.secondary)
                                 Text(selectedImg.type.displayName).font(.caption).padding(.horizontal, 6).padding(.vertical, 2).background(Color.blue.opacity(0.2)).cornerRadius(4)
                             }
-                            Divider().frame(height: 20)
-                            HStack(spacing: 8) {
+                            Divider().frame(height: 16)
+                            HStack(spacing: 6) {
                                 Button(action: { zoomScale = max(0.5, zoomScale / 1.5) }) { Image(systemName: "minus.magnifyingglass") }.help("Zoom Out")
                                 Text("\(Int(zoomScale * 100))%").font(.caption).monospacedDigit().frame(width: 50)
                                 Button(action: { zoomScale = min(10.0, zoomScale * 1.5) }) { Image(systemName: "plus.magnifyingglass") }.help("Zoom In")
@@ -106,11 +106,11 @@ struct ContentView: View {
                             }.buttonStyle(.borderless)
                         }
                     }
-                }.padding(.horizontal).padding(.vertical, 8).background(Color(NSColor.controlBackgroundColor)).cornerRadius(8)
+                }.padding(.horizontal, 8).padding(.vertical, 6).background(Color(NSColor.controlBackgroundColor)).cornerRadius(6)
             }
             
             ZStack {
-                RoundedRectangle(cornerRadius: 12).stroke(style: StrokeStyle(lineWidth: 2, dash: [10])).foregroundColor(isProcessing ? .blue : (!imageItems.isEmpty ? .green : .secondary)).background(Color(NSColor.controlBackgroundColor))
+                RoundedRectangle(cornerRadius: 10).stroke(style: StrokeStyle(lineWidth: 2, dash: [10])).foregroundColor(isProcessing ? .blue : (!imageItems.isEmpty ? .green : .secondary)).background(Color(NSColor.controlBackgroundColor))
                 
                 if let selectedImg = selectedImage {
                     GeometryReader { geometry in
@@ -119,17 +119,17 @@ struct ContentView: View {
                                 .frame(width: CGFloat(selectedImg.image.size.width) * zoomScale, height: CGFloat(selectedImg.image.size.height) * zoomScale)
                                 .gesture(MagnificationGesture().onChanged { value in zoomScale = max(0.5, min(value, 10.0)) })
                         }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }.frame(height: 450).padding()
+                    }.padding(8)
                 } else if imageItems.isEmpty {
-                    VStack(spacing: 15) {
-                        Image(systemName: "photo.stack").font(.system(size: 50)).foregroundColor(.secondary)
+                    VStack(spacing: 12) {
+                        Image(systemName: "photo.stack").font(.system(size: 48)).foregroundColor(.secondary)
                         Text("Retro Graphics Converter").font(.headline)
-                        Text("Supports Apple II (including disk images: 2IMG, DSK, HDV), Amiga IFF, Atari ST, C64, ZX Spectrum, Amstrad CPC, PCX, BMP, MacPaint, plus modern formats.").multilineTextAlignment(.center).font(.caption).foregroundColor(.secondary)
+                        Text("Supports Apple II (including disk images: 2IMG, DSK, HDV), Amiga IFF, Atari ST, C64, ZX Spectrum, Amstrad CPC, PCX, BMP, MacPaint, plus modern formats.").multilineTextAlignment(.center).font(.caption).foregroundColor(.secondary).padding(.horizontal, 20)
                         Text("Drag & drop files/folders or click 'Open Files...'").font(.caption).foregroundColor(.secondary)
-                    }
+                    }.padding()
                 } else {
-                    VStack(spacing: 15) {
-                        Image(systemName: "hand.tap").font(.system(size: 50)).foregroundColor(.secondary)
+                    VStack(spacing: 12) {
+                        Image(systemName: "hand.tap").font(.system(size: 48)).foregroundColor(.secondary)
                         Text("Select an image from the browser").font(.headline).foregroundColor(.secondary)
                     }
                 }
@@ -139,18 +139,18 @@ struct ContentView: View {
                         .padding().background(Color(NSColor.windowBackgroundColor).opacity(0.9)).cornerRadius(10)
                 }
             }
-            .frame(height: 450)
+            .frame(maxHeight: .infinity)
             .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
             
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
                 HStack {
                     Button("Open Files...") { openFiles() }
                     Button(showBrowser ? "Hide Browser" : "Show Browser") { withAnimation { showBrowser.toggle() } }.disabled(imageItems.isEmpty)
                     Spacer()
-                    Picker("Upscale:", selection: $upscaleFactor) { Text("1x (Original)").tag(1); Text("2x").tag(2); Text("4x").tag(4); Text("8x").tag(8) }.frame(width: 150)
+                    Picker("Upscale:", selection: $upscaleFactor) { Text("1x (Original)").tag(1); Text("2x").tag(2); Text("4x").tag(4); Text("8x").tag(8) }.frame(width: 150).disabled(selectedExportFormat == .original)
                     Picker("Export As:", selection: $selectedExportFormat) { ForEach(ExportFormat.allCases, id: \.self) { format in Text(format.rawValue).tag(format) } }.frame(width: 180)
                 }
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     Button("Export Selected (\(selectedImages.isEmpty ? 1 : selectedImages.count))...") { exportSelectedImages() }.disabled((selectedImage == nil && selectedImages.isEmpty) || isProcessing)
                     Button("Export All (\(imageItems.count))...") { exportAllImages() }.disabled(imageItems.isEmpty || isProcessing)
                     Button("Export with Custom Names...") { showBatchRename() }.disabled(imageItems.isEmpty || isProcessing)
@@ -158,11 +158,11 @@ struct ContentView: View {
                 }
             }
             
-            VStack(alignment: .leading, spacing: 5) {
-                Text(statusMessage).font(.headline)
-                if !progressString.isEmpty && !isProcessing { Text(progressString).font(.caption).foregroundColor(.secondary) }
-            }.frame(maxWidth: .infinity, alignment: .leading)
-        }.padding()
+            VStack(alignment: .leading, spacing: 3) {
+                Text(statusMessage).font(.caption).fontWeight(.medium)
+                if !progressString.isEmpty && !isProcessing { Text(progressString).font(.caption2).foregroundColor(.secondary) }
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
+        }.padding(8)
     }
     
     // MARK: - File Handling
@@ -174,7 +174,7 @@ struct ContentView: View {
                 if entry.isImage, let cgImage = SHRDecoder.decode(data: entry.data, filename: entry.name).image {
                     let url = URL(fileURLWithPath: "/catalog/\(entry.name)")
                     let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-                    newItems.append(ImageItem(url: url, image: nsImage, type: entry.imageType))
+                    newItems.append(ImageItem(url: url, image: nsImage, type: entry.imageType, originalData: entry.data))
                 }
             }
             DispatchQueue.main.async {
@@ -230,8 +230,9 @@ struct ContentView: View {
                 for (index, item) in self.imageItems.enumerated() {
                     DispatchQueue.main.async { self.progressString = "Exporting \(index + 1) of \(self.imageItems.count)" }
                     var newName = pattern.replacingOccurrences(of: "{n}", with: "\(index + 1)").replacingOccurrences(of: "{name}", with: item.url.deletingPathExtension().lastPathComponent)
-                    let filename = "\(newName).\(self.selectedExportFormat.fileExtension)"
-                    if self.saveImage(image: item.image, to: outputFolderURL.appendingPathComponent(filename), format: self.selectedExportFormat) { successCount += 1 }
+                    let fileExtension = self.selectedExportFormat == .original ? item.originalFileExtension : self.selectedExportFormat.fileExtension
+                    let filename = "\(newName).\(fileExtension)"
+                    if self.saveImage(image: item.image, to: outputFolderURL.appendingPathComponent(filename), format: self.selectedExportFormat, originalData: item.originalData, originalExtension: item.originalFileExtension) { successCount += 1 }
                 }
                 DispatchQueue.main.async { self.isProcessing = false; self.statusMessage = "Exported \(successCount) of \(self.imageItems.count) image(s) with custom names"; self.progressString = "" }
             }
@@ -297,7 +298,7 @@ struct ContentView: View {
                         if let cgImage = result.image, result.type != .Unknown {
                             let fileURL = file.url ?? URL(fileURLWithPath: "/\(fileName)")
                             let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-                            newItems.append(ImageItem(url: fileURL, image: nsImage, type: result.type)); successCount += 1
+                            newItems.append(ImageItem(url: fileURL, image: nsImage, type: result.type, originalData: data)); successCount += 1
                         }
                     }
                 }
@@ -359,14 +360,14 @@ struct ContentView: View {
                         if let cgImage = SHRDecoder.decode(data: diskFile.data, filename: diskFile.name).image {
                             let virtualURL = url.appendingPathComponent(diskFile.name)
                             let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-                            newItems.append(ImageItem(url: virtualURL, image: nsImage, type: diskFile.type)); successCount += 1
+                            newItems.append(ImageItem(url: virtualURL, image: nsImage, type: diskFile.type, originalData: diskFile.data)); successCount += 1
                         }
                     }
                 } else {
                     let result = SHRDecoder.decode(data: data, filename: url.lastPathComponent)
                     if let cgImage = result.image, result.type != .Unknown {
                         let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-                        newItems.append(ImageItem(url: url, image: nsImage, type: result.type)); successCount += 1
+                        newItems.append(ImageItem(url: url, image: nsImage, type: result.type, originalData: data)); successCount += 1
                     }
                 }
             }
@@ -382,14 +383,15 @@ struct ContentView: View {
     
     func exportSingleImage(_ item: ImageItem) {
         let savePanel = NSSavePanel()
-        savePanel.allowedContentTypes = [UTType(filenameExtension: selectedExportFormat.fileExtension)!]
-        savePanel.nameFieldStringValue = "\(item.url.deletingPathExtension().lastPathComponent).\(selectedExportFormat.fileExtension)"
+        let fileExtension = selectedExportFormat == .original ? item.originalFileExtension : selectedExportFormat.fileExtension
+        savePanel.allowedContentTypes = [UTType(filenameExtension: fileExtension)!]
+        savePanel.nameFieldStringValue = "\(item.url.deletingPathExtension().lastPathComponent).\(fileExtension)"
         savePanel.prompt = "Export"; savePanel.canCreateDirectories = true
         savePanel.begin { response in
             if response == .OK, let outputURL = savePanel.url {
                 self.isProcessing = true
                 DispatchQueue.global(qos: .userInitiated).async {
-                    let success = self.saveImage(image: item.image, to: outputURL, format: self.selectedExportFormat)
+                    let success = self.saveImage(image: item.image, to: outputURL, format: self.selectedExportFormat, originalData: item.originalData, originalExtension: item.originalFileExtension)
                     DispatchQueue.main.async {
                         self.isProcessing = false
                         self.statusMessage = success ? "Exported: \(outputURL.lastPathComponent)" : "Export failed!"; self.progressString = ""
@@ -416,8 +418,9 @@ struct ContentView: View {
                     var successCount = 0
                     for (index, item) in itemsToExport.enumerated() {
                         DispatchQueue.main.async { self.progressString = "Exporting \(index + 1) of \(itemsToExport.count)" }
-                        let filename = "\(item.url.deletingPathExtension().lastPathComponent).\(self.selectedExportFormat.fileExtension)"
-                        if self.saveImage(image: item.image, to: outputFolderURL.appendingPathComponent(filename), format: self.selectedExportFormat) { successCount += 1 }
+                        let fileExtension = self.selectedExportFormat == .original ? item.originalFileExtension : self.selectedExportFormat.fileExtension
+                        let filename = "\(item.url.deletingPathExtension().lastPathComponent).\(fileExtension)"
+                        if self.saveImage(image: item.image, to: outputFolderURL.appendingPathComponent(filename), format: self.selectedExportFormat, originalData: item.originalData, originalExtension: item.originalFileExtension) { successCount += 1 }
                     }
                     DispatchQueue.main.async { self.isProcessing = false; self.statusMessage = "Exported \(successCount) of \(itemsToExport.count) selected image(s)"; self.progressString = "" }
                 }
@@ -435,15 +438,39 @@ struct ContentView: View {
                 var successCount = 0
                 for (index, item) in self.imageItems.enumerated() {
                     DispatchQueue.main.async { self.progressString = "Exporting \(index + 1) of \(self.imageItems.count)" }
-                    let filename = "\(item.url.deletingPathExtension().lastPathComponent).\(self.selectedExportFormat.fileExtension)"
-                    if self.saveImage(image: item.image, to: outputFolderURL.appendingPathComponent(filename), format: self.selectedExportFormat) { successCount += 1 }
+                    let fileExtension = self.selectedExportFormat == .original ? item.originalFileExtension : self.selectedExportFormat.fileExtension
+                    let filename = "\(item.url.deletingPathExtension().lastPathComponent).\(fileExtension)"
+                    if self.saveImage(image: item.image, to: outputFolderURL.appendingPathComponent(filename), format: self.selectedExportFormat, originalData: item.originalData, originalExtension: item.originalFileExtension) { successCount += 1 }
                 }
                 DispatchQueue.main.async { self.isProcessing = false; self.statusMessage = "Exported \(successCount) of \(self.imageItems.count) image(s)"; self.progressString = "" }
             }
         }
     }
     
-    func saveImage(image: NSImage, to outputURL: URL, format: ExportFormat) -> Bool {
+    func saveImage(image: NSImage, to outputURL: URL, format: ExportFormat, originalData: Data? = nil, originalExtension: String = "bin") -> Bool {
+        // Bei "Original" Format die Original-Daten direkt speichern
+        if format == .original {
+            guard let data = originalData else {
+                // Keine Original-Daten verfügbar - kann nicht exportieren
+                DispatchQueue.main.async {
+                    let alert = NSAlert()
+                    alert.messageText = "Original data not available"
+                    alert.informativeText = "This image was loaded without preserving the original data. Please select a different export format."
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                }
+                return false
+            }
+            do {
+                try data.write(to: outputURL)
+                return true
+            } catch {
+                return false
+            }
+        }
+        
+        // Für andere Formate: Bild konvertieren
         var finalImage = image
         if upscaleFactor > 1 {
             if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil), let upscaled = SHRDecoder.upscaleCGImage(cgImage, factor: upscaleFactor) {
@@ -460,6 +487,8 @@ struct ContentView: View {
         case .gif: outputData = bitmap.representation(using: .gif, properties: [.ditherTransparency: true])
         case .heic:
             if let cgImage = finalImage.cgImage(forProposedRect: nil, context: nil, hints: nil) { outputData = HEICConverter.convert(cgImage: cgImage) }
+        case .original:
+            return false // wird oben behandelt
         }
         guard let finalData = outputData else { return false }
         do { try finalData.write(to: outputURL); return true } catch { return false }
