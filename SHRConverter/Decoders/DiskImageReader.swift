@@ -113,9 +113,14 @@ class DiskImageReader {
                 let blocksUsed = Int(data[entryOffset + 19]) | (Int(data[entryOffset + 20]) << 8)
                 let eof = Int(data[entryOffset + 21]) | (Int(data[entryOffset + 22]) << 8) | (Int(data[entryOffset + 23]) << 16)
                 
+                // Read auxType from offset +31 (ProDOS spec)
+                let auxType = Int(data[entryOffset + 31]) | (Int(data[entryOffset + 32]) << 8)
+                
                 if fileType == 0xC0 || fileType == 0xC1 || fileType == 0x08 || fileType == 0x06 {
                     if let fileData = extractProDOSFile(data: data, keyBlock: keyBlock, blocksUsed: blocksUsed, eof: eof, storageType: Int(entryStorageType)) {
-                        let result = SHRDecoder.decode(data: fileData, filename: fileName)
+                        // Encode ProDOS file type info in filename for decoder detection
+                        let fileNameWithType = String(format: "%@#%02x%04x", fileName, fileType, auxType)
+                        let result = SHRDecoder.decode(data: fileData, filename: fileNameWithType)
                         if result.type != AppleIIImageType.Unknown, let _ = result.image {
                             files.append(DiskImageFile(name: fileName, data: fileData, type: result.type))
                         }

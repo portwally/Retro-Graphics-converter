@@ -40,18 +40,41 @@ class SHRDecoder {
             return PCImageDecoder.decodePCX(data: data)
         }
         
-        // Apple IIgs PNT detection
+        // Apple IIgs PNT detection - check ProDOS file type first
         if let filename = filename?.lowercased() {
+            // ProDOS type $C0 (PNT) with different auxtypes
             if filename.contains("#c00000") {
+                // Paintworks Packed Picture - uses PackBits, not PackBytes
                 return PackedSHRDecoder.decodePNT0000(data: data)
             }
             if filename.contains("#c00001") {
+                // Packed Super Hi-Res - uses PackBytes
                 return PackedSHRDecoder.decodePNT0001(data: data)
             }
             if filename.contains("#c00002") {
+                // Apple Preferred Format (APF)
                 return PackedSHRDecoder.decodePNT0002(data: data)
             }
+            if filename.contains("#c00003") {
+                // Packed QuickDraw II PICT
+                return PackedSHRDecoder.decodePNT0002(data: data)  // Try APF decoder
+            }
             
+            // ProDOS type $C1 (PIC) with different auxtypes
+            if filename.contains("#c10000") {
+                // Unpacked Super Hi-Res Screen
+                if data.count >= 32000 {
+                    return (AppleIIDecoder.decodeSHR(data: data, is3200Color: false), .SHR(mode: "Standard", width: 320, height: 200))
+                }
+            }
+            if filename.contains("#c10002") {
+                // SHR 3200 Color
+                if data.count >= 38400 {
+                    return (AppleIIDecoder.decodeSHR(data: data, is3200Color: true), .SHR(mode: "3200", width: 320, height: 200))
+                }
+            }
+            
+            // Fallback for .pnt extension without type info
             if filename.hasSuffix(".pnt") {
                 if let result = PackedSHRDecoder.detectAndDecodePNT(data: data) {
                     return result
@@ -157,6 +180,12 @@ class SHRDecoder {
         case 16384:
             return (AppleIIDecoder.decodeDHGR(data: data), .DHGR)
         default:
+            // Check for Paintworks signature before trying MacPaint
+            // Paintworks files have a palette at offset 0 and patterns at offset 0x22
+            if size >= 546 && PackedSHRDecoder.isPaintworksFormat(data) {
+                return PackedSHRDecoder.decodePNT0000(data: data)
+            }
+            
             // Last resort: MacPaint
             if size >= 20000 && size <= 100000 && size >= 512 {
                 let result = RetroDecoder.decodeMacPaint(data: data)
