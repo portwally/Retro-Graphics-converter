@@ -462,6 +462,7 @@ extension DiskImageReader {
                         }
 
                         let couldBeGraphics = (fileType == 0x04 || fileType == 0x06) && (
+                            fileData.count == 8184 ||  // HGR with 4-byte header
                             fileData.count == 8192 ||
                             fileData.count == 16384 ||
                             fileData.count == 32768 ||
@@ -474,7 +475,13 @@ extension DiskImageReader {
 
                         let result: (image: CGImage?, type: AppleIIImageType)
                         if couldBeGraphics || fileTypeInfo.isGraphics {
-                            result = SHRDecoder.decode(data: fileData, filename: fileName)
+                            // Für BIN/TXT Dateien mit Graphics: 4-Byte-Header abschneiden falls vorhanden
+                            var dataToDecode = fileData
+                            if (fileType == 0x04 || fileType == 0x06) && loadAddr != nil && length != nil && fileData.count >= 4 {
+                                // Header detected, strip it
+                                dataToDecode = fileData.subdata(in: 4..<fileData.count)
+                            }
+                            result = SHRDecoder.decode(data: dataToDecode, filename: fileName)
                         } else {
                             result = (image: nil, type: .Unknown)
                         }
@@ -609,7 +616,13 @@ extension DiskImageReader {
 
                     let result: (image: CGImage?, type: AppleIIImageType)
                     if couldBeGraphics {
-                        result = SHRDecoder.decode(data: fileData, filename: fileName)
+                        // Für BIN/TXT Dateien mit Graphics: 4-Byte-Header abschneiden falls vorhanden
+                        var dataToDecode = fileData
+                        if (fileType & 0x7F == 0x04 || fileType & 0x7F == 0x06) && loadAddr != nil && length != nil && fileData.count >= 4 {
+                            // Header detected, strip it
+                            dataToDecode = fileData.subdata(in: 4..<fileData.count)
+                        }
+                        result = SHRDecoder.decode(data: dataToDecode, filename: fileName)
                     } else {
                         result = (image: nil, type: .Unknown)
                     }

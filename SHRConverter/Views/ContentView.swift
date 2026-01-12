@@ -5,6 +5,7 @@ import AppKit
 // MARK: - Content View
 
 struct ContentView: View {
+    @EnvironmentObject private var appState: AppState
     @State private var filesToConvert: [URL] = []
     @State private var imageItems: [ImageItem] = []
     @State private var selectedImage: ImageItem?
@@ -19,6 +20,10 @@ struct ContentView: View {
     @State private var filterFormat: String = "All"
     @State private var showCatalogBrowser = false
     @State private var currentCatalog: DiskCatalog? = nil
+    @State private var cropMode = false
+    @State private var cropStart: CGPoint?
+    @State private var cropEnd: CGPoint?
+    @State private var undoStack: [(id: UUID, image: NSImage, type: AppleIIImageType, data: Data?)] = []
     
     var filteredImages: [ImageItem] {
         if filterFormat == "All" { return imageItems }
@@ -49,6 +54,9 @@ struct ContentView: View {
             if let catalog = currentCatalog {
                 DiskCatalogBrowserView(catalog: catalog, onImport: { selectedEntries in importCatalogEntries(selectedEntries); showCatalogBrowser = false }, onCancel: { showCatalogBrowser = false })
             }
+        }
+        .onChange(of: appState.undoTrigger) { oldValue, newValue in
+            undoLastAction()
         }
     }
     
@@ -118,12 +126,38 @@ struct ContentView: View {
                             
                             Divider().frame(height: 16)
                             
-                            // Rechte Seite: Zoom Controls
+                            // Rechte Seite: Zoom Controls (nur außerhalb Crop-Modus)
                             HStack(spacing: 6) {
-                                Button(action: { zoomScale = max(0.5, zoomScale / 1.5) }) { Image(systemName: "minus.magnifyingglass") }.help("Zoom Out")
-                                Text("\(Int(zoomScale * 100))%").font(.caption).monospacedDigit().frame(width: 50)
-                                Button(action: { zoomScale = min(10.0, zoomScale * 1.5) }) { Image(systemName: "plus.magnifyingglass") }.help("Zoom In")
-                                Button(action: { zoomScale = 1.0 }) { Image(systemName: "arrow.counterclockwise") }.help("Reset Zoom")
+                                if !cropMode {
+                                    Button(action: { zoomScale = max(0.5, zoomScale / 1.5) }) { Image(systemName: "minus.magnifyingglass") }.help("Zoom Out")
+                                    Text("\(Int(zoomScale * 100))%").font(.caption).monospacedDigit().frame(width: 50)
+                                    Button(action: { zoomScale = min(10.0, zoomScale * 1.5) }) { Image(systemName: "plus.magnifyingglass") }.help("Zoom In")
+                                    Button(action: { zoomScale = 1.0 }) { Image(systemName: "arrow.counterclockwise") }.help("Reset Zoom")
+                                    
+                                    Divider().frame(height: 16)
+                                }
+                                
+                                Button(action: { toggleCropMode() }) {
+                                    Label(cropMode ? "Exit Crop" : "Crop", systemImage: cropMode ? "xmark.circle" : "crop")
+                                }
+                                .help(cropMode ? "Exit crop mode" : "Enter crop mode")
+                                
+                                if cropMode && cropStart != nil && cropEnd != nil {
+                                    Button(action: { copySelectedArea() }) {
+                                        Image(systemName: "doc.on.doc")
+                                    }
+                                    .help("Copy selected area")
+                                    
+                                    Button(action: { cropToSelection() }) {
+                                        Image(systemName: "crop.rotate")
+                                    }
+                                    .help("Crop to selection")
+                                    
+                                    Button(action: { clearSelection() }) {
+                                        Image(systemName: "xmark")
+                                    }
+                                    .help("Clear selection")
+                                }
                             }.buttonStyle(.borderless)
                         }
                     }
@@ -131,15 +165,58 @@ struct ContentView: View {
             }
             
             ZStack {
-                RoundedRectangle(cornerRadius: 10).stroke(style: StrokeStyle(lineWidth: 2, dash: [10])).foregroundColor(isProcessing ? .blue : (!imageItems.isEmpty ? .green : .secondary)).background(Color(NSColor.controlBackgroundColor))
+                Color(NSColor.controlBackgroundColor)
                 
                 if let selectedImg = selectedImage {
                     GeometryReader { geometry in
                         ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                            Image(nsImage: selectedImg.image).resizable().interpolation(.none)
-                                .frame(width: CGFloat(selectedImg.image.size.width) * zoomScale, height: CGFloat(selectedImg.image.size.height) * zoomScale)
-                                .gesture(MagnificationGesture().onChanged { value in zoomScale = max(0.5, min(value, 10.0)) })
-                        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                            ZStack {
+                                Image(nsImage: selectedImg.image)
+                                    .resizable()
+                                    .interpolation(.none)
+                                    .frame(width: CGFloat(selectedImg.image.size.width) * zoomScale, height: CGFloat(selectedImg.image.size.height) * zoomScale)
+                                
+                                // Crop overlay
+                                if cropMode {
+                                    CropOverlayView(
+                                        imageSize: selectedImg.image.size,
+                                        imageScale: zoomScale,
+                                        cropStart: $cropStart,
+                                        cropEnd: $cropEnd
+                                    )
+                                    .frame(width: CGFloat(selectedImg.image.size.width) * zoomScale, height: CGFloat(selectedImg.image.size.height) * zoomScale)
+                                }
+                            }
+                            .gesture(
+                                cropMode ? 
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        handleCropDrag(value: value, imageSize: selectedImg.image.size)
+                                    }
+                                    .onEnded { _ in
+                                        // Validate selection size
+                                        if let start = cropStart, let end = cropEnd {
+                                            let width = abs(end.x - start.x)
+                                            let height = abs(end.y - start.y)
+                                            if width < 5 || height < 5 {
+                                                clearSelection()
+                                            }
+                                        }
+                                    }
+                                : nil
+                            )
+                            .onHover { hovering in
+                                if cropMode {
+                                    if hovering {
+                                        NSCursor.crosshair.push()
+                                    } else {
+                                        NSCursor.pop()
+                                    }
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(cropMode ? Color.black.opacity(0.3) : Color.clear)
                     }.padding(8)
                 } else if imageItems.isEmpty {
                     VStack(spacing: 12) {
@@ -302,7 +379,15 @@ struct ContentView: View {
                     let isBMP = data.count >= 2 && data[0] == 0x42 && data[1] == 0x4D
                     let isPCX = data.count >= 128 && data[0] == 0x0A
                     let isModernImage = isPNG || isJPEG || isGIF || isBMP || isPCX
-                    let possibleDiskImage = !isModernImage && (data.count == 143360 || data.count == 819200 || data.count > 100000)
+                    
+                    // Check for disk images by file extension only
+                    let possibleDiskImage = !isModernImage && (
+                        fileName.lowercased().hasSuffix(".po") || 
+                        fileName.lowercased().hasSuffix(".dsk") ||
+                        fileName.lowercased().hasSuffix(".2mg") ||
+                        fileName.lowercased().hasSuffix(".hdv") ||
+                        fileName.lowercased().hasSuffix(".img")
+                    )
                     var processedAsDiskImage = false
                     
                     if possibleDiskImage {
@@ -514,4 +599,244 @@ struct ContentView: View {
         guard let finalData = outputData else { return false }
         do { try finalData.write(to: outputURL); return true } catch { return false }
     }
+    
+    // MARK: - Crop Tool Functions
+    
+    func toggleCropMode() {
+        cropMode.toggle()
+        if !cropMode {
+            clearSelection()
+            NSCursor.pop() // Reset cursor when exiting crop mode
+        }
+    }
+    
+    func clearSelection() {
+        cropStart = nil
+        cropEnd = nil
+    }
+    
+    func handleCropDrag(value: DragGesture.Value, imageSize: CGSize) {
+        // Get coordinates relative to the image
+        let location = value.location
+        let startLocation = value.startLocation
+        
+        // Clamp to image bounds
+        func clamp(_ point: CGPoint) -> CGPoint {
+            CGPoint(
+                x: max(0, min(point.x, imageSize.width * zoomScale)),
+                y: max(0, min(point.y, imageSize.height * zoomScale))
+            )
+        }
+        
+        if cropStart == nil {
+            cropStart = clamp(startLocation)
+        }
+        cropEnd = clamp(location)
+    }
+    
+    func copySelectedArea() {
+        guard let selectedImg = selectedImage,
+              let start = cropStart,
+              let end = cropEnd else { return }
+        
+        if let cropped = cropImageToRect(image: selectedImg.image, start: start, end: end) {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.writeObjects([cropped])
+            statusMessage = "Selection copied to clipboard (\(Int(cropped.size.width))×\(Int(cropped.size.height)))"
+        }
+    }
+    
+    func cropToSelection() {
+        guard let selectedImg = selectedImage,
+              let start = cropStart,
+              let end = cropEnd else { 
+            return 
+        }
+        
+        if let cropped = cropImageToRect(image: selectedImg.image, start: start, end: end) {
+            // Replace image in list
+            if let index = imageItems.firstIndex(where: { $0.id == selectedImg.id }) {
+                guard let cgImage = cropped.cgImage(forProposedRect: nil, context: nil, hints: nil) else { 
+                    return 
+                }
+                
+                // Save current state to undo stack
+                let undoItem = (
+                    id: selectedImg.id,
+                    image: selectedImg.image,
+                    type: selectedImg.type,
+                    data: selectedImg.originalData
+                )
+                undoStack.append(undoItem)
+                
+                // Limit undo stack to 10 items
+                if undoStack.count > 10 {
+                    undoStack.removeFirst()
+                }
+                
+                // Update undo availability
+                appState.setCanUndo(true)
+                
+                let newImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                
+                // Behalte die gleiche ID bei!
+                imageItems[index] = ImageItem(
+                    id: selectedImg.id,
+                    url: selectedImg.url,
+                    image: newImage,
+                    type: selectedImg.type,
+                    originalData: nil
+                )
+                
+                selectedImage = imageItems[index]
+                statusMessage = "Image cropped to \(Int(cropped.size.width))×\(Int(cropped.size.height)) (⌘Z to undo)"
+                
+                // Exit crop mode
+                cropMode = false
+                clearSelection()
+            }
+        }
+    }
+    
+    func undoLastAction() {
+        guard let lastAction = undoStack.popLast() else {
+            statusMessage = "Nothing to undo"
+            return
+        }
+        
+        // Find and restore the image
+        if let index = imageItems.firstIndex(where: { $0.id == lastAction.id }) {
+            // Behalte die gleiche ID bei!
+            imageItems[index] = ImageItem(
+                id: lastAction.id,
+                url: imageItems[index].url,
+                image: lastAction.image,
+                type: lastAction.type,
+                originalData: lastAction.data
+            )
+            
+            selectedImage = imageItems[index]
+            statusMessage = "Undo successful"
+            
+            // Update undo availability
+            appState.setCanUndo(!undoStack.isEmpty)
+        }
+    }
+    
+    func cropImageToRect(image: NSImage, start: CGPoint, end: CGPoint) -> NSImage? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+        
+        // Convert from view coordinates to image coordinates
+        let x1 = min(start.x, end.x) / zoomScale
+        let y1 = min(start.y, end.y) / zoomScale
+        let x2 = max(start.x, end.x) / zoomScale
+        let y2 = max(start.y, end.y) / zoomScale
+        
+        let cropRect = CGRect(
+            x: x1,
+            y: y1,
+            width: x2 - x1,
+            height: y2 - y1
+        )
+        
+        guard let croppedCGImage = cgImage.cropping(to: cropRect) else {
+            return nil
+        }
+        
+        return NSImage(cgImage: croppedCGImage, size: NSSize(
+            width: croppedCGImage.width,
+            height: croppedCGImage.height
+        ))
+    }
 }
+
+// MARK: - Crop Overlay View
+
+struct CropOverlayView: View {
+    let imageSize: CGSize
+    let imageScale: CGFloat
+    @Binding var cropStart: CGPoint?
+    @Binding var cropEnd: CGPoint?
+    
+    var selectionRect: CGRect? {
+        guard let start = cropStart, let end = cropEnd else { return nil }
+        return CGRect(
+            x: min(start.x, end.x),
+            y: min(start.y, end.y),
+            width: abs(end.x - start.x),
+            height: abs(end.y - start.y)
+        )
+    }
+    
+    var body: some View {
+        ZStack {
+            if let rect = selectionRect {
+                // Dimmed area outside selection
+                GeometryReader { geo in
+                    Path { path in
+                        path.addRect(CGRect(origin: .zero, size: geo.size))
+                        path.addRect(rect)
+                    }
+                    .fill(style: FillStyle(eoFill: true))
+                    .foregroundColor(Color.black.opacity(0.5))
+                }
+                
+                // Selection border
+                Rectangle()
+                    .stroke(Color.white, lineWidth: 2)
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
+                
+                // Selection info with better contrast
+                let pixelWidth = Int(rect.width / imageScale)
+                let pixelHeight = Int(rect.height / imageScale)
+                Text("\(pixelWidth)×\(pixelHeight)")
+                    .font(.system(.caption, design: .monospaced))
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.black.opacity(0.85))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                            )
+                    )
+                    .position(x: rect.midX, y: rect.minY - 18)
+                
+                // Corner handles
+                ForEach(0..<4, id: \.self) { corner in
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 8, height: 8)
+                        .overlay(Circle().stroke(Color.black, lineWidth: 1))
+                        .position(
+                            x: corner % 2 == 0 ? rect.minX : rect.maxX,
+                            y: corner < 2 ? rect.minY : rect.maxY
+                        )
+                }
+            } else {
+                Text("Drag to select area")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.black.opacity(0.85))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                            )
+                    )
+            }
+        }
+    }
+}
+
+
