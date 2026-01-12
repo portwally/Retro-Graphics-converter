@@ -149,7 +149,7 @@ struct ContentView: View {
                                     .help("Copy selected area")
                                     
                                     Button(action: { cropToSelection() }) {
-                                        Image(systemName: "crop.rotate")
+                                        Image(systemName: "checkmark")
                                     }
                                     .help("Crop to selection")
                                     
@@ -380,14 +380,12 @@ struct ContentView: View {
                     let isPCX = data.count >= 128 && data[0] == 0x0A
                     let isModernImage = isPNG || isJPEG || isGIF || isBMP || isPCX
                     
-                    // Check for disk images by file extension only
-                    let possibleDiskImage = !isModernImage && (
-                        fileName.lowercased().hasSuffix(".po") || 
-                        fileName.lowercased().hasSuffix(".dsk") ||
-                        fileName.lowercased().hasSuffix(".2mg") ||
-                        fileName.lowercased().hasSuffix(".hdv") ||
-                        fileName.lowercased().hasSuffix(".img")
-                    )
+                    // Check for disk images by size AND/OR file extension
+                    let hasDiskExtension = fileName.lowercased().hasSuffix(".po") || 
+                                          fileName.lowercased().hasSuffix(".dsk") ||
+                                          fileName.lowercased().hasSuffix(".2mg") ||
+                                          fileName.lowercased().hasSuffix(".hdv")
+                    let possibleDiskImage = !isModernImage && (hasDiskExtension || data.count == 143360 || data.count == 819200 || data.count > 200000)
                     var processedAsDiskImage = false
                     
                     if possibleDiskImage {
