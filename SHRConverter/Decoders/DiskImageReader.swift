@@ -11,6 +11,9 @@ class DiskImageReader {
         if let twoImgFiles = read2IMG(data: data) {
             files.append(contentsOf: twoImgFiles)
         }
+        else if let d64Files = readD64(data: data) {
+            files.append(contentsOf: d64Files)
+        }
         else if let proDOSFiles = readProDOSDSK(data: data) {
             files.append(contentsOf: proDOSFiles)
         }
@@ -317,6 +320,200 @@ class DiskImageReader {
     static func readHDV(data: Data) -> [DiskImageFile]? {
         return readProDOSDSK(data: data)
     }
+    
+    // MARK: - C64 D64 Format
+    
+    static func readD64(data: Data) -> [DiskImageFile]? {
+        // D64 sizes: 174848 (with error bytes) or 174848-683 = 174165 (without)
+        // Standard: 35 tracks, 683 sectors total
+        let validSizes = [174848, 175531] // with/without error info
+        
+        guard validSizes.contains(data.count) else {
+            return nil
+        }
+        
+        var files: [DiskImageFile] = []
+        
+        // Track 18, Sector 0 = BAM (Block Availability Map) and Directory header
+        let dirTrack = 18
+        let dirSector = 0
+        
+        guard let bamData = readD64Sector(data: data, track: dirTrack, sector: dirSector) else {
+            return nil
+        }
+        
+        // Ensure BAM has enough data
+        guard bamData.count >= 2 else {
+            return nil
+        }
+        
+        // First directory sector is at Track 18, Sector 1
+        var currentTrack = Int(bamData[0])
+        var currentSector = Int(bamData[1])
+        var loopCount = 0
+        
+        while currentTrack != 0 && loopCount < 100 {
+            loopCount += 1
+            
+            guard let sectorData = readD64Sector(data: data, track: currentTrack, sector: currentSector) else {
+                break
+            }
+            
+            // Ensure sector has enough data
+            guard sectorData.count >= 2 else {
+                break
+            }
+            
+            // Each sector contains 8 directory entries (32 bytes each)
+            for entryIdx in 0..<8 {
+                let entryOffset = 2 + (entryIdx * 32)
+                guard entryOffset + 32 <= sectorData.count else { continue }
+                
+                let fileType = sectorData[entryOffset]
+                
+                // Skip deleted or empty entries
+                if fileType == 0 || fileType == 0x80 {
+                    continue
+                }
+                
+                // Read filename (16 bytes, PETSCII, padded with 0xA0)
+                var fileName = ""
+                for i in 0..<16 {
+                    guard entryOffset + 3 + i < sectorData.count else { break }
+                    let char = sectorData[entryOffset + 3 + i]
+                    if char == 0xA0 || char == 0 { break }
+                    fileName.append(Character(UnicodeScalar(char)))
+                }
+                
+                if fileName.isEmpty { continue }
+                
+                // File location
+                let fileTrack = Int(sectorData[entryOffset + 1])
+                let fileSector = Int(sectorData[entryOffset + 2])
+                
+                // File size in sectors (2 bytes, little endian)
+                let sizeInSectors = Int(sectorData[entryOffset + 28]) | (Int(sectorData[entryOffset + 29]) << 8)
+                
+                // Extract file data
+                if let fileData = extractD64File(data: data, startTrack: fileTrack, startSector: fileSector) {
+                    // Detect file type
+                    let actualFileType = fileType & 0x07
+                    let fileTypeString: String
+                    switch actualFileType {
+                    case 1: fileTypeString = "SEQ"
+                    case 2: fileTypeString = "PRG"
+                    case 3: fileTypeString = "USR"
+                    case 4: fileTypeString = "REL"
+                    default: fileTypeString = "???"
+                    }
+                    
+                    // Check if it's a graphics file
+                    let result: (image: CGImage?, type: AppleIIImageType)
+                    let isGraphics = (fileData.count >= 9000 && fileData.count <= 10020)
+                    
+                    if isGraphics {
+                        result = SHRDecoder.decode(data: fileData, filename: fileName)
+                    } else {
+                        result = (nil, .Unknown)
+                    }
+                    
+                    let imageType = result.type
+                    
+                    files.append(DiskImageFile(
+                        name: "\(fileName).\(fileTypeString.lowercased())",
+                        data: fileData,
+                        type: imageType
+                    ))
+                }
+            }
+            
+            // Next directory sector
+            currentTrack = Int(sectorData[0])
+            currentSector = Int(sectorData[1])
+        }
+        
+        return files.isEmpty ? nil : files
+    }
+    
+    private static func readD64Sector(data: Data, track: Int, sector: Int) -> Data? {
+        // C64 1541 disk geometry
+        let sectorsPerTrack: [Int] = [
+            // Tracks 1-17: 21 sectors
+            21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+            // Tracks 18-24: 19 sectors
+            19, 19, 19, 19, 19, 19, 19,
+            // Tracks 25-30: 18 sectors
+            18, 18, 18, 18, 18, 18,
+            // Tracks 31-35: 17 sectors
+            17, 17, 17, 17, 17
+        ]
+        
+        guard track >= 1 && track <= 35 else { return nil }
+        guard sector >= 0 && sector < sectorsPerTrack[track - 1] else { return nil }
+        
+        // Calculate offset
+        var offset = 0
+        for t in 1..<track {
+            offset += sectorsPerTrack[t - 1] * 256
+        }
+        offset += sector * 256
+        
+        guard offset + 256 <= data.count else { return nil }
+        
+        return data.subdata(in: offset..<(offset + 256))
+    }
+    
+    private static func extractD64File(data: Data, startTrack: Int, startSector: Int) -> Data? {
+        var fileData = Data()
+        var currentTrack = startTrack
+        var currentSector = startSector
+        var visited = Set<String>()
+        
+        while currentTrack != 0 {
+            let key = "\(currentTrack):\(currentSector)"
+            if visited.contains(key) {
+                break // Circular reference
+            }
+            visited.insert(key)
+            
+            guard let sectorData = readD64Sector(data: data, track: currentTrack, sector: currentSector) else {
+                break
+            }
+            
+            // Ensure we have at least 2 bytes
+            guard sectorData.count >= 2 else {
+                break
+            }
+            
+            let nextTrack = Int(sectorData[0])
+            let nextSector = Int(sectorData[1])
+            
+            if nextTrack == 0 {
+                // Last sector: byte 1 contains number of bytes used (1-255)
+                let bytesUsed = max(1, min(Int(sectorData[1]), 254))
+                let endIdx = min(2 + bytesUsed, sectorData.count)
+                if endIdx > 2 {
+                    fileData.append(sectorData.subdata(in: 2..<endIdx))
+                }
+                break
+            } else {
+                // Full sector (254 bytes of data)
+                let endIdx = min(256, sectorData.count)
+                if endIdx > 2 {
+                    fileData.append(sectorData.subdata(in: 2..<endIdx))
+                }
+                currentTrack = nextTrack
+                currentSector = nextSector
+            }
+            
+            // Safety check: limit iterations
+            if visited.count > 1000 {
+                break
+            }
+        }
+        
+        return fileData.isEmpty ? nil : fileData
+    }
 }
 
 // MARK: - Catalog Reading Extension
@@ -325,6 +522,11 @@ extension DiskImageReader {
     static func readDiskCatalog(data: Data, filename: String = "Unknown") -> DiskCatalog? {
         // 2IMG Format
         if let catalog = read2IMGCatalogFull(data: data, filename: filename) {
+            return catalog
+        }
+        
+        // C64 D64 Format
+        if let catalog = readD64CatalogFull(data: data, filename: filename) {
             return catalog
         }
         
@@ -673,6 +875,121 @@ extension DiskImageReader {
         return DiskCatalog(
             diskName: filename,
             diskFormat: "DOS 3.3",
+            diskSize: data.count,
+            entries: entries
+        )
+    }
+    
+    static func readD64CatalogFull(data: Data, filename: String) -> DiskCatalog? {
+        let validSizes = [174848, 175531]
+        guard validSizes.contains(data.count) else { return nil }
+        
+        var entries: [DiskCatalogEntry] = []
+        
+        // Track 18, Sector 0 = BAM
+        guard let bamData = readD64Sector(data: data, track: 18, sector: 0) else {
+            return nil
+        }
+        
+        // Ensure BAM has enough data
+        guard bamData.count >= 2 && bamData.count >= 0x90 + 16 else {
+            return nil
+        }
+        
+        // Disk name starts at offset 0x90 (144), 16 bytes
+        var diskName = ""
+        for i in 0..<16 {
+            let char = bamData[0x90 + i]
+            if char == 0xA0 || char == 0 { break }
+            diskName.append(Character(UnicodeScalar(char)))
+        }
+        if diskName.isEmpty { diskName = filename }
+        
+        // First directory sector
+        var currentTrack = Int(bamData[0])
+        var currentSector = Int(bamData[1])
+        var loopCount = 0
+        
+        while currentTrack != 0 && loopCount < 100 {
+            loopCount += 1
+            
+            guard let sectorData = readD64Sector(data: data, track: currentTrack, sector: currentSector) else {
+                break
+            }
+            
+            // Ensure sector has enough data
+            guard sectorData.count >= 2 else {
+                break
+            }
+            
+            // 8 entries per sector
+            for entryIdx in 0..<8 {
+                let entryOffset = 2 + (entryIdx * 32)
+                guard entryOffset + 32 <= sectorData.count else { continue }
+                
+                let fileType = sectorData[entryOffset]
+                if fileType == 0 || fileType == 0x80 { continue }
+                
+                // Filename (16 bytes)
+                var fileName = ""
+                for i in 0..<16 {
+                    guard entryOffset + 3 + i < sectorData.count else { break }
+                    let char = sectorData[entryOffset + 3 + i]
+                    if char == 0xA0 || char == 0 { break }
+                    fileName.append(Character(UnicodeScalar(char)))
+                }
+                if fileName.isEmpty { continue }
+                
+                let fileTrack = Int(sectorData[entryOffset + 1])
+                let fileSector = Int(sectorData[entryOffset + 2])
+                let sizeInSectors = Int(sectorData[entryOffset + 28]) | (Int(sectorData[entryOffset + 29]) << 8)
+                
+                if let fileData = extractD64File(data: data, startTrack: fileTrack, startSector: fileSector) {
+                    let actualFileType = fileType & 0x07
+                    let fileTypeString: String
+                    switch actualFileType {
+                    case 1: fileTypeString = "SEQ"
+                    case 2: fileTypeString = "PRG"
+                    case 3: fileTypeString = "USR"
+                    case 4: fileTypeString = "REL"
+                    default: fileTypeString = "???"
+                    }
+                    
+                    // Check for graphics
+                    let isGraphics = (fileData.count >= 9000 && fileData.count <= 10020)
+                    var result: (image: CGImage?, type: AppleIIImageType) = (nil, .Unknown)
+                    
+                    if isGraphics {
+                        result = SHRDecoder.decode(data: fileData, filename: fileName)
+                    }
+                    
+                    let isImage = result.image != nil && result.type != .Unknown
+                    
+                    let entry = DiskCatalogEntry(
+                        name: fileName,
+                        fileType: actualFileType,
+                        fileTypeString: fileTypeString,
+                        size: fileData.count,
+                        blocks: sizeInSectors,
+                        loadAddress: nil,
+                        length: nil,
+                        data: fileData,
+                        isImage: isImage,
+                        imageType: result.type,
+                        isDirectory: false,
+                        children: nil
+                    )
+                    entries.append(entry)
+                }
+            }
+            
+            currentTrack = Int(sectorData[0])
+            currentSector = Int(sectorData[1])
+        }
+        
+        return DiskCatalog(
+            diskName: diskName,
+            diskFormat: "C64 D64",
             diskSize: data.count,
             entries: entries
         )

@@ -149,7 +149,7 @@ struct ContentView: View {
                                     .help("Copy selected area")
                                     
                                     Button(action: { cropToSelection() }) {
-                                        Image(systemName: "checkmark")
+                                        Image(systemName: "crop.rotate")
                                     }
                                     .help("Crop to selection")
                                     
@@ -380,12 +380,17 @@ struct ContentView: View {
                     let isPCX = data.count >= 128 && data[0] == 0x0A
                     let isModernImage = isPNG || isJPEG || isGIF || isBMP || isPCX
                     
-                    // Check for disk images by size AND/OR file extension
-                    let hasDiskExtension = fileName.lowercased().hasSuffix(".po") || 
-                                          fileName.lowercased().hasSuffix(".dsk") ||
-                                          fileName.lowercased().hasSuffix(".2mg") ||
-                                          fileName.lowercased().hasSuffix(".hdv")
-                    let possibleDiskImage = !isModernImage && (hasDiskExtension || data.count == 143360 || data.count == 819200 || data.count > 200000)
+                    // Check for disk images by file extension only
+                    let possibleDiskImage = !isModernImage && (
+                        fileName.lowercased().hasSuffix(".po") || 
+                        fileName.lowercased().hasSuffix(".dsk") ||
+                        fileName.lowercased().hasSuffix(".2mg") ||
+                        fileName.lowercased().hasSuffix(".hdv") ||
+                        fileName.lowercased().hasSuffix(".img") ||
+                        fileName.lowercased().hasSuffix(".d64") ||
+                        fileName.lowercased().hasSuffix(".d71") ||
+                        fileName.lowercased().hasSuffix(".d81")
+                    )
                     var processedAsDiskImage = false
                     
                     if possibleDiskImage {
@@ -455,7 +460,7 @@ struct ContentView: View {
                 DispatchQueue.main.async { self.progressString = "Processing \(index + 1) of \(urls.count): \(url.lastPathComponent)" }
                 guard let data = try? Data(contentsOf: url) else { continue }
                 let fileExtension = url.pathExtension.lowercased()
-                if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" {
+                if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" || fileExtension == "img" || fileExtension == "d64" || fileExtension == "d71" || fileExtension == "d81" {
                     if let catalog = DiskImageReader.readDiskCatalog(data: data, filename: url.lastPathComponent) {
                         DispatchQueue.main.async { self.currentCatalog = catalog; self.showCatalogBrowser = true; self.isProcessing = false }
                         continue
