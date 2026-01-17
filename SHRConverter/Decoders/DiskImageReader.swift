@@ -250,9 +250,10 @@ class DiskImageReader {
                 }
                 fileName = fileName.trimmingCharacters(in: .whitespaces)
                 
-                let fileType = data[entryOffset + 2] & 0x7F
-                
-                if fileType == 0x42 || fileType == 0x49 || fileType == 0x41 || fileType == 0x04 {
+                let fileType = data[entryOffset + 2]
+                let fileTypeUnlocked = fileType & 0x7F
+
+                if fileTypeUnlocked == 0x02 || fileTypeUnlocked == 0x01 || fileTypeUnlocked == 0x04 || fileTypeUnlocked == 0x06 {
                     if let fileData = extractDOS33File(data: data, trackList: trackList, sectorList: sectorList, sectorsPerTrack: sectorsPerTrack, sectorSize: sectorSize) {
                         let result = SHRDecoder.decode(data: fileData, filename: fileName)
                         if result.type != AppleIIImageType.Unknown, let _ = result.image {
@@ -273,45 +274,45 @@ class DiskImageReader {
         return files.isEmpty ? nil : files
     }
     
-    static func extractDOS33File(data: Data, trackList: Int, sectorList: Int, sectorsPerTrack: Int, sectorSize: Int) -> Data? {
+    static func extractDOS33File(data: Data, trackList: Int, sectorList: Int, sectorsPerTrack: Int, sectorSize: Int, stripHeader: Bool = true) -> Data? {
         var fileData = Data()
         var currentTrack = trackList
         var currentSector = sectorList
-        
+
         for _ in 0..<1000 {
             let tsListOffset = (currentTrack * sectorsPerTrack + currentSector) * sectorSize
             guard tsListOffset + sectorSize <= data.count else { break }
-            
+
             for pairIdx in 0..<122 {
                 let track = Int(data[tsListOffset + 12 + (pairIdx * 2)])
                 let sector = Int(data[tsListOffset + 12 + (pairIdx * 2) + 1])
-                
+
                 if track == 0 { break }
-                
+
                 let dataOffset = (track * sectorsPerTrack + sector) * sectorSize
                 guard dataOffset + sectorSize <= data.count else { continue }
-                
+
                 fileData.append(data.subdata(in: dataOffset..<(dataOffset + sectorSize)))
             }
-            
+
             let nextTrack = Int(data[tsListOffset + 1])
             let nextSector = Int(data[tsListOffset + 2])
-            
+
             if nextTrack == 0 { break }
             currentTrack = nextTrack
             currentSector = nextSector
         }
-        
-        // Strip DOS 3.3 binary header (4 bytes: load address + length)
-        if fileData.count > 4 {
+
+        // Strip DOS 3.3 binary header (4 bytes: load address + length) if requested
+        if stripHeader && fileData.count > 4 {
             let loadAddr = Int(fileData[0]) | (Int(fileData[1]) << 8)
             let length = Int(fileData[2]) | (Int(fileData[3]) << 8)
-            
+
             if length > 100 && length <= fileData.count - 4 && loadAddr >= 0x0800 && loadAddr <= 0xBFFF {
                 fileData = fileData.subdata(in: 4..<(4 + length))
             }
         }
-        
+
         return fileData.isEmpty ? nil : fileData
     }
     
@@ -794,7 +795,7 @@ extension DiskImageReader {
                 let fileType = data[entryOffset + 2]
                 let sectorsUsed = Int(data[entryOffset + 33]) | (Int(data[entryOffset + 34]) << 8)
                 
-                if let fileData = extractDOS33File(data: data, trackList: trackList, sectorList: sectorList, sectorsPerTrack: sectorsPerTrack, sectorSize: sectorSize) {
+                if let fileData = extractDOS33File(data: data, trackList: trackList, sectorList: sectorList, sectorsPerTrack: sectorsPerTrack, sectorSize: sectorSize, stripHeader: false) {
                     var loadAddr: Int? = nil
                     var length: Int? = nil
                     if fileData.count > 4 && (fileType & 0x7F == 0x04 || fileType & 0x7F == 0x06) {
@@ -816,14 +817,18 @@ extension DiskImageReader {
                         (loadAddr == 0x4000 && fileData.count >= 16380)
                     )
 
+                    // Strip header for decoding if it's a binary file with valid header
+                    var dataToDecode = fileData
+                    var hasValidHeader = false
+                    if (fileType & 0x7F == 0x04 || fileType & 0x7F == 0x06),
+                       let addr = loadAddr, let len = length,
+                       len > 100 && len <= fileData.count - 4 && addr >= 0x0800 && addr <= 0xBFFF {
+                        dataToDecode = fileData.subdata(in: 4..<(4 + len))
+                        hasValidHeader = true
+                    }
+
                     let result: (image: CGImage?, type: AppleIIImageType)
                     if couldBeGraphics {
-                        // Für BIN/TXT Dateien mit Graphics: 4-Byte-Header abschneiden falls vorhanden
-                        var dataToDecode = fileData
-                        if (fileType & 0x7F == 0x04 || fileType & 0x7F == 0x06) && loadAddr != nil && length != nil && fileData.count >= 4 {
-                            // Header detected, strip it
-                            dataToDecode = fileData.subdata(in: 4..<fileData.count)
-                        }
                         result = SHRDecoder.decode(data: dataToDecode, filename: fileName)
                     } else {
                         result = (image: nil, type: .Unknown)
@@ -835,9 +840,9 @@ extension DiskImageReader {
 
                     let displayAuxType: Int?
                     if couldBeGraphics && isImage {
-                        if fileData.count >= 16380 && fileData.count <= 16400 {
+                        if dataToDecode.count >= 16380 && dataToDecode.count <= 16400 {
                             displayAuxType = 0x4000
-                        } else if fileData.count >= 8180 && fileData.count <= 8200 {
+                        } else if dataToDecode.count >= 8180 && dataToDecode.count <= 8200 {
                             displayAuxType = 0x2000
                         } else {
                             displayAuxType = loadAddr
@@ -846,6 +851,7 @@ extension DiskImageReader {
                         displayAuxType = loadAddr
                     }
 
+                    // Store stripped data for import (decoder expects raw image data without header)
                     let entry = DiskCatalogEntry(
                         name: fileName,
                         fileType: proDOSFileType,
@@ -854,7 +860,7 @@ extension DiskImageReader {
                         blocks: sectorsUsed,
                         loadAddress: displayAuxType,
                         length: length,
-                        data: fileData,
+                        data: dataToDecode,
                         isImage: isImage,
                         imageType: result.type,
                         isDirectory: false,

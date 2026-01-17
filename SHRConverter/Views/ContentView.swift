@@ -16,7 +16,7 @@ struct ContentView: View {
     @State private var progressString = ""
     @State private var showBrowser = false
     @State private var upscaleFactor: Int = 1
-    @State private var zoomScale: CGFloat = 1.0
+    @State private var zoomScale: CGFloat = -1.0  // -1 means "fit to window"
     @State private var filterFormat: String = "All"
     @State private var showCatalogBrowser = false
     @State private var currentCatalog: DiskCatalog? = nil
@@ -129,11 +129,12 @@ struct ContentView: View {
                             // Rechte Seite: Zoom Controls (nur außerhalb Crop-Modus)
                             HStack(spacing: 6) {
                                 if !cropMode {
-                                    Button(action: { zoomScale = max(0.5, zoomScale / 1.5) }) { Image(systemName: "minus.magnifyingglass") }.help("Zoom Out")
-                                    Text("\(Int(zoomScale * 100))%").font(.caption).monospacedDigit().frame(width: 50)
-                                    Button(action: { zoomScale = min(10.0, zoomScale * 1.5) }) { Image(systemName: "plus.magnifyingglass") }.help("Zoom In")
-                                    Button(action: { zoomScale = 1.0 }) { Image(systemName: "arrow.counterclockwise") }.help("Reset Zoom")
-                                    
+                                    Button(action: { if zoomScale < 0 { zoomScale = 1.0 }; zoomScale = max(0.5, zoomScale / 1.5) }) { Image(systemName: "minus.magnifyingglass") }.help("Zoom Out")
+                                    Text(zoomScale < 0 ? "Fit" : "\(Int(zoomScale * 100))%").font(.caption).monospacedDigit().frame(width: 50)
+                                    Button(action: { if zoomScale < 0 { zoomScale = 1.0 }; zoomScale = min(10.0, zoomScale * 1.5) }) { Image(systemName: "plus.magnifyingglass") }.help("Zoom In")
+                                    Button(action: { zoomScale = -1.0 }) { Image(systemName: "arrow.up.left.and.arrow.down.right") }.help("Fit to Window")
+                                    Button(action: { zoomScale = 1.0 }) { Image(systemName: "1.square") }.help("Actual Size (100%)")
+
                                     Divider().frame(height: 16)
                                 }
                                 
@@ -169,22 +170,28 @@ struct ContentView: View {
                 
                 if let selectedImg = selectedImage {
                     GeometryReader { geometry in
+                        let fitScale = min(
+                            (geometry.size.width - 16) / CGFloat(selectedImg.image.size.width),
+                            (geometry.size.height - 16) / CGFloat(selectedImg.image.size.height)
+                        )
+                        let effectiveScale = zoomScale < 0 ? max(1.0, fitScale) : zoomScale
+
                         ScrollView([.horizontal, .vertical], showsIndicators: true) {
                             ZStack {
                                 Image(nsImage: selectedImg.image)
                                     .resizable()
                                     .interpolation(.none)
-                                    .frame(width: CGFloat(selectedImg.image.size.width) * zoomScale, height: CGFloat(selectedImg.image.size.height) * zoomScale)
+                                    .frame(width: CGFloat(selectedImg.image.size.width) * effectiveScale, height: CGFloat(selectedImg.image.size.height) * effectiveScale)
                                 
                                 // Crop overlay
                                 if cropMode {
                                     CropOverlayView(
                                         imageSize: selectedImg.image.size,
-                                        imageScale: zoomScale,
+                                        imageScale: effectiveScale,
                                         cropStart: $cropStart,
                                         cropEnd: $cropEnd
                                     )
-                                    .frame(width: CGFloat(selectedImg.image.size.width) * zoomScale, height: CGFloat(selectedImg.image.size.height) * zoomScale)
+                                    .frame(width: CGFloat(selectedImg.image.size.width) * effectiveScale, height: CGFloat(selectedImg.image.size.height) * effectiveScale)
                                 }
                             }
                             .gesture(
