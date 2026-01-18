@@ -7,18 +7,24 @@ In the end I decided to code one myself in Swift. It started with SHR uncompress
 Newly added are now HGR and DHGR conversion and output formats like png, jpg, tiff, gif and heic.
 Was bored and added then more graphic formats...
 
-**NEW, now with files browser for .2mg, .po and .hdv volumes**<br>
+**NEW, now with files browser for .2mg, .po, .do, .dsk and .hdv volumes**<br>
 Just drag and drop your disk images in the app and extract your pics from there. You also can export any file from within the app to your Mac.
+
+**NEW in Version 3.9:
+- 816/Paint format detection and display
+- C64 D64 disk image support
+- Raw image scanning for non-standard/bootable slideshow disks
+- Improved ProDOS and DOS 3.3 disk detection
 
 <img width="1445" height="887" alt="Screenshot 2026-01-12 at 16 38 14" src="https://github.com/user-attachments/assets/35768c53-519d-4fe0-af6f-d1694b160b83" />
 
 📂 Supported Formats (10 Platforms)
 Retro Platforms
 
-🍎 Apple II/IIGS: SHR (Standard/3200), HGR, DHGR<br>
+🍎 Apple II/IIGS: SHR (Standard/3200/816Paint), HGR, DHGR, PNT, PIC<br>
 🖥️ Amiga: IFF/ILBM (8-bit indexed, 24-bit RGB)<br>
 🕹️ Atari ST: Degas (PI1/PI2/PI3)<br>
-💾 Commodore 64: Koala Painter, HIRES, Art Studio<br>
+💾 Commodore 64: Koala Painter, HIRES, Art Studio, D64 disk images<br>
 🎮 ZX Spectrum: SCR (6912 bytes)<br>
 💻 Amstrad CPC: Mode 0 (16 colors), Mode 1 (4 colors)<br>
 🖨️ PC/DOS: PCX (1/2/4/8/24-bit with RLE compression)<br>
@@ -70,7 +76,7 @@ Technical Highlights
 🔄 Format Migration: Batch convert old formats to modern standards<br>
 📚 Collection Management: Browse and organize retro graphics libraries<br>
 🖼️ Comparison: View retro and modern images side-by-side<br>
-💿 Archive Processing: Extract and convert graphics from disk images<br>
+💿 Archive Processing: Extract and convert graphics from disk images (.2mg, .po, .do, .dsk, .hdv, .d64)<br>
 
 
 <img width="1492" height="831" alt="Bildschirmfoto 2025-12-10 um 14 49 07" src="https://github.com/user-attachments/assets/db620b3a-73e4-4c0c-988c-9c659bcfb75a" />
