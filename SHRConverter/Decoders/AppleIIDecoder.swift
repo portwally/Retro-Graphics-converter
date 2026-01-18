@@ -6,39 +6,61 @@ import CoreGraphics
 class AppleIIDecoder {
     
     // MARK: - SHR Decoder (320x200, 32KB)
-    
+
     static func decodeSHR(data: Data, is3200Color: Bool) -> CGImage? {
         let width = 320
         let height = 200
         var rgbaBuffer = [UInt8](repeating: 255, count: width * height * 4)
-        
+
         let pixelDataStart = 0
         let scbOffset = 32000
         let standardPaletteOffset = 32256
         let brooksPaletteOffset = 32000
-        
+
+        // Standard SHR requires at least 32768 bytes (32000 pixels + 256 SCB + 512 palette)
+        // But some files may have less - we need at least pixels + SCB + 1 palette (32000 + 256 + 32)
+        guard data.count >= 32000 else { return nil }
+
         if !is3200Color {
             var palettes = [[(r: UInt8, g: UInt8, b: UInt8)]]()
+
+            // Read palettes (with bounds checking)
             for i in 0..<16 {
                 let pOffset = standardPaletteOffset + (i * 32)
-                palettes.append(ImageHelpers.readPalette(from: data, offset: pOffset, reverseOrder: false))
+                if pOffset + 32 <= data.count {
+                    palettes.append(ImageHelpers.readPalette(from: data, offset: pOffset, reverseOrder: false))
+                } else {
+                    // Use default palette if not enough data
+                    palettes.append(ImageHelpers.generateDefaultPalette())
+                }
             }
-            
+
             for y in 0..<height {
-                let scb = data[scbOffset + y]
+                // Read SCB with bounds checking
+                let scb: UInt8
+                if scbOffset + y < data.count {
+                    scb = data[scbOffset + y]
+                } else {
+                    scb = 0  // Default to palette 0
+                }
                 let paletteIndex = Int(scb & 0x0F)
                 let currentPalette = palettes[paletteIndex]
                 renderLine(y: y, data: data, pixelStart: pixelDataStart, palette: currentPalette, to: &rgbaBuffer, width: width)
             }
-            
+
         } else {
             for y in 0..<height {
                 let pOffset = brooksPaletteOffset + (y * 32)
-                let currentPalette = ImageHelpers.readPalette(from: data, offset: pOffset, reverseOrder: true)
+                let currentPalette: [(r: UInt8, g: UInt8, b: UInt8)]
+                if pOffset + 32 <= data.count {
+                    currentPalette = ImageHelpers.readPalette(from: data, offset: pOffset, reverseOrder: true)
+                } else {
+                    currentPalette = ImageHelpers.generateDefaultPalette()
+                }
                 renderLine(y: y, data: data, pixelStart: pixelDataStart, palette: currentPalette, to: &rgbaBuffer, width: width)
             }
         }
-        
+
         return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
     }
     

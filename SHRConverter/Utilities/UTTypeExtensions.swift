@@ -30,4 +30,12 @@ extension UTType {
     static var hdv: UTType {
         UTType(filenameExtension: "hdv") ?? .data
     }
+
+    static var do_disk: UTType {
+        UTType(filenameExtension: "do") ?? .data
+    }
+
+    static var po: UTType {
+        UTType(filenameExtension: "po") ?? .data
+    }
 }

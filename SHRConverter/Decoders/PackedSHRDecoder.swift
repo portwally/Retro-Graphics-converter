@@ -650,15 +650,37 @@ class PackedSHRDecoder {
     }
     
     // MARK: - PNT/$0001 (PackBytes)
-    
+
     private static func tryDecodePNT0001(data: Data) -> (image: CGImage?, type: AppleIIImageType)? {
-        let unpackedData = unpackBytes(data: data, maxOutputSize: 32768)
+        // Standard SHR is 32768 bytes: 32000 pixels + 512 palette + 256 SCB
+        let unpackedData = unpackBytes(data: data, maxOutputSize: 65536)
+
+        // Need at least 32000 bytes for pixel data (without palette/SCB it's still valid)
         guard unpackedData.count >= 32000 else { return nil }
-        
+
         if let image = AppleIIDecoder.decodeSHR(data: unpackedData, is3200Color: false) {
-            return (image, .SHR(mode: "Packed", width: 320, height: 200))
+            // Check for 816/Paint signature at offset 32224 in unpacked data
+            let modeString = is816PaintFormat(unpackedData) ? "816/Paint" : "Packed"
+            return (image, .SHR(mode: modeString, width: 320, height: 200))
         }
         return nil
+    }
+
+    /// Detects if unpacked SHR data contains the 816/Paint signature
+    /// 816/Paint stores "816/Paint" at offset 32224 in the SCB area
+    private static func is816PaintFormat(_ data: Data) -> Bool {
+        guard data.count >= 32234 else { return false }
+
+        // Check for "816/Paint" signature at offset 32224
+        let signatureOffset = 32224
+        let signature: [UInt8] = [0x38, 0x31, 0x36, 0x2F, 0x50, 0x61, 0x69, 0x6E, 0x74] // "816/Paint"
+
+        for (i, byte) in signature.enumerated() {
+            if data[signatureOffset + i] != byte {
+                return false
+            }
+        }
+        return true
     }
     
     static func decodePNT0001(data: Data) -> (image: CGImage?, type: AppleIIImageType) {

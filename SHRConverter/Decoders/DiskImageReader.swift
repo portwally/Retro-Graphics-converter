@@ -570,24 +570,39 @@ extension DiskImageReader {
     static func readProDOSCatalogFull(data: Data, filename: String) -> DiskCatalog? {
         let blockSize = 512
         guard data.count >= blockSize * 3 else { return nil }
-        
+
         for volumeDirBlock in [2, 1] {
             let volumeDirOffset = volumeDirBlock * blockSize
             guard volumeDirOffset + blockSize <= data.count else { continue }
-            
+
             let storageType = (data[volumeDirOffset + 4] & 0xF0) >> 4
             guard storageType == 0x0F else { continue }
-            
+
             let volumeNameLength = Int(data[volumeDirOffset + 4] & 0x0F)
             guard volumeNameLength > 0 && volumeNameLength <= 15 else { continue }
-            
+
+            // Validate volume name contains only valid ProDOS characters (A-Z, 0-9, .)
+            // This prevents misidentifying random data as a ProDOS volume header
             var volumeName = ""
+            var validName = true
             for i in 0..<volumeNameLength {
-                volumeName.append(Character(UnicodeScalar(data[volumeDirOffset + 5 + i])))
+                let char = data[volumeDirOffset + 5 + i]
+                // ProDOS names: uppercase letters A-Z (0x41-0x5A), digits 0-9 (0x30-0x39), period (0x2E)
+                if (char >= 0x41 && char <= 0x5A) || (char >= 0x30 && char <= 0x39) || char == 0x2E {
+                    volumeName.append(Character(UnicodeScalar(char)))
+                } else {
+                    validName = false
+                    break
+                }
             }
-            
+            guard validName else { continue }
+
+            // Additional validation: check that the entry count field is reasonable
+            let entryCount = Int(data[volumeDirOffset + 0x25]) | (Int(data[volumeDirOffset + 0x26]) << 8)
+            guard entryCount < 1000 else { continue }  // Sanity check
+
             let entries = readProDOSDirectoryForCatalog(data: data, startBlock: volumeDirBlock, blockSize: blockSize, parentPath: "")
-            
+
             if !entries.isEmpty {
                 return DiskCatalog(
                     diskName: volumeName.isEmpty ? filename : volumeName,
@@ -597,7 +612,7 @@ extension DiskImageReader {
                 )
             }
         }
-        
+
         return nil
     }
     
@@ -629,9 +644,11 @@ extension DiskImageReader {
                 let keyPointer = Int(data[entryOffset + 17]) | (Int(data[entryOffset + 18]) << 8)
                 let blocksUsed = Int(data[entryOffset + 19]) | (Int(data[entryOffset + 20]) << 8)
                 let eof = Int(data[entryOffset + 21]) | (Int(data[entryOffset + 22]) << 8) | (Int(data[entryOffset + 23]) << 16)
-                
+                // Read auxType from directory entry (at offset +31, 2 bytes)
+                let auxType = Int(data[entryOffset + 31]) | (Int(data[entryOffset + 32]) << 8)
+
                 let fullPath = parentPath.isEmpty ? fileName : "\(parentPath)/\(fileName)"
-                
+
                 if entryStorageType == 0x0D {
                     let subEntries = readProDOSDirectoryForCatalog(data: data, startBlock: keyPointer, blockSize: blockSize, parentPath: fullPath)
                     
@@ -674,7 +691,9 @@ extension DiskImageReader {
                             fileData.count == 32772
                         )
 
-                        let fileTypeInfo = ProDOSFileTypeInfo.getFileTypeInfo(fileType: fileType, auxType: loadAddr)
+                        // Use auxType for PNT/PIC files, loadAddr for BIN files
+                        let effectiveAuxType = (fileType == 0xC0 || fileType == 0xC1) ? auxType : (loadAddr ?? 0)
+                        let fileTypeInfo = ProDOSFileTypeInfo.getFileTypeInfo(fileType: fileType, auxType: effectiveAuxType)
 
                         let result: (image: CGImage?, type: AppleIIImageType)
                         if couldBeGraphics || fileTypeInfo.isGraphics {
@@ -684,7 +703,10 @@ extension DiskImageReader {
                                 // Header detected, strip it
                                 dataToDecode = fileData.subdata(in: 4..<fileData.count)
                             }
-                            result = SHRDecoder.decode(data: dataToDecode, filename: fileName)
+                            // Construct filename with ProDOS type info (e.g., "FILENAME#c00001")
+                            // This tells SHRDecoder the exact format for PNT/PIC files
+                            let filenameWithType = String(format: "%@#%02x%04x", fileName, fileType, effectiveAuxType)
+                            result = SHRDecoder.decode(data: dataToDecode, filename: filenameWithType)
                         } else {
                             result = (image: nil, type: .Unknown)
                         }
@@ -703,7 +725,10 @@ extension DiskImageReader {
                         }
 
                         let displayAuxType: Int?
-                        if couldBeGraphics && isImage {
+                        if fileType == 0xC0 || fileType == 0xC1 {
+                            // For PNT/PIC files, use the actual auxType from directory
+                            displayAuxType = auxType
+                        } else if couldBeGraphics && isImage {
                             if fileData.count >= 16380 && fileData.count <= 16400 {
                                 displayAuxType = 0x4000
                             } else if fileData.count >= 8180 && fileData.count <= 8200 {
@@ -717,7 +742,7 @@ extension DiskImageReader {
 
                         let entry = DiskCatalogEntry(
                             name: fileName,
-                            fileType: displayFileType,
+                            fileType: fileType,  // Keep original fileType for proper detection
                             fileTypeString: String(format: "$%02X", fileType),
                             size: fileData.count,
                             blocks: blocksUsed,
@@ -1040,12 +1065,17 @@ extension DiskImageReader {
                 return catalog
             }
         }
-        
+
         if let catalog = readDOS33CatalogFull(data: data, filename: filename) {
             return catalog
         }
-        
+
         if data.count == 143360 {
+            // Try reading ProDOS catalog from DOS-ordered disk with sequential sector reading FIRST
+            if let catalog = readProDOSCatalogFromDOSOrderSequential(data: data, filename: filename) {
+                return catalog
+            }
+
             if let convertedData = convertDOSOrderToProDOSOrder(data: data) {
                 if let catalog = readProDOSCatalogFull(data: convertedData, filename: filename) {
                     if catalog.totalFiles > 0 {
@@ -1054,7 +1084,443 @@ extension DiskImageReader {
                 }
             }
         }
-        
+
         return nil
+    }
+
+    /// Reads ProDOS catalog from a DOS-ordered disk by reading sequential DOS sectors
+    /// This handles disks where the volume directory is stored at DOS sectors 11, 10, 9 (track 0)
+    static func readProDOSCatalogFromDOSOrderSequential(data: Data, filename: String) -> DiskCatalog? {
+        guard data.count == 143360 else { return nil }
+
+        // Check for volume header at DOS sector 11 (offset 11*256 = 2816)
+        let sector11Offset = 11 * 256
+        guard sector11Offset + 256 <= data.count else { return nil }
+
+        // Check if there's a ProDOS volume header at sector 11
+        let storageType = (data[sector11Offset + 4] & 0xF0) >> 4
+        guard storageType == 0x0F else { return nil }
+
+        let volumeNameLength = Int(data[sector11Offset + 4] & 0x0F)
+        guard volumeNameLength > 0 && volumeNameLength <= 15 else { return nil }
+
+        // Validate volume name contains only valid ProDOS characters (A-Z, 0-9, .)
+        var volumeName = ""
+        for i in 0..<volumeNameLength {
+            let char = data[sector11Offset + 5 + i]
+            // ProDOS names: uppercase letters A-Z (0x41-0x5A), digits 0-9 (0x30-0x39), period (0x2E)
+            if (char >= 0x41 && char <= 0x5A) || (char >= 0x30 && char <= 0x39) || char == 0x2E {
+                volumeName.append(Character(UnicodeScalar(char)))
+            } else {
+                return nil  // Invalid character in volume name - not a ProDOS disk
+            }
+        }
+
+        // Read expected file count from volume header
+        let expectedFileCount = Int(data[sector11Offset + 0x25]) | (Int(data[sector11Offset + 0x26]) << 8)
+        guard expectedFileCount < 1000 else { return nil }  // Sanity check
+
+        var entries: [DiskCatalogEntry] = []
+
+        // Read directory entries from DOS sectors 11, 10, 9, 8... (descending)
+        // First block: sectors 11 + 10 combined (512 bytes)
+        // Continuation: sectors 9 + 8, etc.
+        var currentDosSector = 11
+        var isFirstBlock = true
+
+        for _ in 0..<10 {
+            guard currentDosSector >= 0 else { break }
+
+            // Read two consecutive sectors as a 512-byte block
+            // Use descending order: sector N, then sector N-1
+            let sector1Offset = currentDosSector * 256
+            let sector2Offset = (currentDosSector - 1) * 256
+            guard sector1Offset + 256 <= data.count && sector2Offset + 256 <= data.count else { break }
+
+            // Combine into a 512-byte block (sector N first, then N-1)
+            var blockData = Data()
+            blockData.append(contentsOf: data[sector1Offset..<(sector1Offset + 256)])
+            blockData.append(contentsOf: data[sector2Offset..<(sector2Offset + 256)])
+
+            // Get next block pointer
+            let nextBlock = Int(blockData[2]) | (Int(blockData[3]) << 8)
+
+            // Parse directory entries
+            let entryStart = isFirstBlock ? (4 + 39) : 4  // Skip volume header in first block
+            let maxEntries = isFirstBlock ? 12 : 13
+
+            for entryIdx in 0..<maxEntries {
+                let entryOffset = entryStart + (entryIdx * 39)
+                guard entryOffset + 39 <= blockData.count else { break }
+
+                let entryStorageType = (blockData[entryOffset] & 0xF0) >> 4
+                if entryStorageType == 0 { continue }
+                if entryStorageType == 0x0D { continue }  // Skip subdirectories for now
+
+                let nameLength = Int(blockData[entryOffset] & 0x0F)
+                guard nameLength > 0 && nameLength <= 15 else { continue }
+
+                var fileName = ""
+                for i in 0..<nameLength {
+                    fileName.append(Character(UnicodeScalar(blockData[entryOffset + 1 + i])))
+                }
+
+                // Skip if already added
+                if entries.contains(where: { $0.name == fileName }) { continue }
+
+                let fileType = blockData[entryOffset + 16]
+                let keyPointer = Int(blockData[entryOffset + 17]) | (Int(blockData[entryOffset + 18]) << 8)
+                let blocksUsed = Int(blockData[entryOffset + 19]) | (Int(blockData[entryOffset + 20]) << 8)
+                let eof = Int(blockData[entryOffset + 21]) | (Int(blockData[entryOffset + 22]) << 8) | (Int(blockData[entryOffset + 23]) << 16)
+                let auxType = entryOffset + 33 <= blockData.count ? Int(blockData[entryOffset + 31]) | (Int(blockData[entryOffset + 32]) << 8) : 0
+
+                // Extract file data using direct block addressing
+                let fileData = extractProDOSFileFromDOSOrderDisk(data: data, keyBlock: keyPointer, blocksUsed: blocksUsed, eof: eof, storageType: Int(entryStorageType)) ?? Data()
+
+                let isPNTorPIC = (fileType == 0xC0 || fileType == 0xC1)
+                let couldBeGraphics = isPNTorPIC || ((fileType == 0x04 || fileType == 0x06) && (
+                    eof == 8184 || eof == 8192 || eof == 16384 ||
+                    eof == 32768 || eof == 8196 || eof == 16388 || eof == 32772 || eof == 33024
+                ))
+
+                var result: (image: CGImage?, type: AppleIIImageType) = (nil, .Unknown)
+                if couldBeGraphics && !fileData.isEmpty {
+                    // For BIN files ($06), check if there's a 4-byte header to strip
+                    var dataToDecode = fileData
+                    if fileType == 0x06 && fileData.count >= 4 {
+                        let loadAddr = Int(fileData[0]) | (Int(fileData[1]) << 8)
+                        let length = Int(fileData[2]) | (Int(fileData[3]) << 8)
+                        // Check for typical HGR/DHGR load addresses
+                        if (loadAddr == 0x2000 || loadAddr == 0x4000) && length > 0 && length <= fileData.count - 4 {
+                            dataToDecode = fileData.subdata(in: 4..<fileData.count)
+                        }
+                    }
+                    // Construct filename with ProDOS type info (e.g., "FILENAME#c00001")
+                    let filenameWithType = String(format: "%@#%02x%04x", fileName, fileType, auxType)
+                    result = SHRDecoder.decode(data: dataToDecode, filename: filenameWithType)
+                }
+
+                let isImage = result.image != nil && result.type != .Unknown
+
+                let entry = DiskCatalogEntry(
+                    name: fileName,
+                    fileType: fileType,
+                    fileTypeString: ProDOSFileTypeInfo.getFileTypeInfo(fileType: fileType, auxType: auxType).shortName,
+                    size: eof,
+                    blocks: blocksUsed,
+                    loadAddress: auxType,
+                    length: nil,
+                    data: fileData,
+                    isImage: isImage,
+                    imageType: result.type,
+                    isDirectory: false,
+                    children: nil
+                )
+                entries.append(entry)
+            }
+
+            isFirstBlock = false
+
+            // Follow the chain or continue sequentially
+            if nextBlock == 0 {
+                break
+            } else if nextBlock == 3 {
+                // Special case: next=3 means continue at DOS sector 9
+                currentDosSector = 9
+            } else {
+                // Move to next pair of sectors (descending)
+                currentDosSector -= 2
+            }
+        }
+
+        if !entries.isEmpty {
+            return DiskCatalog(
+                diskName: volumeName.isEmpty ? filename : volumeName,
+                diskFormat: "ProDOS (DOS order)",
+                diskSize: data.count,
+                entries: entries
+            )
+        }
+
+        return nil
+    }
+
+    /// ProDOS to DOS sector interleave mapping (standard)
+    private static let prodosToDOSSector: [Int] = [
+        0, 13, 11, 9, 7, 5, 3, 1, 14, 12, 10, 8, 6, 4, 2, 15
+    ]
+
+    /// Reversed interleave mapping (for some non-standard disks)
+    private static let prodosToDOSSectorReversed: [Int] = [
+        0, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 15
+    ]
+
+    /// Reads a ProDOS block from a DOS-ordered disk using interleave mapping
+    /// ProDOS block N maps to two physical sectors based on interleave table
+    static func readProDOSBlockFromDOSOrderDiskInterleaved(data: Data, block: Int) -> Data? {
+        return readProDOSBlockWithInterleave(data: data, block: block, interleaveTable: prodosToDOSSector)
+    }
+
+    /// Reads a ProDOS block using reversed interleave (for non-standard disks)
+    static func readProDOSBlockFromDOSOrderDiskReversedInterleave(data: Data, block: Int) -> Data? {
+        return readProDOSBlockWithInterleave(data: data, block: block, interleaveTable: prodosToDOSSectorReversed)
+    }
+
+    /// Helper to read a block using any interleave table
+    private static func readProDOSBlockWithInterleave(data: Data, block: Int, interleaveTable: [Int]) -> Data? {
+        guard data.count == 143360 else { return nil }
+        guard block < 280 else { return nil }  // Max blocks in 140KB disk
+
+        let sectorsPerTrack = 16
+        let sectorSize = 256
+
+        // Calculate track and logical sectors for this block
+        let sectorsTotal = block * 2
+        let track = sectorsTotal / sectorsPerTrack
+        let logicalSector1 = sectorsTotal % sectorsPerTrack
+        let logicalSector2 = (sectorsTotal + 1) % sectorsPerTrack
+        let track2 = (sectorsTotal + 1) / sectorsPerTrack
+
+        // Apply interleave mapping
+        let physSector1 = interleaveTable[logicalSector1]
+        let physSector2 = interleaveTable[logicalSector2]
+
+        let offset1 = (track * sectorsPerTrack + physSector1) * sectorSize
+        let offset2 = (track2 * sectorsPerTrack + physSector2) * sectorSize
+
+        guard offset1 + sectorSize <= data.count && offset2 + sectorSize <= data.count else { return nil }
+
+        var blockData = Data()
+        blockData.append(contentsOf: data[offset1..<(offset1 + sectorSize)])
+        blockData.append(contentsOf: data[offset2..<(offset2 + sectorSize)])
+        return blockData
+    }
+
+    /// Reads a ProDOS block directly from a DOS-ordered disk (no interleave)
+    /// This is for disks where file data is stored at direct block offsets
+    static func readProDOSBlockFromDOSOrderDiskDirect(data: Data, block: Int) -> Data? {
+        guard data.count == 143360 else { return nil }
+        guard block < 280 else { return nil }  // Max blocks in 140KB disk
+
+        let blockSize = 512
+        let offset = block * blockSize
+
+        guard offset + blockSize <= data.count else { return nil }
+
+        var blockData = Data()
+        blockData.append(contentsOf: data[offset..<(offset + blockSize)])
+        return blockData
+    }
+
+    /// Extracts a ProDOS file from a DOS-ordered disk
+    /// Tries multiple methods: reversed interleave, standard interleave, direct, and contiguous
+    static func extractProDOSFileFromDOSOrderDisk(data: Data, keyBlock: Int, blocksUsed: Int, eof: Int, storageType: Int) -> Data? {
+        // Try reversed interleave first (works for some non-standard disks like hgrbyte)
+        if let fileData = extractProDOSFileWithInterleaveMethod(data: data, keyBlock: keyBlock, eof: eof, storageType: storageType, interleaveTable: prodosToDOSSectorReversed) {
+            return fileData
+        }
+
+        // Try standard interleaved reading (standard ProDOS on DOS-ordered disk)
+        if let fileData = extractProDOSFileWithInterleaveMethod(data: data, keyBlock: keyBlock, eof: eof, storageType: storageType, interleaveTable: prodosToDOSSector) {
+            return fileData
+        }
+
+        // Try direct block addressing
+        if let fileData = extractProDOSFileWithMethod(data: data, keyBlock: keyBlock, eof: eof, storageType: storageType, useInterleave: false) {
+            return fileData
+        }
+
+        // Fallback: Try contiguous storage (some disks store sapling files contiguously)
+        if storageType == 2 || storageType == 3 {
+            return extractContiguousFile(data: data, keyBlock: keyBlock, eof: eof)
+        }
+
+        return nil
+    }
+
+    /// Extract file using a specific interleave table
+    private static func extractProDOSFileWithInterleaveMethod(data: Data, keyBlock: Int, eof: Int, storageType: Int, interleaveTable: [Int]) -> Data? {
+        var fileData = Data()
+
+        let readBlock: (Int) -> Data? = { block in
+            return readProDOSBlockWithInterleave(data: data, block: block, interleaveTable: interleaveTable)
+        }
+
+        switch storageType {
+        case 1: // Seedling - single block
+            guard let blockData = readBlock(keyBlock) else { return nil }
+            fileData.append(blockData)
+
+        case 2: // Sapling - index block points to data blocks
+            guard let indexBlock = readBlock(keyBlock) else { return nil }
+
+            // Validate index block - check if high bytes are reasonable
+            var hasValidIndexEntries = false
+            for i in 0..<256 {
+                let highByte = Int(indexBlock[i + 256])
+                if highByte > 1 {
+                    return nil  // Invalid index block for this method
+                }
+                let blockNum = Int(indexBlock[i]) | (highByte << 8)
+                if blockNum > 0 && blockNum < 280 {
+                    hasValidIndexEntries = true
+                }
+            }
+
+            if !hasValidIndexEntries { return nil }
+
+            // Read data blocks
+            for i in 0..<256 {
+                let blockNum = Int(indexBlock[i]) | (Int(indexBlock[i + 256]) << 8)
+                if blockNum == 0 { continue }
+                if blockNum >= 280 { continue }
+                guard let blockData = readBlock(blockNum) else { continue }
+                fileData.append(blockData)
+                if fileData.count >= eof { break }
+            }
+
+        case 3: // Tree - master index block points to index blocks
+            guard let masterIndex = readBlock(keyBlock) else { return nil }
+
+            for i in 0..<128 {
+                let indexBlockNum = Int(masterIndex[i]) | (Int(masterIndex[i + 256]) << 8)
+                if indexBlockNum == 0 { continue }
+                if indexBlockNum >= 280 { return nil }
+
+                guard let indexBlock = readBlock(indexBlockNum) else { continue }
+
+                for j in 0..<256 {
+                    let blockNum = Int(indexBlock[j]) | (Int(indexBlock[j + 256]) << 8)
+                    if blockNum == 0 { continue }
+                    if blockNum >= 280 { continue }
+                    guard let blockData = readBlock(blockNum) else { continue }
+                    fileData.append(blockData)
+                    if fileData.count >= eof { break }
+                }
+
+                if fileData.count >= eof { break }
+            }
+
+        default:
+            return nil
+        }
+
+        // Trim to EOF
+        if eof > 0 && eof < fileData.count {
+            fileData = fileData.prefix(eof)
+        }
+
+        return fileData.isEmpty ? nil : fileData
+    }
+
+    /// Extracts a file stored contiguously starting at keyBlock
+    private static func extractContiguousFile(data: Data, keyBlock: Int, eof: Int) -> Data? {
+        var fileData = Data()
+        let blocksNeeded = (eof + 511) / 512
+
+        for i in 0..<blocksNeeded {
+            let block = keyBlock + i
+            if block >= 280 { break }
+
+            if let blockData = readProDOSBlockFromDOSOrderDiskDirect(data: data, block: block) {
+                fileData.append(blockData)
+            } else {
+                break
+            }
+        }
+
+        if eof > 0 && eof < fileData.count {
+            fileData = fileData.prefix(eof)
+        }
+
+        return fileData.isEmpty ? nil : fileData
+    }
+
+    /// Helper function to extract a file using either interleaved or direct block reading
+    private static func extractProDOSFileWithMethod(data: Data, keyBlock: Int, eof: Int, storageType: Int, useInterleave: Bool) -> Data? {
+        var fileData = Data()
+
+        let readBlock: (Int) -> Data? = { block in
+            if useInterleave {
+                return readProDOSBlockFromDOSOrderDiskInterleaved(data: data, block: block)
+            } else {
+                return readProDOSBlockFromDOSOrderDiskDirect(data: data, block: block)
+            }
+        }
+
+        switch storageType {
+        case 1: // Seedling - single block
+            guard let blockData = readBlock(keyBlock) else { return nil }
+            fileData.append(blockData)
+
+        case 2: // Sapling - index block points to data blocks
+            guard let indexBlock = readBlock(keyBlock) else { return nil }
+
+            // Validate index block - check if high bytes are reasonable (all zero or small values)
+            var hasValidIndexEntries = false
+            var validBlockCount = 0
+            for i in 0..<256 {
+                let lowByte = Int(indexBlock[i])
+                let highByte = Int(indexBlock[i + 256])
+                let blockNum = lowByte | (highByte << 8)
+
+                // High bytes should be 0 or 1 for valid 140KB disk (max block 279)
+                if highByte > 1 {
+                    return nil  // Invalid index block for this method
+                }
+
+                if blockNum > 0 && blockNum < 280 {
+                    hasValidIndexEntries = true
+                    validBlockCount += 1
+                }
+            }
+
+            if !hasValidIndexEntries { return nil }
+
+            // Read data blocks
+            for i in 0..<256 {
+                let blockNum = Int(indexBlock[i]) | (Int(indexBlock[i + 256]) << 8)
+                if blockNum == 0 { continue }
+                if blockNum >= 280 { continue }  // Skip invalid block numbers
+                guard let blockData = readBlock(blockNum) else { continue }
+                fileData.append(blockData)
+
+                // Stop if we've read enough
+                if fileData.count >= eof { break }
+            }
+
+        case 3: // Tree - master index block points to index blocks
+            guard let masterIndex = readBlock(keyBlock) else { return nil }
+
+            for i in 0..<128 {
+                let indexBlockNum = Int(masterIndex[i]) | (Int(masterIndex[i + 256]) << 8)
+                if indexBlockNum == 0 { continue }
+                if indexBlockNum >= 280 { return nil }  // Invalid for this method
+
+                guard let indexBlock = readBlock(indexBlockNum) else { continue }
+
+                for j in 0..<256 {
+                    let blockNum = Int(indexBlock[j]) | (Int(indexBlock[j + 256]) << 8)
+                    if blockNum == 0 { continue }
+                    if blockNum >= 280 { continue }
+                    guard let blockData = readBlock(blockNum) else { continue }
+                    fileData.append(blockData)
+
+                    if fileData.count >= eof { break }
+                }
+
+                if fileData.count >= eof { break }
+            }
+
+        default:
+            return nil
+        }
+
+        // Trim to EOF
+        if eof > 0 && eof < fileData.count {
+            fileData = fileData.prefix(eof)
+        }
+
+        return fileData.isEmpty ? nil : fileData
     }
 }

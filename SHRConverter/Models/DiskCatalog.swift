@@ -27,6 +27,13 @@ struct DiskCatalogEntry: Identifiable {
             return String(format: "%.1f MB", Double(size) / (1024.0 * 1024.0))
         }
     }
+
+    /// Filename with ProDOS type info suffix (e.g., "FILENAME#c00001")
+    /// This is used by the decoder to identify file formats like PNT ($C0) with auxtype
+    var nameWithTypeInfo: String {
+        let auxType = loadAddress ?? 0
+        return String(format: "%@#%02x%04x", name, fileType, auxType)
+    }
 }
 
 extension DiskCatalogEntry {

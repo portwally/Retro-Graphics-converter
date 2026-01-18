@@ -89,7 +89,7 @@ struct ContentView: View {
                     }
                 }.padding(.horizontal, 5)
             }
-            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
+            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
         }.padding(8).background(Color(NSColor.controlBackgroundColor))
     }
     
@@ -245,7 +245,7 @@ struct ContentView: View {
                 }
             }
             .frame(maxHeight: .infinity)
-            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
+            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
             
             VStack(spacing: 8) {
                 HStack {
@@ -276,10 +276,13 @@ struct ContentView: View {
         DispatchQueue.global(qos: .userInitiated).async {
             var newItems: [ImageItem] = []
             for entry in entries {
-                if entry.isImage, let cgImage = SHRDecoder.decode(data: entry.data, filename: entry.name).image {
+                // Use nameWithTypeInfo to pass ProDOS file type info for proper format detection
+                let decodeResult = SHRDecoder.decode(data: entry.data, filename: entry.nameWithTypeInfo)
+                if entry.isImage, let cgImage = decodeResult.image {
                     let url = URL(fileURLWithPath: "/catalog/\(entry.name)")
                     let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-                    newItems.append(ImageItem(url: url, image: nsImage, type: entry.imageType, originalData: entry.data))
+                    // Use the type from decode result to get accurate format detection (e.g., 816/Paint)
+                    newItems.append(ImageItem(url: url, image: nsImage, type: decodeResult.type, originalData: entry.data))
                 }
             }
             DispatchQueue.main.async {
@@ -348,7 +351,7 @@ struct ContentView: View {
         let openPanel = NSOpenPanel()
         openPanel.allowsOtherFileTypes = true; openPanel.allowsMultipleSelection = true; openPanel.canChooseDirectories = true; openPanel.canChooseFiles = true
         openPanel.prompt = "Open Files or Folders"
-        openPanel.allowedContentTypes = [.png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .data]
+        openPanel.allowedContentTypes = [.png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .data]
         if openPanel.runModal() == .OK { processFilesAndFolders(urls: openPanel.urls) }
     }
     
@@ -389,7 +392,8 @@ struct ContentView: View {
                     
                     // Check for disk images by file extension only
                     let possibleDiskImage = !isModernImage && (
-                        fileName.lowercased().hasSuffix(".po") || 
+                        fileName.lowercased().hasSuffix(".po") ||
+                        fileName.lowercased().hasSuffix(".do") ||
                         fileName.lowercased().hasSuffix(".dsk") ||
                         fileName.lowercased().hasSuffix(".2mg") ||
                         fileName.lowercased().hasSuffix(".hdv") ||
@@ -467,7 +471,7 @@ struct ContentView: View {
                 DispatchQueue.main.async { self.progressString = "Processing \(index + 1) of \(urls.count): \(url.lastPathComponent)" }
                 guard let data = try? Data(contentsOf: url) else { continue }
                 let fileExtension = url.pathExtension.lowercased()
-                if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" || fileExtension == "img" || fileExtension == "d64" || fileExtension == "d71" || fileExtension == "d81" {
+                if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" || fileExtension == "do" || fileExtension == "img" || fileExtension == "d64" || fileExtension == "d71" || fileExtension == "d81" {
                     if let catalog = DiskImageReader.readDiskCatalog(data: data, filename: url.lastPathComponent) {
                         DispatchQueue.main.async { self.currentCatalog = catalog; self.showCatalogBrowser = true; self.isProcessing = false }
                         continue
