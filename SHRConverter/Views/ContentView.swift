@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var cropMode = false
     @State private var cropStart: CGPoint?
     @State private var cropEnd: CGPoint?
+    @State private var cropScale: CGFloat = 1.0  // Store the scale used during crop selection
     @State private var undoStack: [(id: UUID, image: NSImage, type: AppleIIImageType, data: Data?)] = []
     
     var filteredImages: [ImageItem] {
@@ -150,7 +151,7 @@ struct ContentView: View {
                                     .help("Copy selected area")
                                     
                                     Button(action: { cropToSelection() }) {
-                                        Image(systemName: "crop.rotate")
+                                        Image(systemName: "checkmark.circle")
                                     }
                                     .help("Crop to selection")
                                     
@@ -195,10 +196,10 @@ struct ContentView: View {
                                 }
                             }
                             .gesture(
-                                cropMode ? 
+                                cropMode ?
                                 DragGesture(minimumDistance: 0)
                                     .onChanged { value in
-                                        handleCropDrag(value: value, imageSize: selectedImg.image.size)
+                                        handleCropDrag(value: value, imageSize: selectedImg.image.size, scale: effectiveScale)
                                     }
                                     .onEnded { _ in
                                         // Validate selection size
@@ -629,19 +630,22 @@ struct ContentView: View {
         cropEnd = nil
     }
     
-    func handleCropDrag(value: DragGesture.Value, imageSize: CGSize) {
+    func handleCropDrag(value: DragGesture.Value, imageSize: CGSize, scale: CGFloat) {
         // Get coordinates relative to the image
         let location = value.location
         let startLocation = value.startLocation
-        
-        // Clamp to image bounds
+
+        // Store the scale being used for this crop selection
+        cropScale = scale
+
+        // Clamp to image bounds using the actual display scale
         func clamp(_ point: CGPoint) -> CGPoint {
             CGPoint(
-                x: max(0, min(point.x, imageSize.width * zoomScale)),
-                y: max(0, min(point.y, imageSize.height * zoomScale))
+                x: max(0, min(point.x, imageSize.width * scale)),
+                y: max(0, min(point.y, imageSize.height * scale))
             )
         }
-        
+
         if cropStart == nil {
             cropStart = clamp(startLocation)
         }
@@ -742,24 +746,25 @@ struct ContentView: View {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return nil
         }
-        
-        // Convert from view coordinates to image coordinates
-        let x1 = min(start.x, end.x) / zoomScale
-        let y1 = min(start.y, end.y) / zoomScale
-        let x2 = max(start.x, end.x) / zoomScale
-        let y2 = max(start.y, end.y) / zoomScale
-        
+
+        // Convert from view coordinates to image coordinates using the stored crop scale
+        let scale = cropScale > 0 ? cropScale : 1.0
+        let x1 = min(start.x, end.x) / scale
+        let y1 = min(start.y, end.y) / scale
+        let x2 = max(start.x, end.x) / scale
+        let y2 = max(start.y, end.y) / scale
+
         let cropRect = CGRect(
             x: x1,
             y: y1,
             width: x2 - x1,
             height: y2 - y1
         )
-        
+
         guard let croppedCGImage = cgImage.cropping(to: cropRect) else {
             return nil
         }
-        
+
         return NSImage(cgImage: croppedCGImage, size: NSSize(
             width: croppedCGImage.width,
             height: croppedCGImage.height
