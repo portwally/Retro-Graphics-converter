@@ -10,15 +10,6 @@ Was bored and added then more graphic formats...
 **NEW, now with files browser for .2mg, .po, .do, .dsk and .hdv volumes**<br>
 Just drag and drop your disk images in the app and extract your pics from there. You also can export any file from within the app to your Mac.
 
-**NEW in Version 3.77:**
-- DreamGrafix format support (PNT/$8005 packed, PIC/$8003 unpacked) with LZW decompression
-- SHR 3200 Packed format (.3201) - compressed 3200-color images
-- ProDOS sparse file support
-- 816/Paint format detection and display
-- C64 D64 disk image support
-- Raw image scanning for non-standard/bootable slideshow disks
-- Improved ProDOS and DOS 3.3 disk detection
-
 <img width="1445" height="887" alt="Screenshot 2026-01-12 at 16 38 14" src="https://github.com/user-attachments/assets/35768c53-519d-4fe0-af6f-d1694b160b83" />
 
 📂 Supported Formats (10 Platforms)
