@@ -10,7 +10,10 @@ Was bored and added then more graphic formats...
 **NEW, now with files browser for .2mg, .po, .do, .dsk and .hdv volumes**<br>
 Just drag and drop your disk images in the app and extract your pics from there. You also can export any file from within the app to your Mac.
 
-**NEW in Version 3.9:
+**NEW in Version 3.77:**
+- DreamGrafix format support (PNT/$8005 packed, PIC/$8003 unpacked) with LZW decompression
+- SHR 3200 Packed format (.3201) - compressed 3200-color images
+- ProDOS sparse file support
 - 816/Paint format detection and display
 - C64 D64 disk image support
 - Raw image scanning for non-standard/bootable slideshow disks
@@ -21,7 +24,7 @@ Just drag and drop your disk images in the app and extract your pics from there.
 📂 Supported Formats (10 Platforms)
 Retro Platforms
 
-🍎 Apple II/IIGS: SHR (Standard/3200/816Paint), HGR, DHGR, PNT, PIC<br>
+🍎 Apple II/IIGS: SHR (Standard/3200/3200 Packed/816Paint/DreamGrafix), HGR, DHGR, PNT, PIC<br>
 🖥️ Amiga: IFF/ILBM (8-bit indexed, 24-bit RGB)<br>
 🕹️ Atari ST: Degas (PI1/PI2/PI3)<br>
 💾 Commodore 64: Koala Painter, HIRES, Art Studio, D64 disk images<br>
@@ -65,7 +68,7 @@ Smart Detection
 Technical Highlights
 
 🎨 Accurate Color Palettes: C64, Apple II, EGA, CGA, ZX Spectrum palettes<br>
-🗜️ Decompression Support: RLE (PCX), PackBits (MacPaint), IFF compression<br>
+🗜️ Decompression Support: RLE (PCX), PackBits (MacPaint), PackBytes (PNT/SHR), LZW (DreamGrafix), IFF compression<br>
 🔄 Format-Specific Decoding: Planar, chunky, interleaved bitmap handling<br>
 📊 Resolution Accuracy: Proper aspect ratios and pixel layouts<br>
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Version 3.77 - 2026-01-21
+## Version 3.95 - 2026-01-21
 
 ### New Features
 
