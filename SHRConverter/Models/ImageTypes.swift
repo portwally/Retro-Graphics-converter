@@ -72,9 +72,11 @@ enum AppleIIImageType: Equatable {
     
     var displayName: String {
         switch self {
-        case .SHR(let mode, _, _): 
+        case .SHR(let mode, _, _):
             // Format SHR names consistently
-            if mode == "3200" {
+            if mode == "3200 Packed" {
+                return "SHR 3200 Packed"
+            } else if mode == "3200" {
                 return "SHR 3200"
             } else if mode.contains("APF") {
                 return "SHR (\(mode))"
@@ -103,6 +105,8 @@ enum AppleIIImageType: Equatable {
                 return "12-bit (3200 colors)"
             } else if mode.contains("640") {
                 return "2-bit (4 colors)"
+            } else if mode.contains("DreamGrafix") && !mode.contains("3200") {
+                return "8-bit (256 colors)"
             } else {
                 return "4-bit (16 colors)"
             }

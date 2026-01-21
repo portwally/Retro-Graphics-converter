@@ -1,5 +1,31 @@
 # Changelog
 
+## Version 3.77 - 2026-01-21
+
+### New Features
+
+- **3200-Color Compressed Format (.3201)**: Added support for compressed 3200-color SHR images with the `.3201` extension. These files use PackBytes compression and store 200 unique 16-color palettes (one per scanline). Files are displayed as "SHR 3200 Packed" in the browser.
+
+- **DreamGrafix Format Support**: Added support for DreamGrafix images (PNT/$8005 packed, PIC/$8003 unpacked). DreamGrafix files use 12-bit LZW compression and support both 256-color and 3200-color modes. Files are identified by the "DreamWorld" signature in the 17-byte footer.
+
+### Bug Fixes
+
+- **Fixed .3201 images displaying with garbled horizontal lines**: The palette colors in .3201 files are stored in reverse order (color 0 in file = color 15 in use). Fixed the palette parsing to reverse the color order correctly.
+
+- **Fixed SHR files with 32767 bytes not being recognized**: Some SHR files are 1 byte short of the standard 32768 bytes. Changed size detection to accept 32767-32768 bytes instead of requiring exactly 32768.
+
+- **Fixed ELISE.PNT and similar PNT files decoding as garbled**: The decompression method order was wrong - raw data check ran before compression methods. Reordered to try PackBytes/PackBits compression first, with raw data as the fallback.
+
+- **Fixed ProDOS sparse files displaying as black images**: Files that use ProDOS sparse file format (block 0 = hole filled with zeros) were not being read correctly. The disk reader was stopping at the first zero block instead of filling it with zeros. Fixed both sapling (storageType 2) and tree (storageType 3) file handling to properly support sparse files.
+
+### Files Modified
+
+- `SHRConverter/Decoders/SHRDecoder.swift` - Added decode3201Format function, DreamGrafix auxtype detection, fixed 32767-byte SHR detection
+- `SHRConverter/Decoders/DreamGrafixDecoder.swift` - New file: DreamGrafix decoder with 12-bit LZW decompression, 256-color and 3200-color rendering
+- `SHRConverter/Decoders/DiskImageReader.swift` - Added .3201 extension detection, fixed sparse file support for sapling and tree files
+- `SHRConverter/Decoders/PackedSHRDecoder.swift` - Fixed decompression method order in decodePNT0000
+- `SHRConverter/Models/ImageTypes.swift` - Added "SHR 3200 Packed" and "DreamGrafix" display name handling
+
 ## Version 3.76 - 2026-01-18
 
 ### New Features

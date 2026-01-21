@@ -27,6 +27,7 @@
 		3E75F2472F11204400C49434 /* SHRDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2262F11204400C49434 /* SHRDecoder.swift */; };
 		3E75F2482F11204400C49434 /* RetroDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2252F11204400C49434 /* RetroDecoder.swift */; };
 		3E75F2492F11204400C49434 /* AppleIIDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F21E2F11204400C49434 /* AppleIIDecoder.swift */; };
+		3E75F24A2F16300000C49434 /* DreamGrafixDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F24B2F16300000C49434 /* DreamGrafixDecoder.swift */; };
 		3E9F97B22F156505009196E9 /* ImageCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9F97B12F156505009196E9 /* ImageCropView.swift */; };
 /* End PBXBuildFile section */
 
@@ -68,6 +69,7 @@
 		3E75F2312F11204400C49434 /* DiskCatalogBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskCatalogBrowserView.swift; sourceTree = "<group>"; };
 		3E75F2322F11204400C49434 /* ImageThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageThumbnailView.swift; sourceTree = "<group>"; };
 		3E75F2342F11204400C49434 /* SHRConverterApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SHRConverterApp.swift; sourceTree = "<group>"; };
+		3E75F24B2F16300000C49434 /* DreamGrafixDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DreamGrafixDecoder.swift; sourceTree = "<group>"; };
 		3E9C9E9A2EE37BDF00DEE453 /* Retro-Graphics-Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Retro-Graphics-Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E9C9EA72EE37BE000DEE453 /* Retro-Graphics-ConverterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Retro-Graphics-ConverterTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E9C9EB12EE37BE000DEE453 /* Retro-Graphics-ConverterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Retro-Graphics-ConverterUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -115,6 +117,7 @@
 				3E75F21F2F11204400C49434 /* AtariSTDecoder.swift */,
 				3E75F2202F11204400C49434 /* C64Decoder.swift */,
 				3E75F2212F11204400C49434 /* DiskImageReader.swift */,
+				3E75F24B2F16300000C49434 /* DreamGrafixDecoder.swift */,
 				3E75F2222F11204400C49434 /* ModernImageDecoder.swift */,
 				3E75F2232F11204400C49434 /* PackedSHRDecoder.swift */,
 				3E75F2242F11204400C49434 /* PCImageDecoder.swift */,
@@ -332,6 +335,7 @@
 				3E9F97B22F156505009196E9 /* ImageCropView.swift in Sources */,
 				3E75F23B2F11204400C49434 /* ImageHelpers.swift in Sources */,
 				3E75F23C2F11204400C49434 /* AmigaIFFDecoder.swift in Sources */,
+				3E75F24A2F16300000C49434 /* DreamGrafixDecoder.swift in Sources */,
 				3E75F23D2F11204400C49434 /* PackedSHRDecoder.swift in Sources */,
 				3E75F23E2F11204400C49434 /* HEICConverter.swift in Sources */,
 				3E75F23F2F11204400C49434 /* C64Decoder.swift in Sources */,
@@ -508,7 +512,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 344;
+				CURRENT_PROJECT_VERSION = 351;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = ZFE2VJD462;
 				ENABLE_APP_SANDBOX = NO;
@@ -544,7 +548,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 344;
+				CURRENT_PROJECT_VERSION = 351;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=macosx*]" = ZFE2VJD462;

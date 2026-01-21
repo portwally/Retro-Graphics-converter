@@ -492,38 +492,40 @@ class PackedSHRDecoder {
         // Try different decompression methods
         var unpackedData: Data?
         var decodedHeight = 200
-        
-        // Method 1: Check if data is already uncompressed (32000 bytes = 320x200)
-        if remainingData.count >= 32000 {
-            // Might be uncompressed
-            unpackedData = remainingData.prefix(32000)
-            decodedHeight = 200
+
+        // Method 1: Try Apple IIgs PackBytes decompression first
+        // This is the most common format for Paintworks files
+        let packedBytes = unpackBytes(data: remainingData, maxOutputSize: 64000)
+        if packedBytes.count >= 32000 {
+            unpackedData = packedBytes
+            decodedHeight = min(packedBytes.count / bytesPerLine, 396)
         }
-        
-        // Method 2: Try Apple IIgs PackBytes decompression
-        if unpackedData == nil || unpackedData!.count < 1000 {
-            let packed = unpackBytes(data: remainingData, maxOutputSize: 64000)
-            if packed.count >= 16000 {  // At least half a screen
-                unpackedData = packed
-                decodedHeight = min(packed.count / bytesPerLine, 396)
-            }
-        }
-        
-        // Method 3: Try PackBits (older MacPaint-style compression)
-        if unpackedData == nil || unpackedData!.count < 1000 {
+
+        // Method 2: Try PackBits (older MacPaint-style compression)
+        if unpackedData == nil || unpackedData!.count < 32000 {
             let packed = unpackBits(data: remainingData, maxOutputSize: 64000)
-            if packed.count >= 16000 {
+            if packed.count >= 32000 {
                 unpackedData = packed
                 decodedHeight = min(packed.count / bytesPerLine, 396)
             }
         }
-        
-        // Method 4: Try QuickDraw II PackBytes (another variant)
-        if unpackedData == nil || unpackedData!.count < 1000 {
+
+        // Method 3: Try QuickDraw II PackBytes (another variant)
+        if unpackedData == nil || unpackedData!.count < 32000 {
             let packed = unpackQuickDrawII(data: remainingData, maxOutputSize: 64000)
-            if packed.count >= 16000 {
+            if packed.count >= 32000 {
                 unpackedData = packed
                 decodedHeight = min(packed.count / bytesPerLine, 396)
+            }
+        }
+
+        // Method 4: Check if data is already uncompressed (exactly 32000 bytes for 320x200)
+        // Only use this as a fallback if compression methods failed
+        if unpackedData == nil || unpackedData!.count < 32000 {
+            if remainingData.count >= 32000 && remainingData.count <= 33000 {
+                // Likely uncompressed - file size is close to expected uncompressed size
+                unpackedData = remainingData.prefix(32000)
+                decodedHeight = 200
             }
         }
         

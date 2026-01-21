@@ -150,47 +150,80 @@ class DiskImageReader {
         } else if storageType == 2 {
             let indexOffset = keyBlock * blockSize
             guard indexOffset + blockSize <= data.count else { return nil }
-            
-            for i in 0..<256 {
+
+            // Calculate how many blocks we need based on EOF
+            let blocksNeeded = (eof + blockSize - 1) / blockSize
+
+            for i in 0..<min(256, blocksNeeded) {
                 let blockNum = Int(data[indexOffset + i]) | (Int(data[indexOffset + i + 256]) << 8)
-                if blockNum == 0 { break }
-                
-                let blockOffset = blockNum * blockSize
-                guard blockOffset + blockSize <= data.count else { continue }
-                
+
                 let bytesToRead = min(blockSize, eof - fileData.count)
-                if bytesToRead > 0 {
+                if bytesToRead <= 0 { break }
+
+                if blockNum == 0 {
+                    // Sparse block - fill with zeros
+                    fileData.append(Data(repeating: 0, count: bytesToRead))
+                } else {
+                    let blockOffset = blockNum * blockSize
+                    guard blockOffset + blockSize <= data.count else {
+                        // Block out of range - treat as sparse
+                        fileData.append(Data(repeating: 0, count: bytesToRead))
+                        continue
+                    }
                     fileData.append(data.subdata(in: blockOffset..<(blockOffset + bytesToRead)))
                 }
-                
+
                 if fileData.count >= eof { break }
             }
         } else if storageType == 3 {
             let masterIndexOffset = keyBlock * blockSize
             guard masterIndexOffset + blockSize <= data.count else { return nil }
-            
-            for masterIdx in 0..<256 {
+
+            // Calculate how many index blocks we need based on EOF
+            let blocksNeeded = (eof + blockSize - 1) / blockSize
+            let indexBlocksNeeded = (blocksNeeded + 255) / 256
+
+            for masterIdx in 0..<min(128, indexBlocksNeeded) {
                 let indexBlockNum = Int(data[masterIndexOffset + masterIdx]) | (Int(data[masterIndexOffset + masterIdx + 256]) << 8)
-                if indexBlockNum == 0 { break }
-                
+
+                // Calculate how many data blocks in this index block
+                let blocksInThisIndex = min(256, blocksNeeded - (masterIdx * 256))
+
+                if indexBlockNum == 0 {
+                    // Sparse index block - fill with zeros for all blocks it would contain
+                    for _ in 0..<blocksInThisIndex {
+                        let bytesToRead = min(blockSize, eof - fileData.count)
+                        if bytesToRead <= 0 { break }
+                        fileData.append(Data(repeating: 0, count: bytesToRead))
+                    }
+                    if fileData.count >= eof { break }
+                    continue
+                }
+
                 let indexOffset = indexBlockNum * blockSize
                 guard indexOffset + blockSize <= data.count else { continue }
-                
-                for i in 0..<256 {
+
+                for i in 0..<blocksInThisIndex {
                     let blockNum = Int(data[indexOffset + i]) | (Int(data[indexOffset + i + 256]) << 8)
-                    if blockNum == 0 { break }
-                    
-                    let blockOffset = blockNum * blockSize
-                    guard blockOffset + blockSize <= data.count else { continue }
-                    
+
                     let bytesToRead = min(blockSize, eof - fileData.count)
-                    if bytesToRead > 0 {
+                    if bytesToRead <= 0 { break }
+
+                    if blockNum == 0 {
+                        // Sparse block - fill with zeros
+                        fileData.append(Data(repeating: 0, count: bytesToRead))
+                    } else {
+                        let blockOffset = blockNum * blockSize
+                        guard blockOffset + blockSize <= data.count else {
+                            fileData.append(Data(repeating: 0, count: bytesToRead))
+                            continue
+                        }
                         fileData.append(data.subdata(in: blockOffset..<(blockOffset + bytesToRead)))
                     }
-                    
+
                     if fileData.count >= eof { break }
                 }
-                
+
                 if fileData.count >= eof { break }
             }
         }
@@ -703,7 +736,9 @@ extension DiskImageReader {
                         )
                         // Also check if auxType indicates a graphics load address
                         let hasGraphicsAuxType = (auxType == 0x2000 || auxType == 0x4000)
-                        let couldBeGraphics = (fileType == 0x04 || fileType == 0x06) && (hasGraphicsSize || hasGraphicsAuxType)
+                        // Check for .3201 extension (Compressed 3200-Color Image)
+                        let has3201Extension = fileName.lowercased().contains(".3201")
+                        let couldBeGraphics = (fileType == 0x04 || fileType == 0x06) && (hasGraphicsSize || hasGraphicsAuxType || has3201Extension)
 
                         // Use auxType for PNT/PIC files, loadAddr for BIN files
                         let effectiveAuxType = (fileType == 0xC0 || fileType == 0xC1) ? auxType : (loadAddr ?? 0)
@@ -842,6 +877,8 @@ extension DiskImageReader {
                         length = Int(fileData[2]) | (Int(fileData[3]) << 8)
                     }
 
+                    // Check for .3201 extension (Compressed 3200-Color Image)
+                    let has3201Extension = fileName.lowercased().contains(".3201")
                     let couldBeGraphics = (fileType & 0x7F == 0x04 || fileType & 0x7F == 0x06) && (
                         fileData.count == 8192 ||
                         fileData.count == 16384 ||
@@ -853,7 +890,8 @@ extension DiskImageReader {
                         (fileData.count >= 16380 && fileData.count <= 16400) ||
                         (fileData.count >= 32760 && fileData.count <= 32780) ||
                         (loadAddr == 0x2000 && fileData.count >= 8180) ||
-                        (loadAddr == 0x4000 && fileData.count >= 16380)
+                        (loadAddr == 0x4000 && fileData.count >= 16380) ||
+                        has3201Extension
                     )
 
                     // Strip header for decoding if it's a binary file with valid header
@@ -1201,7 +1239,9 @@ extension DiskImageReader {
                     (eof >= 32760 && eof <= 33030)  // SHR range
                 )
                 let hasGraphicsAuxType = (auxType == 0x2000 || auxType == 0x4000)
-                let couldBeGraphics = isPNTorPIC || ((fileType == 0x04 || fileType == 0x06) && (hasGraphicsSize || hasGraphicsAuxType))
+                // Check for .3201 extension (Compressed 3200-Color Image)
+                let has3201Extension = fileName.lowercased().contains(".3201")
+                let couldBeGraphics = isPNTorPIC || ((fileType == 0x04 || fileType == 0x06) && (hasGraphicsSize || hasGraphicsAuxType || has3201Extension))
 
                 var result: (image: CGImage?, type: AppleIIImageType) = (nil, .Unknown)
                 if couldBeGraphics && !fileData.isEmpty {

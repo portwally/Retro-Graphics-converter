@@ -60,6 +60,11 @@ class SHRDecoder {
                 return PackedSHRDecoder.decodePNT0002(data: data)  // Try APF decoder
             }
             
+            // ProDOS type $C0 (PNT) auxtype $8005 - DreamGrafix LZW compressed
+            if filename.contains("#c08005") {
+                return DreamGrafixDecoder.decodeDreamGrafixPacked(data: data)
+            }
+
             // ProDOS type $C1 (PIC) with different auxtypes
             if filename.contains("#c10000") {
                 // Unpacked Super Hi-Res Screen
@@ -73,6 +78,10 @@ class SHRDecoder {
                     return (AppleIIDecoder.decodeSHR(data: data, is3200Color: true), .SHR(mode: "3200", width: 320, height: 200))
                 }
             }
+            // ProDOS type $C1 (PIC) auxtype $8003 - DreamGrafix unpacked
+            if filename.contains("#c18003") {
+                return DreamGrafixDecoder.decodeDreamGrafixUnpacked(data: data)
+            }
             
             // Fallback for .pnt extension without type info
             if filename.hasSuffix(".pnt") {
@@ -82,9 +91,30 @@ class SHRDecoder {
             }
         }
 
+        // .3201 extension: Compressed 3200-Color Image
+        // Layout: +$00/4: "APP\0", +$04/6400: palettes (200×16×2), +$1904/xx: PackBytes pixel data
+        if let name = filename?.lowercased(), name.contains(".3201") {
+            if let image = decode3201Format(data: data) {
+                return (image, .SHR(mode: "3200 Packed", width: 320, height: 200))
+            }
+        }
+
         // APF by signature
         if let result = PackedSHRDecoder.tryDecodeAPF(data: data) {
             return result
+        }
+
+        // DreamGrafix by signature (DreamWorld footer)
+        if DreamGrafixDecoder.isDreamGrafixFormat(data) {
+            // Try packed first (more common), then unpacked
+            let packedResult = DreamGrafixDecoder.decodeDreamGrafixPacked(data: data)
+            if packedResult.image != nil {
+                return packedResult
+            }
+            let unpackedResult = DreamGrafixDecoder.decodeDreamGrafixUnpacked(data: data)
+            if unpackedResult.image != nil {
+                return unpackedResult
+            }
         }
 
         // IFF format (Amiga)
@@ -169,8 +199,8 @@ class SHRDecoder {
     
     private static func decodeAppleIIBySize(data: Data, size: Int) -> (image: CGImage?, type: AppleIIImageType) {
         switch size {
-        case 32768:
-            // Standard SHR: 32KB file
+        case 32767...32768:
+            // Standard SHR: 32KB file (some files are 1 byte short)
             return (AppleIIDecoder.decodeSHR(data: data, is3200Color: false), .SHR(mode: "Standard", width: 320, height: 200))
         case 38400...:
             // 3200 color SHR: needs full palette data
@@ -197,8 +227,95 @@ class SHRDecoder {
         }
     }
     
+    // MARK: - .3201 Format Decoder (Compressed 3200-Color)
+    // Layout: +$00/4: High-ASCII "APP" + $00, +$04/6400: palettes (200×16×2), +$1904/xx: PackBytes pixels
+
+    private static func decode3201Format(data: Data) -> CGImage? {
+        // Check minimum size: 4 (header) + 6400 (palettes) + some compressed data
+        guard data.count > 6404 else { return nil }
+
+        // Verify "APP\0" header (high-ASCII: 0xC1, 0xD0, 0xD0, 0x00)
+        let hasAppHeader = (data[0] == 0xC1 && data[1] == 0xD0 && data[2] == 0xD0 && data[3] == 0x00)
+        if !hasAppHeader {
+            // Some files may not have the header, try anyway
+        }
+
+        let paletteOffset = hasAppHeader ? 4 : 0
+        let pixelDataOffset = paletteOffset + 6400
+
+        guard data.count > pixelDataOffset else { return nil }
+
+        // Parse 200 palettes (one per scanline, 16 colors each, 2 bytes per color)
+        // Note: Colors are stored in reverse order (color 0 in file = color 15 in use)
+        var palettes: [[(r: UInt8, g: UInt8, b: UInt8)]] = []
+        for line in 0..<200 {
+            var linePalette = [(r: UInt8, g: UInt8, b: UInt8)](repeating: (0, 0, 0), count: 16)
+            for color in 0..<16 {
+                let offset = paletteOffset + (line * 32) + (color * 2)
+                guard offset + 1 < data.count else { break }
+                let low = data[offset]
+                let high = data[offset + 1]
+                // SHR palette format: low byte = GB, high byte = 0R
+                let r = UInt8((high & 0x0F) * 17)
+                let g = UInt8(((low >> 4) & 0x0F) * 17)
+                let b = UInt8((low & 0x0F) * 17)
+                // Store in reverse order: file color 0 -> slot 15, file color 1 -> slot 14, etc.
+                linePalette[15 - color] = (r: r, g: g, b: b)
+            }
+            palettes.append(linePalette)
+        }
+
+        // Decompress pixel data
+        let compressedData = data.subdata(in: pixelDataOffset..<data.count)
+        let pixelData = PackedSHRDecoder.unpackBytes(data: compressedData, maxOutputSize: 32000)
+
+        guard pixelData.count >= 32000 else { return nil }
+
+        // Render 320x200 image
+        let width = 320
+        let height = 200
+        let bytesPerLine = 160
+
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        for y in 0..<height {
+            let palette = palettes[y]
+            for xByte in 0..<bytesPerLine {
+                let dataIndex = y * bytesPerLine + xByte
+                guard dataIndex < pixelData.count else { continue }
+                let byte = pixelData[dataIndex]
+
+                let x = xByte * 2
+
+                // First pixel (high nibble)
+                let colorIdx1 = Int((byte >> 4) & 0x0F)
+                if colorIdx1 < palette.count {
+                    let color1 = palette[colorIdx1]
+                    let bufIdx1 = (y * width + x) * 4
+                    rgbaBuffer[bufIdx1] = color1.r
+                    rgbaBuffer[bufIdx1 + 1] = color1.g
+                    rgbaBuffer[bufIdx1 + 2] = color1.b
+                    rgbaBuffer[bufIdx1 + 3] = 255
+                }
+
+                // Second pixel (low nibble)
+                let colorIdx2 = Int(byte & 0x0F)
+                if colorIdx2 < palette.count {
+                    let color2 = palette[colorIdx2]
+                    let bufIdx2 = (y * width + x + 1) * 4
+                    rgbaBuffer[bufIdx2] = color2.r
+                    rgbaBuffer[bufIdx2 + 1] = color2.g
+                    rgbaBuffer[bufIdx2 + 2] = color2.b
+                    rgbaBuffer[bufIdx2 + 3] = 255
+                }
+            }
+        }
+
+        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+    }
+
     // MARK: - Image Scaling
-    
+
     static func upscaleCGImage(_ image: CGImage, factor: Int) -> CGImage? {
         guard factor > 1 else { return image }
         let newWidth = image.width * factor
