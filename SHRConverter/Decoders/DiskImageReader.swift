@@ -674,22 +674,36 @@ extension DiskImageReader {
                         if fileData.count > 4 && (fileType == 0x04 || fileType == 0x06) {
                             let potentialLoadAddr = Int(fileData[0]) | (Int(fileData[1]) << 8)
                             let potentialLength = Int(fileData[2]) | (Int(fileData[3]) << 8)
-                            
-                            if potentialLoadAddr < 0xC000 && potentialLength > 0 && potentialLength < 0x8000 {
+
+                            // Only detect header if load address is a known graphics address
+                            // AND the length makes sense for the file size
+                            // This prevents false positives from graphics data that happens to look like a header
+                            let isKnownGraphicsAddr = (potentialLoadAddr == 0x2000 || potentialLoadAddr == 0x4000)
+                            let lengthMatchesFile = (potentialLength > 0 && potentialLength <= fileData.count - 4)
+
+                            if isKnownGraphicsAddr && lengthMatchesFile {
                                 loadAddr = potentialLoadAddr
                                 length = potentialLength
                             }
                         }
 
-                        let couldBeGraphics = (fileType == 0x04 || fileType == 0x06) && (
-                            fileData.count == 8184 ||  // HGR with 4-byte header
-                            fileData.count == 8192 ||
-                            fileData.count == 16384 ||
-                            fileData.count == 32768 ||
-                            fileData.count == 8196 ||
-                            fileData.count == 16388 ||
-                            fileData.count == 32772
+                        // Check if this could be a graphics file
+                        // Consider both size-based detection and auxType (load address) based detection
+                        let hasGraphicsSize = (
+                            fileData.count == 8184 ||  // HGR with 4-byte header minus padding
+                            fileData.count == 8192 ||  // Standard HGR
+                            fileData.count == 8196 ||  // HGR with 4-byte header
+                            (fileData.count >= 8184 && fileData.count <= 8200) ||  // HGR range
+                            fileData.count == 16384 || // Standard DHGR
+                            fileData.count == 16388 || // DHGR with 4-byte header
+                            (fileData.count >= 16380 && fileData.count <= 16400) ||  // DHGR range
+                            fileData.count == 32768 || // Standard SHR
+                            fileData.count == 32772 || // SHR with 4-byte header
+                            (fileData.count >= 32760 && fileData.count <= 32780)  // SHR range
                         )
+                        // Also check if auxType indicates a graphics load address
+                        let hasGraphicsAuxType = (auxType == 0x2000 || auxType == 0x4000)
+                        let couldBeGraphics = (fileType == 0x04 || fileType == 0x06) && (hasGraphicsSize || hasGraphicsAuxType)
 
                         // Use auxType for PNT/PIC files, loadAddr for BIN files
                         let effectiveAuxType = (fileType == 0xC0 || fileType == 0xC1) ? auxType : (loadAddr ?? 0)
@@ -1178,10 +1192,16 @@ extension DiskImageReader {
                 let fileData = extractProDOSFileFromDOSOrderDisk(data: data, keyBlock: keyPointer, blocksUsed: blocksUsed, eof: eof, storageType: Int(entryStorageType)) ?? Data()
 
                 let isPNTorPIC = (fileType == 0xC0 || fileType == 0xC1)
-                let couldBeGraphics = isPNTorPIC || ((fileType == 0x04 || fileType == 0x06) && (
-                    eof == 8184 || eof == 8192 || eof == 16384 ||
-                    eof == 32768 || eof == 8196 || eof == 16388 || eof == 32772 || eof == 33024
-                ))
+                let hasGraphicsSize = (
+                    eof == 8184 || eof == 8192 || eof == 8196 ||
+                    (eof >= 8180 && eof <= 8200) ||  // HGR range
+                    eof == 16384 || eof == 16388 ||
+                    (eof >= 16380 && eof <= 16400) ||  // DHGR range
+                    eof == 32768 || eof == 32772 || eof == 33024 ||
+                    (eof >= 32760 && eof <= 33030)  // SHR range
+                )
+                let hasGraphicsAuxType = (auxType == 0x2000 || auxType == 0x4000)
+                let couldBeGraphics = isPNTorPIC || ((fileType == 0x04 || fileType == 0x06) && (hasGraphicsSize || hasGraphicsAuxType))
 
                 var result: (image: CGImage?, type: AppleIIImageType) = (nil, .Unknown)
                 if couldBeGraphics && !fileData.isEmpty {

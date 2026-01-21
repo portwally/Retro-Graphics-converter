@@ -68,7 +68,21 @@ struct DiskCatalogBrowserView: View {
             }.padding(.horizontal).padding(.vertical, 8).background(Color(NSColor.controlBackgroundColor).opacity(0.5))
             
             Divider()
-            
+
+            // Column Headers
+            HStack(spacing: 8) {
+                Text("").frame(width: 30)  // Checkbox column
+                Text("").frame(width: 24)  // Icon column
+                Text("Name").font(.caption).fontWeight(.semibold).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                Text("Type").font(.caption).fontWeight(.semibold).foregroundColor(.secondary).frame(width: 120, alignment: .leading)
+                Text("Size").font(.caption).fontWeight(.semibold).foregroundColor(.secondary).frame(width: 80, alignment: .trailing)
+                Text("AuxType").font(.caption).fontWeight(.semibold).foregroundColor(.secondary).frame(width: 80, alignment: .trailing)
+            }
+            .padding(.vertical, 6).padding(.horizontal, 8)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.7))
+
+            Divider()
+
             // Table
             ScrollView {
                 LazyVStack(spacing: 0) {
