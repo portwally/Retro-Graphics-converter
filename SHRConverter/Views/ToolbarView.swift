@@ -66,27 +66,32 @@ struct ZoomControlsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 8) {
             Button(action: zoomOut) {
-                Image(systemName: "minus")
-                    .frame(width: 20, height: 20)
+                Image(systemName: "minus.magnifyingglass")
+                    .font(.system(size: 14))
+                    .frame(width: 24, height: 24)
             }
             .buttonStyle(.borderless)
             .disabled(isFitMode)
+            .help("Zoom Out")
 
-            Text(isFitMode ? "Fit" : "\(zoomPercentage)%")
-                .font(.system(.caption, design: .monospaced))
-                .frame(width: 44)
+            Text("\(zoomPercentage)%")
+                .font(.system(.body, design: .default))
+                .frame(width: 50)
 
             Button(action: zoomIn) {
-                Image(systemName: "plus")
-                    .frame(width: 20, height: 20)
+                Image(systemName: "plus.magnifyingglass")
+                    .font(.system(size: 14))
+                    .frame(width: 24, height: 24)
             }
             .buttonStyle(.borderless)
+            .help("Zoom In")
 
             Button(action: fitToWindow) {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    .frame(width: 20, height: 20)
+                Image(systemName: "arrow.up.backward.and.arrow.down.forward")
+                    .font(.system(size: 14))
+                    .frame(width: 24, height: 24)
             }
             .buttonStyle(.borderless)
             .help("Fit to Window")

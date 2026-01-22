@@ -31,7 +31,7 @@ struct ExportSheet: View {
             buttonSection
         }
         .padding(20)
-        .frame(width: 400, height: 450)
+        .frame(width: 400, height: 520)
     }
 
     // MARK: - Header Section

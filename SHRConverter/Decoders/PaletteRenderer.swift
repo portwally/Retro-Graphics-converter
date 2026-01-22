@@ -43,13 +43,16 @@ struct PaletteRenderer {
 
         case .PCX(_, _, let bpp):
             if bpp <= 8 {
-                cgImage = renderPCX(data: data, palette: palette)
+                cgImage = renderPCX(data: data, palette: palette, bitsPerPixel: bpp)
             }
 
         case .BMP(_, _, let bpp):
             if bpp <= 8 {
-                cgImage = renderBMP(data: data, palette: palette)
+                cgImage = renderBMP(data: data, palette: palette, bitsPerPixel: bpp)
             }
+
+        case .ZXSpectrum:
+            cgImage = renderZXSpectrum(data: data, palette: palette)
 
         default:
             return nil
@@ -451,18 +454,193 @@ struct PaletteRenderer {
 
     // MARK: - PCX Renderer
 
-    private static func renderPCX(data: Data, palette: PaletteInfo) -> CGImage? {
-        // PCX re-rendering is complex due to RLE compression
-        // Return nil for now
-        return nil
+    private static func renderPCX(data: Data, palette: PaletteInfo, bitsPerPixel: Int) -> CGImage? {
+        guard data.count >= 128, data[0] == 0x0A else { return nil }
+
+        let xMin = Int(data[4]) | (Int(data[5]) << 8)
+        let yMin = Int(data[6]) | (Int(data[7]) << 8)
+        let xMax = Int(data[8]) | (Int(data[9]) << 8)
+        let yMax = Int(data[10]) | (Int(data[11]) << 8)
+        let width = xMax - xMin + 1
+        let height = yMax - yMin + 1
+        let numPlanes = Int(data[65])
+        let bytesPerLine = Int(data[66]) | (Int(data[67]) << 8)
+
+        guard width > 0, height > 0, width < 10000, height < 10000 else { return nil }
+
+        let primaryPalette = palette.primaryPalette
+        guard !primaryPalette.isEmpty else { return nil }
+
+        let pcxPalette: [(r: UInt8, g: UInt8, b: UInt8)] = primaryPalette.map { ($0.r, $0.g, $0.b) }
+
+        // Decompress RLE data
+        var decompressedData: [UInt8] = []
+        var offset = 128
+        let expectedSize = numPlanes == 0 ? bytesPerLine * height : bytesPerLine * numPlanes * height
+
+        while offset < data.count && decompressedData.count < expectedSize {
+            let byte = data[offset]
+            offset += 1
+            if (byte & 0xC0) == 0xC0 {
+                let count = Int(byte & 0x3F)
+                if offset < data.count {
+                    let value = data[offset]
+                    offset += 1
+                    for _ in 0..<count {
+                        decompressedData.append(value)
+                    }
+                }
+            } else {
+                decompressedData.append(byte)
+            }
+        }
+
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        if bitsPerPixel == 8 && numPlanes == 1 {
+            // 256-color mode
+            for y in 0..<height {
+                for x in 0..<width {
+                    let dataIndex = y * bytesPerLine + x
+                    let paletteIndex = dataIndex < decompressedData.count ? min(Int(decompressedData[dataIndex]), pcxPalette.count - 1) : 0
+                    let color = pcxPalette[paletteIndex]
+                    let bufferIdx = (y * width + x) * 4
+                    rgbaBuffer[bufferIdx] = color.r
+                    rgbaBuffer[bufferIdx + 1] = color.g
+                    rgbaBuffer[bufferIdx + 2] = color.b
+                    rgbaBuffer[bufferIdx + 3] = 255
+                }
+            }
+        } else if bitsPerPixel <= 4 {
+            // 16-color or less
+            for y in 0..<height {
+                for x in 0..<width {
+                    let byteIndex = y * bytesPerLine + (x / 8)
+                    let bitIndex = 7 - (x % 8)
+                    if byteIndex < decompressedData.count {
+                        let bit = (decompressedData[byteIndex] >> bitIndex) & 1
+                        let color = Int(bit) < pcxPalette.count ? pcxPalette[Int(bit)] : (r: UInt8(0), g: UInt8(0), b: UInt8(0))
+                        let bufferIdx = (y * width + x) * 4
+                        rgbaBuffer[bufferIdx] = color.r
+                        rgbaBuffer[bufferIdx + 1] = color.g
+                        rgbaBuffer[bufferIdx + 2] = color.b
+                        rgbaBuffer[bufferIdx + 3] = 255
+                    }
+                }
+            }
+        }
+
+        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
     }
 
     // MARK: - BMP Renderer
 
-    private static func renderBMP(data: Data, palette: PaletteInfo) -> CGImage? {
-        // BMP re-rendering would need to parse header and apply palette
-        // Return nil for now
-        return nil
+    private static func renderBMP(data: Data, palette: PaletteInfo, bitsPerPixel: Int) -> CGImage? {
+        guard data.count >= 54, data[0] == 0x42, data[1] == 0x4D else { return nil }
+
+        let width = Int(data[18]) | (Int(data[19]) << 8) | (Int(data[20]) << 16) | (Int(data[21]) << 24)
+        var height = Int(data[22]) | (Int(data[23]) << 8) | (Int(data[24]) << 16) | (Int(data[25]) << 24)
+        let topDown = height < 0
+        if topDown { height = -height }
+
+        let pixelDataOffset = Int(data[10]) | (Int(data[11]) << 8) | (Int(data[12]) << 16) | (Int(data[13]) << 24)
+
+        guard width > 0, height > 0, width < 10000, height < 10000 else { return nil }
+
+        let primaryPalette = palette.primaryPalette
+        guard !primaryPalette.isEmpty else { return nil }
+
+        let bmpPalette: [(r: UInt8, g: UInt8, b: UInt8)] = primaryPalette.map { ($0.r, $0.g, $0.b) }
+
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+        let rowSize = ((bitsPerPixel * width + 31) / 32) * 4
+
+        for y in 0..<height {
+            let actualY = topDown ? y : (height - 1 - y)
+            let rowOffset = pixelDataOffset + (y * rowSize)
+
+            for x in 0..<width {
+                var colorIndex = 0
+
+                switch bitsPerPixel {
+                case 8:
+                    let pixelOffset = rowOffset + x
+                    if pixelOffset < data.count {
+                        colorIndex = Int(data[pixelOffset])
+                    }
+                case 4:
+                    let byteOffset = rowOffset + (x / 2)
+                    if byteOffset < data.count {
+                        colorIndex = (x % 2 == 0) ? Int(data[byteOffset] >> 4) : Int(data[byteOffset] & 0x0F)
+                    }
+                case 1:
+                    let byteOffset = rowOffset + (x / 8)
+                    if byteOffset < data.count {
+                        colorIndex = Int((data[byteOffset] >> (7 - (x % 8))) & 1)
+                    }
+                default:
+                    break
+                }
+
+                let color = colorIndex < bmpPalette.count ? bmpPalette[colorIndex] : (r: UInt8(0), g: UInt8(0), b: UInt8(0))
+                let bufferIdx = (actualY * width + x) * 4
+                rgbaBuffer[bufferIdx] = color.r
+                rgbaBuffer[bufferIdx + 1] = color.g
+                rgbaBuffer[bufferIdx + 2] = color.b
+                rgbaBuffer[bufferIdx + 3] = 255
+            }
+        }
+
+        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+    }
+
+    // MARK: - ZX Spectrum Renderer
+
+    private static func renderZXSpectrum(data: Data, palette: PaletteInfo) -> CGImage? {
+        guard data.count == 6912 else { return nil }
+
+        let primaryPalette = palette.primaryPalette
+        guard primaryPalette.count >= 16 else { return nil }
+
+        let zxPalette: [(r: UInt8, g: UInt8, b: UInt8)] = primaryPalette.map { ($0.r, $0.g, $0.b) }
+
+        let width = 256
+        let height = 192
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        for y in 0..<height {
+            // ZX Spectrum screen memory layout
+            let third = y / 64
+            let lineInThird = y % 64
+            let octave = lineInThird / 8
+            let lineInOctave = lineInThird % 8
+            let bitmapLineOffset = (third * 2048) + (lineInOctave * 256) + (octave * 32)
+            let attrY = y / 8
+
+            for x in 0..<width {
+                let xByte = x / 8
+                let xBit = 7 - (x % 8)
+                let bitmapByte = data[bitmapLineOffset + xByte]
+                let pixelBit = (bitmapByte >> xBit) & 1
+
+                let attrByte = data[6144 + (attrY * 32) + xByte]
+                let bright = (attrByte >> 6) & 1
+                let paper = (attrByte >> 3) & 0x07
+                let ink = attrByte & 0x07
+
+                // Color index: ink (0-7) or paper (0-7), +8 if bright
+                let colorIndex = (pixelBit == 1) ? Int(ink) + (bright == 1 ? 8 : 0) : Int(paper) + (bright == 1 ? 8 : 0)
+                let color = colorIndex < zxPalette.count ? zxPalette[colorIndex] : (r: UInt8(0), g: UInt8(0), b: UInt8(0))
+
+                let bufferIdx = (y * width + x) * 4
+                rgbaBuffer[bufferIdx] = color.r
+                rgbaBuffer[bufferIdx + 1] = color.g
+                rgbaBuffer[bufferIdx + 2] = color.b
+                rgbaBuffer[bufferIdx + 3] = 255
+            }
+        }
+
+        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
     }
 
     // MARK: - C64 Renderer

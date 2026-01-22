@@ -24,7 +24,7 @@ struct ContentView: View {
     @State private var cropStart: CGPoint?
     @State private var cropEnd: CGPoint?
     @State private var cropScale: CGFloat = 1.0  // Store the scale used during crop selection
-    @State private var undoStack: [(id: UUID, image: NSImage, type: AppleIIImageType, data: Data?)] = []
+    @State private var undoStack: [(id: UUID, image: NSImage, type: AppleIIImageType, data: Data?, paletteInfo: PaletteInfo?, modifiedPalette: PaletteInfo?)] = []
 
     // New UI state
     @State private var showExportSheet = false
@@ -831,7 +831,9 @@ struct ContentView: View {
                     id: selectedImg.id,
                     image: selectedImg.image,
                     type: selectedImg.type,
-                    data: selectedImg.originalData
+                    data: selectedImg.originalData,
+                    paletteInfo: selectedImg.paletteInfo,
+                    modifiedPalette: selectedImg.modifiedPalette
                 )
                 undoStack.append(undoItem)
                 
@@ -844,15 +846,18 @@ struct ContentView: View {
                 appState.setCanUndo(true)
                 
                 let newImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-                
+
                 // Behalte die gleiche ID bei!
-                imageItems[index] = ImageItem(
+                var croppedItem = ImageItem(
                     id: selectedImg.id,
                     url: selectedImg.url,
                     image: newImage,
                     type: selectedImg.type,
-                    originalData: nil
+                    originalData: nil,
+                    paletteInfo: selectedImg.paletteInfo
                 )
+                croppedItem.modifiedPalette = selectedImg.modifiedPalette
+                imageItems[index] = croppedItem
                 
                 selectedImage = imageItems[index]
                 statusMessage = "Image cropped to \(Int(cropped.size.width))×\(Int(cropped.size.height)) (⌘Z to undo)"
@@ -873,14 +878,17 @@ struct ContentView: View {
         // Find and restore the image
         if let index = imageItems.firstIndex(where: { $0.id == lastAction.id }) {
             // Behalte die gleiche ID bei!
-            imageItems[index] = ImageItem(
+            var restoredItem = ImageItem(
                 id: lastAction.id,
                 url: imageItems[index].url,
                 image: lastAction.image,
                 type: lastAction.type,
-                originalData: lastAction.data
+                originalData: lastAction.data,
+                paletteInfo: lastAction.paletteInfo
             )
-            
+            restoredItem.modifiedPalette = lastAction.modifiedPalette
+            imageItems[index] = restoredItem
+
             selectedImage = imageItems[index]
             statusMessage = "Undo successful"
             

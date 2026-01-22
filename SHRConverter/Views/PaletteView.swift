@@ -112,12 +112,15 @@ struct PaletteView: View {
 
     private func paletteColorsView(colors: [PaletteColor]) -> some View {
         // Determine layout based on number of colors
-        let maxColorsPerRow = 16
+        let isLargePalette = colors.count > 32
+        let swatchSize: CGFloat = isLargePalette ? 12 : 16
+        let maxColorsPerRow = isLargePalette ? 32 : 16
         let rows = (colors.count + maxColorsPerRow - 1) / maxColorsPerRow
+        let maxVisibleRows = 2
 
-        return VStack(alignment: .leading, spacing: 2) {
+        let content = VStack(alignment: .leading, spacing: 1) {
             ForEach(0..<rows, id: \.self) { row in
-                HStack(spacing: 2) {
+                HStack(spacing: 1) {
                     ForEach(0..<min(maxColorsPerRow, colors.count - row * maxColorsPerRow), id: \.self) { col in
                         let index = row * maxColorsPerRow + col
                         if index < colors.count {
@@ -126,6 +129,7 @@ struct PaletteView: View {
                                 index: index,
                                 isEditable: paletteInfo?.isEditable ?? false,
                                 isHovered: hoveredColorIndex == index,
+                                swatchSize: swatchSize,
                                 onHover: { hoveredColorIndex = $0 ? index : nil },
                                 onEdit: { newColor in
                                     onColorEdit?(currentPaletteIndex, index, newColor)
@@ -135,6 +139,18 @@ struct PaletteView: View {
                     }
                 }
             }
+        }
+
+        // Use scroll view for large palettes
+        if rows > maxVisibleRows {
+            return AnyView(
+                ScrollView(.vertical, showsIndicators: true) {
+                    content
+                }
+                .frame(maxHeight: CGFloat(maxVisibleRows) * (swatchSize + 2) + 4)
+            )
+        } else {
+            return AnyView(content)
         }
     }
 }
@@ -146,13 +162,14 @@ struct ColorSwatchView: View {
     let index: Int
     let isEditable: Bool
     let isHovered: Bool
+    var swatchSize: CGFloat = 16
     let onHover: (Bool) -> Void
     let onEdit: (NSColor) -> Void
 
     var body: some View {
         Rectangle()
             .fill(Color(color.nsColor))
-            .frame(width: 16, height: 16)
+            .frame(width: swatchSize, height: swatchSize)
             .border(isHovered ? Color.white : Color.gray.opacity(0.3), width: isHovered ? 2 : 0.5)
             .onHover { hovering in
                 onHover(hovering)
@@ -162,7 +179,7 @@ struct ColorSwatchView: View {
                     openColorPanel()
                 }
             }
-            .help("Color \(index): \(color.hexString)\(isEditable ? " - Click to edit" : "")")
+            .help("Color \(index): \(color.hexString)")
     }
 
     private func openColorPanel() {
