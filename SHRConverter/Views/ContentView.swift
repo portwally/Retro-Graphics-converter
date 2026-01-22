@@ -25,6 +25,12 @@ struct ContentView: View {
     @State private var cropEnd: CGPoint?
     @State private var cropScale: CGFloat = 1.0  // Store the scale used during crop selection
     @State private var undoStack: [(id: UUID, image: NSImage, type: AppleIIImageType, data: Data?)] = []
+
+    // New UI state
+    @State private var showExportSheet = false
+    @State private var currentScanline: Int? = 100
+    @State private var removedCount = 0
+    @State private var exportedCount = 0
     
     var filteredImages: [ImageItem] {
         if filterFormat == "All" { return imageItems }
@@ -46,15 +52,64 @@ struct ContentView: View {
     }
     
     var body: some View {
-        HSplitView {
-            if showBrowser && !imageItems.isEmpty { browserPanel.frame(minWidth: 250, idealWidth: 300) }
-            mainPanel.frame(minWidth: 500)
+        VStack(spacing: 0) {
+            // Main Toolbar
+            MainToolbarView(
+                zoomScale: $zoomScale,
+                cropMode: $cropMode,
+                canUndo: !undoStack.isEmpty,
+                onImport: { openFiles() },
+                onExport: { showExportSheet = true },
+                onUndo: { undoLastAction() }
+            )
+
+            Divider()
+
+            // Main content area
+            HSplitView {
+                if showBrowser && !imageItems.isEmpty {
+                    browserPanel.frame(minWidth: 250, idealWidth: 300)
+                }
+                previewPanel.frame(minWidth: 500)
+            }
+
+            Divider()
+
+            // Info Bar
+            InfoBarView(
+                selectedImage: selectedImage,
+                currentScanline: $currentScanline,
+                onColorEdit: { paletteIndex, colorIndex, newColor in
+                    handleColorEdit(paletteIndex: paletteIndex, colorIndex: colorIndex, newColor: newColor)
+                },
+                onResetPalette: {
+                    resetPaletteModification()
+                }
+            )
+
+            Divider()
+
+            // Status Bar
+            StatusBarView(
+                importedCount: imageItems.count,
+                selectedCount: selectedImages.count,
+                removedCount: removedCount,
+                exportedCount: exportedCount
+            )
         }
-        .padding(8)
         .sheet(isPresented: $showCatalogBrowser) {
             if let catalog = currentCatalog {
                 DiskCatalogBrowserView(catalog: catalog, onImport: { selectedEntries in importCatalogEntries(selectedEntries); showCatalogBrowser = false }, onCancel: { showCatalogBrowser = false })
             }
+        }
+        .sheet(isPresented: $showExportSheet) {
+            ExportSheet(
+                isPresented: $showExportSheet,
+                selectedCount: selectedImages.isEmpty ? (selectedImage != nil ? 1 : imageItems.count) : selectedImages.count,
+                onExport: { formats, scale in
+                    performBatchExport(formats: formats, scale: scale)
+                }
+            )
         }
         .onChange(of: appState.undoTrigger) { oldValue, newValue in
             undoLastAction()
@@ -94,78 +149,34 @@ struct ContentView: View {
         }.padding(8).background(Color(NSColor.controlBackgroundColor))
     }
     
-    var mainPanel: some View {
-        VStack(spacing: 12) {
-            if !imageItems.isEmpty && selectedImage != nil {
-                HStack {
-                    if let selectedImg = selectedImage {
-                        HStack(spacing: 12) {
-                            // Linke Seite: Filename und Type
-                            HStack(spacing: 6) {
-                                Text(selectedImg.filename).font(.caption).fontWeight(.medium)
-                                Text("•").foregroundColor(.secondary)
-                                Text(selectedImg.type.displayName).font(.caption).padding(.horizontal, 6).padding(.vertical, 2).background(Color.blue.opacity(0.2)).cornerRadius(4)
-                            }
-                            
-                            Divider().frame(height: 16)
-                            
-                            // Mitte: Auflösung und Farbtiefe
-                            HStack(spacing: 6) {
-                                let resolution = selectedImg.type.resolution
-                                Image(systemName: "rectangle.grid.2x2").font(.caption).foregroundColor(.secondary)
-                                Text("\(resolution.width)×\(resolution.height)").font(.caption).monospacedDigit()
-                                Text("•").foregroundColor(.secondary)
-                                Image(systemName: "paintpalette").font(.caption).foregroundColor(.secondary)
-                                Text(selectedImg.type.colorDepth).font(.caption)
-                            }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.green.opacity(0.15))
-                            .cornerRadius(4)
-                            
-                            Spacer()
-                            
-                            Divider().frame(height: 16)
-                            
-                            // Rechte Seite: Zoom Controls (nur außerhalb Crop-Modus)
-                            HStack(spacing: 6) {
-                                if !cropMode {
-                                    Button(action: { if zoomScale < 0 { zoomScale = 1.0 }; zoomScale = max(0.5, zoomScale / 1.5) }) { Image(systemName: "minus.magnifyingglass") }.help("Zoom Out")
-                                    Text(zoomScale < 0 ? "Fit" : "\(Int(zoomScale * 100))%").font(.caption).monospacedDigit().frame(width: 50)
-                                    Button(action: { if zoomScale < 0 { zoomScale = 1.0 }; zoomScale = min(10.0, zoomScale * 1.5) }) { Image(systemName: "plus.magnifyingglass") }.help("Zoom In")
-                                    Button(action: { zoomScale = -1.0 }) { Image(systemName: "arrow.up.left.and.arrow.down.right") }.help("Fit to Window")
-                                    Button(action: { zoomScale = 1.0 }) { Image(systemName: "1.square") }.help("Actual Size (100%)")
-
-                                    Divider().frame(height: 16)
-                                }
-                                
-                                Button(action: { toggleCropMode() }) {
-                                    Label(cropMode ? "Exit Crop" : "Crop", systemImage: cropMode ? "xmark.circle" : "crop")
-                                }
-                                .help(cropMode ? "Exit crop mode" : "Enter crop mode")
-                                
-                                if cropMode && cropStart != nil && cropEnd != nil {
-                                    Button(action: { copySelectedArea() }) {
-                                        Image(systemName: "doc.on.doc")
-                                    }
-                                    .help("Copy selected area")
-                                    
-                                    Button(action: { cropToSelection() }) {
-                                        Image(systemName: "checkmark.circle")
-                                    }
-                                    .help("Crop to selection")
-                                    
-                                    Button(action: { clearSelection() }) {
-                                        Image(systemName: "xmark")
-                                    }
-                                    .help("Clear selection")
-                                }
-                            }.buttonStyle(.borderless)
-                        }
+    var previewPanel: some View {
+        VStack(spacing: 8) {
+            // Crop mode controls (only shown when in crop mode with selection)
+            if cropMode && cropStart != nil && cropEnd != nil {
+                HStack(spacing: 8) {
+                    Spacer()
+                    Button(action: { copySelectedArea() }) {
+                        Label("Copy", systemImage: "doc.on.doc")
                     }
-                }.padding(.horizontal, 8).padding(.vertical, 6).background(Color(NSColor.controlBackgroundColor)).cornerRadius(6)
+                    .help("Copy selected area")
+
+                    Button(action: { cropToSelection() }) {
+                        Label("Apply Crop", systemImage: "checkmark.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .help("Crop to selection")
+
+                    Button(action: { clearSelection() }) {
+                        Label("Clear", systemImage: "xmark")
+                    }
+                    .help("Clear selection")
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(NSColor.controlBackgroundColor))
             }
-            
+
             ZStack {
                 Color(NSColor.controlBackgroundColor)
                 
@@ -247,28 +258,157 @@ struct ContentView: View {
             }
             .frame(maxHeight: .infinity)
             .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
-            
-            VStack(spacing: 8) {
-                HStack {
-                    Button("Open Files...") { openFiles() }
-                    Button(showBrowser ? "Hide Browser" : "Show Browser") { withAnimation { showBrowser.toggle() } }.disabled(imageItems.isEmpty)
-                    Spacer()
-                    Picker("Upscale:", selection: $upscaleFactor) { Text("1x (Original)").tag(1); Text("2x").tag(2); Text("4x").tag(4); Text("8x").tag(8) }.frame(width: 150).disabled(selectedExportFormat == .original)
-                    Picker("Export As:", selection: $selectedExportFormat) { ForEach(ExportFormat.allCases, id: \.self) { format in Text(format.rawValue).tag(format) } }.frame(width: 180)
+
+            // Bottom quick actions bar
+            HStack(spacing: 12) {
+                Button(showBrowser ? "Hide Browser" : "Show Browser") {
+                    withAnimation { showBrowser.toggle() }
                 }
-                HStack(spacing: 8) {
-                    Button("Export Selected (\(selectedImages.isEmpty ? 1 : selectedImages.count))...") { exportSelectedImages() }.disabled((selectedImage == nil && selectedImages.isEmpty) || isProcessing)
-                    Button("Export All (\(imageItems.count))...") { exportAllImages() }.disabled(imageItems.isEmpty || isProcessing)
-                    Button("Export with Custom Names...") { showBatchRename() }.disabled(imageItems.isEmpty || isProcessing)
-                    Spacer()
+                .disabled(imageItems.isEmpty)
+
+                Spacer()
+
+                if isProcessing {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text(progressString)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text(statusMessage)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
-            
-            VStack(alignment: .leading, spacing: 3) {
-                Text(statusMessage).font(.caption).fontWeight(.medium)
-                if !progressString.isEmpty && !isProcessing { Text(progressString).font(.caption2).foregroundColor(.secondary) }
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
-        }.padding(8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+        }
+        .padding(4)
+    }
+
+    // MARK: - Palette Handling
+
+    func handleColorEdit(paletteIndex: Int, colorIndex: Int, newColor: NSColor) {
+        guard var item = selectedImage,
+              let originalPalette = item.paletteInfo,
+              let originalData = item.originalData else { return }
+
+        // Create modified palette if not already modified
+        if item.modifiedPalette == nil {
+            item.modifiedPalette = originalPalette
+        }
+
+        // Update the color in the modified palette
+        let paletteColor = PaletteColor(nsColor: newColor)
+        item.modifiedPalette?.updateColor(paletteIndex: paletteIndex, colorIndex: colorIndex, newColor: paletteColor)
+
+        // Re-render the image with the modified palette for live preview
+        if let modifiedPalette = item.modifiedPalette,
+           let newImage = PaletteRenderer.rerenderWithPalette(data: originalData, type: item.type, palette: modifiedPalette) {
+            item.image = newImage
+        }
+
+        // Update the image item
+        if let index = imageItems.firstIndex(where: { $0.id == item.id }) {
+            imageItems[index] = item
+            selectedImage = imageItems[index]
+        }
+
+        statusMessage = "Color \(colorIndex) modified - live preview"
+    }
+
+    func resetPaletteModification() {
+        guard var item = selectedImage,
+              let originalData = item.originalData,
+              let originalPalette = item.paletteInfo else { return }
+
+        // Reset modified palette
+        item.modifiedPalette = nil
+
+        // Re-render with original palette to restore original appearance
+        if let originalImage = PaletteRenderer.rerenderWithPalette(data: originalData, type: item.type, palette: originalPalette) {
+            item.image = originalImage
+        } else {
+            // Fallback: re-decode from original data
+            let result = SHRDecoder.decode(data: originalData, filename: item.url.lastPathComponent)
+            if let cgImage = result.image {
+                item.image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+            }
+        }
+
+        if let index = imageItems.firstIndex(where: { $0.id == item.id }) {
+            imageItems[index] = item
+            selectedImage = imageItems[index]
+        }
+
+        statusMessage = "Palette reset to original"
+    }
+
+    // MARK: - Batch Export
+
+    func performBatchExport(formats: Set<ExportFormat>, scale: Int) {
+        var itemsToExport: [ImageItem] = []
+
+        if !selectedImages.isEmpty {
+            itemsToExport = imageItems.filter { selectedImages.contains($0.id) }
+        } else if let current = selectedImage {
+            itemsToExport = [current]
+        } else {
+            itemsToExport = imageItems
+        }
+
+        guard !itemsToExport.isEmpty, !formats.isEmpty else { return }
+
+        let openPanel = NSOpenPanel()
+        openPanel.canChooseFiles = false
+        openPanel.canChooseDirectories = true
+        openPanel.allowsMultipleSelection = false
+        openPanel.canCreateDirectories = true
+        openPanel.prompt = "Save"
+
+        if openPanel.runModal() == .OK, let outputFolderURL = openPanel.url {
+            isProcessing = true
+            let savedUpscale = upscaleFactor
+            upscaleFactor = scale
+
+            DispatchQueue.global(qos: .userInitiated).async {
+                var totalExported = 0
+
+                for format in formats {
+                    self.selectedExportFormat = format
+
+                    for (index, item) in itemsToExport.enumerated() {
+                        DispatchQueue.main.async {
+                            self.progressString = "Exporting \(index + 1)/\(itemsToExport.count) as \(format.rawValue)"
+                        }
+
+                        let fileExtension = format == .original ? item.originalFileExtension : format.fileExtension
+                        let baseName = item.url.deletingPathExtension().lastPathComponent
+                        let filename: String
+
+                        if formats.count > 1 && format != .original {
+                            filename = "\(baseName).\(fileExtension)"
+                        } else {
+                            filename = "\(baseName).\(fileExtension)"
+                        }
+
+                        let outputURL = outputFolderURL.appendingPathComponent(filename)
+
+                        if self.saveImage(image: item.image, to: outputURL, format: format, originalData: item.originalData, originalExtension: item.originalFileExtension) {
+                            totalExported += 1
+                        }
+                    }
+                }
+
+                DispatchQueue.main.async {
+                    self.upscaleFactor = savedUpscale
+                    self.isProcessing = false
+                    self.exportedCount += totalExported
+                    self.statusMessage = "Exported \(totalExported) file(s) to \(outputFolderURL.lastPathComponent)"
+                    self.progressString = ""
+                }
+            }
+        }
     }
     
     // MARK: - File Handling
@@ -282,8 +422,10 @@ struct ContentView: View {
                 if entry.isImage, let cgImage = decodeResult.image {
                     let url = URL(fileURLWithPath: "/catalog/\(entry.name)")
                     let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                    // Extract palette info
+                    let paletteInfo = PaletteExtractor.extractPalette(from: entry.data, type: decodeResult.type, filename: entry.name)
                     // Use the type from decode result to get accurate format detection (e.g., 816/Paint)
-                    newItems.append(ImageItem(url: url, image: nsImage, type: decodeResult.type, originalData: entry.data))
+                    newItems.append(ImageItem(url: url, image: nsImage, type: decodeResult.type, originalData: entry.data, paletteInfo: paletteInfo))
                 }
             }
             DispatchQueue.main.async {
@@ -305,6 +447,7 @@ struct ContentView: View {
                 imageItems.removeAll { $0.id == current.id }
                 selectedImage = imageItems.first
                 if imageItems.isEmpty { showBrowser = false }
+                removedCount += 1
                 statusMessage = "Image deleted."
             }
         } else {
@@ -313,6 +456,7 @@ struct ContentView: View {
             selectedImages.removeAll()
             if let current = selectedImage, !imageItems.contains(where: { $0.id == current.id }) { selectedImage = imageItems.first }
             if imageItems.isEmpty { selectedImage = nil; showBrowser = false }
+            removedCount += count
             statusMessage = "Deleted \(count) image(s)."
         }
     }
@@ -419,7 +563,8 @@ struct ContentView: View {
                         if let cgImage = result.image, result.type != .Unknown {
                             let fileURL = file.url ?? URL(fileURLWithPath: "/\(fileName)")
                             let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-                            newItems.append(ImageItem(url: fileURL, image: nsImage, type: result.type, originalData: data)); successCount += 1
+                            let paletteInfo = PaletteExtractor.extractPalette(from: data, type: result.type, filename: fileName)
+                            newItems.append(ImageItem(url: fileURL, image: nsImage, type: result.type, originalData: data, paletteInfo: paletteInfo)); successCount += 1
                         }
                     }
                 }
@@ -481,14 +626,16 @@ struct ContentView: View {
                         if let cgImage = SHRDecoder.decode(data: diskFile.data, filename: diskFile.name).image {
                             let virtualURL = url.appendingPathComponent(diskFile.name)
                             let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-                            newItems.append(ImageItem(url: virtualURL, image: nsImage, type: diskFile.type, originalData: diskFile.data)); successCount += 1
+                            let paletteInfo = PaletteExtractor.extractPalette(from: diskFile.data, type: diskFile.type, filename: diskFile.name)
+                            newItems.append(ImageItem(url: virtualURL, image: nsImage, type: diskFile.type, originalData: diskFile.data, paletteInfo: paletteInfo)); successCount += 1
                         }
                     }
                 } else {
                     let result = SHRDecoder.decode(data: data, filename: url.lastPathComponent)
                     if let cgImage = result.image, result.type != .Unknown {
                         let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-                        newItems.append(ImageItem(url: url, image: nsImage, type: result.type, originalData: data)); successCount += 1
+                        let paletteInfo = PaletteExtractor.extractPalette(from: data, type: result.type, filename: url.lastPathComponent)
+                        newItems.append(ImageItem(url: url, image: nsImage, type: result.type, originalData: data, paletteInfo: paletteInfo)); successCount += 1
                     }
                 }
             }

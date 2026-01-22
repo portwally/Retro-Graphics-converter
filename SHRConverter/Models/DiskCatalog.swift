@@ -118,21 +118,35 @@ struct DiskImageFile {
 struct ImageItem: Identifiable {
     let id: UUID
     let url: URL
-    let image: NSImage
+    var image: NSImage
     let type: AppleIIImageType
     let originalData: Data?
-    
+    var paletteInfo: PaletteInfo?
+    var modifiedPalette: PaletteInfo?
+
     // Initializer mit optionaler ID - wenn keine ID übergeben wird, wird eine neue erstellt
-    init(id: UUID = UUID(), url: URL, image: NSImage, type: AppleIIImageType, originalData: Data?) {
+    init(id: UUID = UUID(), url: URL, image: NSImage, type: AppleIIImageType, originalData: Data?, paletteInfo: PaletteInfo? = nil) {
         self.id = id
         self.url = url
         self.image = image
         self.type = type
         self.originalData = originalData
+        self.paletteInfo = paletteInfo
+        self.modifiedPalette = nil
     }
-    
+
     var filename: String {
         url.lastPathComponent
+    }
+
+    /// Returns the active palette (modified if available, otherwise original)
+    var activePalette: PaletteInfo? {
+        modifiedPalette ?? paletteInfo
+    }
+
+    /// Whether the palette has been modified
+    var hasPaletteModification: Bool {
+        modifiedPalette != nil
     }
     
     var originalFileExtension: String {
