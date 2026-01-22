@@ -28,7 +28,6 @@
 		3E75F2482F11204400C49434 /* RetroDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2252F11204400C49434 /* RetroDecoder.swift */; };
 		3E75F2492F11204400C49434 /* AppleIIDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F21E2F11204400C49434 /* AppleIIDecoder.swift */; };
 		3E75F24A2F16300000C49434 /* DreamGrafixDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F24B2F16300000C49434 /* DreamGrafixDecoder.swift */; };
-		3E9F97B22F156505009196E9 /* ImageCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9F97B12F156505009196E9 /* ImageCropView.swift */; };
 		3E75F2512F17000000C49434 /* PaletteInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2502F17000000C49434 /* PaletteInfo.swift */; };
 		3E75F2532F17000000C49434 /* PaletteExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2522F17000000C49434 /* PaletteExtractor.swift */; };
 		3E75F2552F17000000C49434 /* StatusBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2542F17000000C49434 /* StatusBarView.swift */; };
@@ -38,6 +37,7 @@
 		3E75F25D2F17000000C49434 /* ExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F25C2F17000000C49434 /* ExportSheet.swift */; };
 		3E75F25F2F17100000C49434 /* PaletteRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F25E2F17100000C49434 /* PaletteRenderer.swift */; };
 		3E75F2612F17200000C49434 /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2602F17200000C49434 /* HelpView.swift */; };
+		3E9F97B22F156505009196E9 /* ImageCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9F97B12F156505009196E9 /* ImageCropView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,8 +62,6 @@
 		3E75F2322F11204400C49434 /* ImageThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageThumbnailView.swift; sourceTree = "<group>"; };
 		3E75F2342F11204400C49434 /* SHRConverterApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SHRConverterApp.swift; sourceTree = "<group>"; };
 		3E75F24B2F16300000C49434 /* DreamGrafixDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DreamGrafixDecoder.swift; sourceTree = "<group>"; };
-		3E9C9E9A2EE37BDF00DEE453 /* Retro-Graphics-Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Retro-Graphics-Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		3E9F97B12F156505009196E9 /* ImageCropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropView.swift; sourceTree = "<group>"; };
 		3E75F2502F17000000C49434 /* PaletteInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteInfo.swift; sourceTree = "<group>"; };
 		3E75F2522F17000000C49434 /* PaletteExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteExtractor.swift; sourceTree = "<group>"; };
 		3E75F2542F17000000C49434 /* StatusBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarView.swift; sourceTree = "<group>"; };
@@ -73,6 +71,8 @@
 		3E75F25C2F17000000C49434 /* ExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSheet.swift; sourceTree = "<group>"; };
 		3E75F25E2F17100000C49434 /* PaletteRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteRenderer.swift; sourceTree = "<group>"; };
 		3E75F2602F17200000C49434 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
+		3E9C9E9A2EE37BDF00DEE453 /* Retro-Graphics-Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Retro-Graphics-Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3E9F97B12F156505009196E9 /* ImageCropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -422,7 +422,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 400;
+				CURRENT_PROJECT_VERSION = 450;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = ZFE2VJD462;
 				ENABLE_APP_SANDBOX = NO;
@@ -436,7 +436,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 4;
+				MARKETING_VERSION = 4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.portwally.retroGFX;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -458,7 +458,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 400;
+				CURRENT_PROJECT_VERSION = 450;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=macosx*]" = ZFE2VJD462;
@@ -484,7 +484,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 4;
+				MARKETING_VERSION = 4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.portwally.retroGFX;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

@@ -52,6 +52,15 @@ class AppState: ObservableObject {
     @Published var canUndo = false
     @Published var showHelp = false
     @Published var selectedHelpSection: HelpSection = .gettingStarted
+    @Published var recentFolders: [URL] = []
+    @Published var openFolderRequest: URL? = nil
+
+    private let recentFoldersKey = "RecentFolders"
+    private let maxRecentFolders = 10
+
+    init() {
+        loadRecentFolders()
+    }
 
     func triggerUndo() {
         undoTrigger.toggle()
@@ -64,6 +73,40 @@ class AppState: ObservableObject {
     func showHelpSection(_ section: HelpSection) {
         selectedHelpSection = section
         showHelp = true
+    }
+
+    // MARK: - Recent Folders
+
+    func addRecentFolder(_ url: URL) {
+        // Remove if already exists
+        recentFolders.removeAll { $0 == url }
+        // Add to front
+        recentFolders.insert(url, at: 0)
+        // Limit count
+        if recentFolders.count > maxRecentFolders {
+            recentFolders = Array(recentFolders.prefix(maxRecentFolders))
+        }
+        saveRecentFolders()
+    }
+
+    func clearRecentFolders() {
+        recentFolders.removeAll()
+        saveRecentFolders()
+    }
+
+    private func loadRecentFolders() {
+        if let paths = UserDefaults.standard.stringArray(forKey: recentFoldersKey) {
+            recentFolders = paths.compactMap { URL(fileURLWithPath: $0) }
+        }
+    }
+
+    private func saveRecentFolders() {
+        let paths = recentFolders.map { $0.path }
+        UserDefaults.standard.set(paths, forKey: recentFoldersKey)
+    }
+
+    func openRecentFolder(_ url: URL) {
+        openFolderRequest = url
     }
 }
 
@@ -90,6 +133,27 @@ struct SHRConverterApp: App {
                 }
                 .keyboardShortcut("z", modifiers: .command)
                 .disabled(!appState.canUndo)
+            }
+
+            CommandGroup(after: .newItem) {
+                Menu("Recent Folders") {
+                    if appState.recentFolders.isEmpty {
+                        Text("No Recent Folders")
+                            .foregroundColor(.secondary)
+                    } else {
+                        ForEach(appState.recentFolders, id: \.path) { url in
+                            Button(url.lastPathComponent) {
+                                appState.openRecentFolder(url)
+                            }
+                        }
+
+                        Divider()
+
+                        Button("Clear Recent Folders") {
+                            appState.clearRecentFolders()
+                        }
+                    }
+                }
             }
 
             CommandGroup(replacing: .help) {

@@ -39,6 +39,8 @@ struct MainToolbarView: View {
     @Binding var cropMode: Bool
     let canUndo: Bool
     let hasImage: Bool
+    let hasModification: Bool
+    let hasSelection: Bool
     let onImport: () -> Void
     let onExport: () -> Void
     let onUndo: () -> Void
@@ -46,6 +48,10 @@ struct MainToolbarView: View {
     let onRotateRight: () -> Void
     let onFlipHorizontal: () -> Void
     let onFlipVertical: () -> Void
+    let onInvert: () -> Void
+    let onCopy: () -> Void
+    let onCompare: () -> Void
+    @Binding var showOriginal: Bool
 
     private var zoomPercentage: Int {
         if zoomScale < 0 {
@@ -115,34 +121,62 @@ struct MainToolbarView: View {
             Divider()
                 .frame(height: 50)
 
-            // Transform group (Rotate & Flip)
+            // Transform group (Rotate, Flip, Invert)
             HStack(spacing: 8) {
                 LabeledToolbarButton(
                     icon: "rotate.left",
                     label: "Rotate L",
-                    isDisabled: !hasImage,
+                    isDisabled: !hasImage && !hasSelection,
                     action: onRotateLeft
                 )
 
                 LabeledToolbarButton(
                     icon: "rotate.right",
                     label: "Rotate R",
-                    isDisabled: !hasImage,
+                    isDisabled: !hasImage && !hasSelection,
                     action: onRotateRight
                 )
 
                 LabeledToolbarButton(
                     icon: "arrow.left.and.right.righttriangle.left.righttriangle.right",
                     label: "Flip H",
-                    isDisabled: !hasImage,
+                    isDisabled: !hasImage && !hasSelection,
                     action: onFlipHorizontal
                 )
 
                 LabeledToolbarButton(
                     icon: "arrow.up.and.down.righttriangle.up.righttriangle.down",
                     label: "Flip V",
-                    isDisabled: !hasImage,
+                    isDisabled: !hasImage && !hasSelection,
                     action: onFlipVertical
+                )
+
+                LabeledToolbarButton(
+                    icon: "circle.lefthalf.filled",
+                    label: "Invert",
+                    isDisabled: !hasImage && !hasSelection,
+                    action: onInvert
+                )
+            }
+
+            Divider()
+                .frame(height: 50)
+
+            // Clipboard & Compare group
+            HStack(spacing: 8) {
+                LabeledToolbarButton(
+                    icon: "doc.on.doc",
+                    label: "Copy",
+                    isDisabled: !hasImage,
+                    action: onCopy
+                )
+
+                LabeledToolbarButton(
+                    icon: "eye.slash",
+                    label: showOriginal ? "Modified" : "Original",
+                    isActive: showOriginal,
+                    isDisabled: !hasModification,
+                    action: onCompare
                 )
             }
 
@@ -294,13 +328,19 @@ struct CropToolsView: View {
             cropMode: .constant(false),
             canUndo: true,
             hasImage: true,
+            hasModification: true,
+            hasSelection: false,
             onImport: {},
             onExport: {},
             onUndo: {},
             onRotateLeft: {},
             onRotateRight: {},
             onFlipHorizontal: {},
-            onFlipVertical: {}
+            onFlipVertical: {},
+            onInvert: {},
+            onCopy: {},
+            onCompare: {},
+            showOriginal: .constant(false)
         )
 
         Divider()
@@ -310,14 +350,20 @@ struct CropToolsView: View {
             cropMode: .constant(true),
             canUndo: false,
             hasImage: false,
+            hasModification: false,
+            hasSelection: true,
             onImport: {},
             onExport: {},
             onUndo: {},
             onRotateLeft: {},
             onRotateRight: {},
             onFlipHorizontal: {},
-            onFlipVertical: {}
+            onFlipVertical: {},
+            onInvert: {},
+            onCopy: {},
+            onCompare: {},
+            showOriginal: .constant(true)
         )
     }
-    .frame(width: 800)
+    .frame(width: 900)
 }

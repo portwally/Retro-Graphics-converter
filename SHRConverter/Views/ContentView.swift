@@ -31,7 +31,31 @@ struct ContentView: View {
     @State private var currentScanline: Int? = 100
     @State private var removedCount = 0
     @State private var exportedCount = 0
+    @State private var showOriginal = false
+    @State private var thumbnailSize: CGFloat = 80
     
+    // Computed property for the image to display (handles Before/After toggle)
+    var displayImage: NSImage? {
+        guard let selected = selectedImage else { return nil }
+
+        // If showing original and we have original data, re-decode it
+        if showOriginal, let originalData = selected.originalData {
+            // Re-decode with original palette
+            if let originalPalette = selected.paletteInfo,
+               let originalImage = PaletteRenderer.rerenderWithPalette(data: originalData, type: selected.type, palette: originalPalette) {
+                return originalImage
+            }
+            // Fallback: re-decode from scratch
+            let result = SHRDecoder.decode(data: originalData, filename: selected.url.lastPathComponent)
+            if let cgImage = result.image {
+                return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+            }
+        }
+
+        // Return the current (possibly modified) image
+        return selected.image
+    }
+
     var filteredImages: [ImageItem] {
         if filterFormat == "All" { return imageItems }
         return imageItems.filter { item in
@@ -59,13 +83,19 @@ struct ContentView: View {
                 cropMode: $cropMode,
                 canUndo: !undoStack.isEmpty,
                 hasImage: selectedImage != nil,
+                hasModification: selectedImage?.hasPaletteModification == true || selectedImage?.originalData == nil,
+                hasSelection: !selectedImages.isEmpty,
                 onImport: { openFiles() },
                 onExport: { showExportSheet = true },
                 onUndo: { undoLastAction() },
-                onRotateLeft: { rotateSelectedImage(clockwise: false) },
-                onRotateRight: { rotateSelectedImage(clockwise: true) },
-                onFlipHorizontal: { flipSelectedImage(horizontal: true) },
-                onFlipVertical: { flipSelectedImage(horizontal: false) }
+                onRotateLeft: { transformImages(transform: .rotateLeft) },
+                onRotateRight: { transformImages(transform: .rotateRight) },
+                onFlipHorizontal: { transformImages(transform: .flipHorizontal) },
+                onFlipVertical: { transformImages(transform: .flipVertical) },
+                onInvert: { transformImages(transform: .invert) },
+                onCopy: { copyImageToClipboard() },
+                onCompare: { showOriginal.toggle() },
+                showOriginal: $showOriginal
             )
 
             Divider()
@@ -119,6 +149,12 @@ struct ContentView: View {
         .onChange(of: appState.undoTrigger) { oldValue, newValue in
             undoLastAction()
         }
+        .onChange(of: appState.openFolderRequest) { oldValue, newValue in
+            if let folder = newValue {
+                processFilesAndFolders(urls: [folder])
+                appState.openFolderRequest = nil
+            }
+        }
     }
     
     var browserPanel: some View {
@@ -142,15 +178,30 @@ struct ContentView: View {
             }
             Divider()
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: thumbnailSize + 40), spacing: 10)], spacing: 10) {
                     ForEach(filteredImages) { item in
-                        ImageThumbnailView(item: item, isSelected: selectedImage?.id == item.id, isChecked: selectedImages.contains(item.id),
+                        ImageThumbnailView(item: item, isSelected: selectedImage?.id == item.id, isChecked: selectedImages.contains(item.id), thumbnailSize: thumbnailSize,
                             onSelect: { selectedImage = item },
                             onToggleCheck: { if selectedImages.contains(item.id) { selectedImages.remove(item.id) } else { selectedImages.insert(item.id) } })
                     }
                 }.padding(.horizontal, 5)
             }
             .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
+
+            Divider()
+
+            // Thumbnail size slider
+            HStack(spacing: 8) {
+                Image(systemName: "photo")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Slider(value: $thumbnailSize, in: 50...150, step: 10)
+                    .frame(maxWidth: 120)
+                Image(systemName: "photo.fill")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.top, 4)
         }.padding(8).background(Color(NSColor.controlBackgroundColor))
     }
     
@@ -185,48 +236,48 @@ struct ContentView: View {
             ZStack {
                 Color(NSColor.controlBackgroundColor)
                 
-                if let selectedImg = selectedImage {
+                if let selectedImg = selectedImage, let imageToShow = displayImage {
                     GeometryReader { geometry in
                         let fitScale = min(
-                            (geometry.size.width - 16) / CGFloat(selectedImg.image.size.width),
-                            (geometry.size.height - 16) / CGFloat(selectedImg.image.size.height)
+                            (geometry.size.width - 16) / CGFloat(imageToShow.size.width),
+                            (geometry.size.height - 16) / CGFloat(imageToShow.size.height)
                         )
                         let effectiveScale = zoomScale < 0 ? max(1.0, fitScale) : zoomScale
 
                         ScrollView([.horizontal, .vertical], showsIndicators: true) {
                             ZStack {
-                                Image(nsImage: selectedImg.image)
+                                Image(nsImage: imageToShow)
                                     .resizable()
                                     .interpolation(.none)
-                                    .frame(width: CGFloat(selectedImg.image.size.width) * effectiveScale, height: CGFloat(selectedImg.image.size.height) * effectiveScale)
+                                    .frame(width: CGFloat(imageToShow.size.width) * effectiveScale, height: CGFloat(imageToShow.size.height) * effectiveScale)
 
                                 // Crop overlay
                                 if cropMode {
                                     CropOverlayView(
-                                        imageSize: selectedImg.image.size,
+                                        imageSize: imageToShow.size,
                                         imageScale: effectiveScale,
                                         cropStart: $cropStart,
                                         cropEnd: $cropEnd
                                     )
-                                    .frame(width: CGFloat(selectedImg.image.size.width) * effectiveScale, height: CGFloat(selectedImg.image.size.height) * effectiveScale)
+                                    .frame(width: CGFloat(imageToShow.size.width) * effectiveScale, height: CGFloat(imageToShow.size.height) * effectiveScale)
                                 }
 
                                 // Scanline tracking overlay for multi-palette images
                                 if !cropMode, let paletteInfo = selectedImg.activePalette, paletteInfo.paletteCount > 1 {
                                     ScanlineTrackingOverlay(
-                                        imageSize: selectedImg.image.size,
+                                        imageSize: imageToShow.size,
                                         imageScale: effectiveScale,
                                         paletteCount: paletteInfo.paletteCount,
                                         currentScanline: $currentScanline
                                     )
-                                    .frame(width: CGFloat(selectedImg.image.size.width) * effectiveScale, height: CGFloat(selectedImg.image.size.height) * effectiveScale)
+                                    .frame(width: CGFloat(imageToShow.size.width) * effectiveScale, height: CGFloat(imageToShow.size.height) * effectiveScale)
                                 }
                             }
                             .gesture(
                                 cropMode ?
                                 DragGesture(minimumDistance: 0)
                                     .onChanged { value in
-                                        handleCropDrag(value: value, imageSize: selectedImg.image.size, scale: effectiveScale)
+                                        handleCropDrag(value: value, imageSize: imageToShow.size, scale: effectiveScale)
                                     }
                                     .onEnded { _ in
                                         // Validate selection size
@@ -503,7 +554,16 @@ struct ContentView: View {
         openPanel.allowsOtherFileTypes = true; openPanel.allowsMultipleSelection = true; openPanel.canChooseDirectories = true; openPanel.canChooseFiles = true
         openPanel.prompt = "Open Files or Folders"
         openPanel.allowedContentTypes = [.png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .data]
-        if openPanel.runModal() == .OK { processFilesAndFolders(urls: openPanel.urls) }
+        if openPanel.runModal() == .OK {
+            // Add folders to recent folders
+            for url in openPanel.urls {
+                var isDirectory: ObjCBool = false
+                if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
+                    appState.addRecentFolder(url)
+                }
+            }
+            processFilesAndFolders(urls: openPanel.urls)
+        }
     }
     
     func loadDroppedFiles(_ providers: [NSItemProvider]) {
@@ -1079,6 +1139,162 @@ struct ContentView: View {
         }
 
         return NSImage(cgImage: flippedCGImage, size: NSSize(width: width, height: height))
+    }
+
+    // MARK: - Batch Transform Support
+
+    enum TransformType {
+        case rotateLeft
+        case rotateRight
+        case flipHorizontal
+        case flipVertical
+        case invert
+    }
+
+    func transformImages(transform: TransformType) {
+        // Determine which images to transform
+        var itemsToTransform: [ImageItem] = []
+
+        if !selectedImages.isEmpty {
+            // Batch mode: transform all selected images
+            itemsToTransform = imageItems.filter { selectedImages.contains($0.id) }
+        } else if let current = selectedImage {
+            // Single mode: transform current image
+            itemsToTransform = [current]
+        }
+
+        guard !itemsToTransform.isEmpty else { return }
+
+        for item in itemsToTransform {
+            guard let index = imageItems.firstIndex(where: { $0.id == item.id }) else { continue }
+
+            // Save to undo stack before transforming
+            let undoItem = (
+                id: item.id,
+                image: item.image,
+                type: item.type,
+                data: item.originalData,
+                paletteInfo: item.paletteInfo,
+                modifiedPalette: item.modifiedPalette
+            )
+            undoStack.append(undoItem)
+
+            // Apply the transform
+            var transformedImage: NSImage?
+            switch transform {
+            case .rotateLeft:
+                transformedImage = rotateImage(item.image, clockwise: false)
+            case .rotateRight:
+                transformedImage = rotateImage(item.image, clockwise: true)
+            case .flipHorizontal:
+                transformedImage = flipImage(item.image, horizontal: true)
+            case .flipVertical:
+                transformedImage = flipImage(item.image, horizontal: false)
+            case .invert:
+                transformedImage = invertImage(item.image)
+            }
+
+            guard let newImage = transformedImage else { continue }
+
+            // Update the image item
+            var updatedItem = ImageItem(
+                id: item.id,
+                url: item.url,
+                image: newImage,
+                type: item.type,
+                originalData: nil,  // Clear original data since image is modified
+                paletteInfo: item.paletteInfo
+            )
+            updatedItem.modifiedPalette = item.modifiedPalette
+            imageItems[index] = updatedItem
+
+            // Update selected image if it was the one transformed
+            if selectedImage?.id == item.id {
+                selectedImage = updatedItem
+            }
+        }
+
+        // Limit undo stack to 10 items
+        while undoStack.count > 10 {
+            undoStack.removeFirst()
+        }
+
+        appState.setCanUndo(true)
+
+        // Status message
+        let transformName: String
+        switch transform {
+        case .rotateLeft: transformName = "Rotated left"
+        case .rotateRight: transformName = "Rotated right"
+        case .flipHorizontal: transformName = "Flipped horizontally"
+        case .flipVertical: transformName = "Flipped vertically"
+        case .invert: transformName = "Inverted colors"
+        }
+
+        if itemsToTransform.count > 1 {
+            statusMessage = "\(transformName) \(itemsToTransform.count) images (⌘Z to undo)"
+        } else {
+            statusMessage = "\(transformName) (⌘Z to undo)"
+        }
+    }
+
+    private func invertImage(_ image: NSImage) -> NSImage? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+
+        let width = cgImage.width
+        let height = cgImage.height
+
+        // Create a new bitmap context with RGBA format for inversion
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+
+        // Draw the original image
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        // Get the pixel data
+        guard let data = context.data else { return nil }
+        let pixels = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
+
+        // Invert each pixel (but not alpha)
+        for i in 0..<(width * height) {
+            let offset = i * 4
+            pixels[offset] = 255 - pixels[offset]         // R
+            pixels[offset + 1] = 255 - pixels[offset + 1] // G
+            pixels[offset + 2] = 255 - pixels[offset + 2] // B
+            // Alpha (offset + 3) stays the same
+        }
+
+        // Create the inverted image
+        guard let invertedCGImage = context.makeImage() else {
+            return nil
+        }
+
+        return NSImage(cgImage: invertedCGImage, size: NSSize(width: width, height: height))
+    }
+
+    func copyImageToClipboard() {
+        guard let current = selectedImage else {
+            statusMessage = "No image selected"
+            return
+        }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([current.image])
+
+        statusMessage = "Image copied to clipboard (\(Int(current.image.size.width))×\(Int(current.image.size.height)))"
     }
 
     func cropImageToRect(image: NSImage, start: CGPoint, end: CGPoint) -> NSImage? {

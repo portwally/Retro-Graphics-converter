@@ -9,6 +9,8 @@ struct InfoBarView: View {
     let onColorEdit: ((Int, Int, NSColor) -> Void)?
     let onResetPalette: (() -> Void)?
 
+    @State private var showInfoPopover = false
+
     var body: some View {
         HStack(spacing: 0) {
             // File Info section
@@ -34,9 +36,26 @@ struct InfoBarView: View {
 
     private var fileInfoSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Source File")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            HStack {
+                Text("Source File")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                if selectedImage != nil {
+                    Button(action: { showInfoPopover.toggle() }) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show image details")
+                    .popover(isPresented: $showInfoPopover, arrowEdge: .bottom) {
+                        imageInfoPopover
+                    }
+                }
+            }
 
             if let image = selectedImage {
                 Text(image.filename)
@@ -71,6 +90,92 @@ struct InfoBarView: View {
                     .foregroundColor(.secondary)
             }
         }
+    }
+
+    // MARK: - Image Info Popover
+
+    private var imageInfoPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Image Details")
+                .font(.headline)
+
+            if let image = selectedImage {
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
+                    GridRow {
+                        Text("Filename:")
+                            .foregroundColor(.secondary)
+                        Text(image.filename)
+                            .fontWeight(.medium)
+                    }
+
+                    GridRow {
+                        Text("Format:")
+                            .foregroundColor(.secondary)
+                        Text(image.type.displayName)
+                    }
+
+                    GridRow {
+                        Text("Dimensions:")
+                            .foregroundColor(.secondary)
+                        Text("\(Int(image.image.size.width)) × \(Int(image.image.size.height)) px")
+                    }
+
+                    if let paletteInfo = image.activePalette {
+                        GridRow {
+                            Text("Colors:")
+                                .foregroundColor(.secondary)
+                            Text("\(paletteInfo.colorsPerPalette) colors")
+                        }
+
+                        if paletteInfo.paletteCount > 1 {
+                            GridRow {
+                                Text("Palettes:")
+                                    .foregroundColor(.secondary)
+                                Text("\(paletteInfo.paletteCount) palettes")
+                            }
+                        }
+                    }
+
+                    if let data = image.originalData {
+                        GridRow {
+                            Text("File Size:")
+                                .foregroundColor(.secondary)
+                            Text(formatFileSize(data.count))
+                        }
+                    }
+
+                    GridRow {
+                        Text("Source:")
+                            .foregroundColor(.secondary)
+                        Text(image.url.path)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                            .font(.caption)
+                    }
+
+                    if image.hasPaletteModification {
+                        GridRow {
+                            Text("Status:")
+                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                Image(systemName: "pencil.circle.fill")
+                                    .foregroundColor(.orange)
+                                Text("Modified palette")
+                            }
+                        }
+                    }
+                }
+                .font(.system(.body, design: .monospaced))
+            }
+        }
+        .padding()
+        .frame(minWidth: 300)
+    }
+
+    private func formatFileSize(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
     }
 
     // MARK: - Palette Section
