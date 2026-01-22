@@ -14,7 +14,7 @@ struct ContentView: View {
     @State private var statusMessage: String = "Drag files/folders or open files to start."
     @State private var isProcessing = false
     @State private var progressString = ""
-    @State private var showBrowser = false
+    @State private var showBrowser = true
     @State private var upscaleFactor: Int = 1
     @State private var zoomScale: CGFloat = -1.0  // -1 means "fit to window"
     @State private var filterFormat: String = "All"
@@ -67,7 +67,7 @@ struct ContentView: View {
 
             // Main content area
             HSplitView {
-                if showBrowser && !imageItems.isEmpty {
+                if showBrowser {
                     browserPanel.frame(minWidth: 250, idealWidth: 300)
                 }
                 previewPanel.frame(minWidth: 500)
@@ -194,7 +194,7 @@ struct ContentView: View {
                                     .resizable()
                                     .interpolation(.none)
                                     .frame(width: CGFloat(selectedImg.image.size.width) * effectiveScale, height: CGFloat(selectedImg.image.size.height) * effectiveScale)
-                                
+
                                 // Crop overlay
                                 if cropMode {
                                     CropOverlayView(
@@ -202,6 +202,17 @@ struct ContentView: View {
                                         imageScale: effectiveScale,
                                         cropStart: $cropStart,
                                         cropEnd: $cropEnd
+                                    )
+                                    .frame(width: CGFloat(selectedImg.image.size.width) * effectiveScale, height: CGFloat(selectedImg.image.size.height) * effectiveScale)
+                                }
+
+                                // Scanline tracking overlay for multi-palette images
+                                if !cropMode, let paletteInfo = selectedImg.activePalette, paletteInfo.paletteCount > 1 {
+                                    ScanlineTrackingOverlay(
+                                        imageSize: selectedImg.image.size,
+                                        imageScale: effectiveScale,
+                                        paletteCount: paletteInfo.paletteCount,
+                                        currentScanline: $currentScanline
                                     )
                                     .frame(width: CGFloat(selectedImg.image.size.width) * effectiveScale, height: CGFloat(selectedImg.image.size.height) * effectiveScale)
                                 }
@@ -259,29 +270,19 @@ struct ContentView: View {
             .frame(maxHeight: .infinity)
             .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
 
-            // Bottom quick actions bar
-            HStack(spacing: 12) {
-                Button(showBrowser ? "Hide Browser" : "Show Browser") {
-                    withAnimation { showBrowser.toggle() }
-                }
-                .disabled(imageItems.isEmpty)
-
-                Spacer()
-
-                if isProcessing {
+            // Bottom quick actions bar (only show when processing)
+            if isProcessing {
+                HStack(spacing: 12) {
+                    Spacer()
                     ProgressView()
                         .scaleEffect(0.7)
                     Text(progressString)
                         .font(.caption)
                         .foregroundColor(.secondary)
-                } else {
-                    Text(statusMessage)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
         }
         .padding(4)
     }
@@ -1010,6 +1011,81 @@ struct CropOverlayView: View {
                     )
             }
         }
+    }
+}
+
+// MARK: - Scanline Tracking Overlay
+
+struct ScanlineTrackingOverlay: NSViewRepresentable {
+    let imageSize: CGSize
+    let imageScale: CGFloat
+    let paletteCount: Int
+    @Binding var currentScanline: Int?
+
+    func makeNSView(context: Context) -> ScanlineTrackingNSView {
+        let view = ScanlineTrackingNSView()
+        view.imageSize = imageSize
+        view.imageScale = imageScale
+        view.paletteCount = paletteCount
+        view.onScanlineChanged = { scanline in
+            DispatchQueue.main.async {
+                self.currentScanline = scanline
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: ScanlineTrackingNSView, context: Context) {
+        nsView.imageSize = imageSize
+        nsView.imageScale = imageScale
+        nsView.paletteCount = paletteCount
+    }
+}
+
+class ScanlineTrackingNSView: NSView {
+    var imageSize: CGSize = .zero
+    var imageScale: CGFloat = 1.0
+    var paletteCount: Int = 200
+    var onScanlineChanged: ((Int) -> Void)?
+
+    private var trackingArea: NSTrackingArea?
+    private var currentLine: Int = -1
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+
+        if let existing = trackingArea {
+            removeTrackingArea(existing)
+        }
+
+        trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea!)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        let location = convert(event.locationInWindow, from: nil)
+
+        // Calculate scanline based on Y position
+        // Note: NSView coordinates have origin at bottom-left, so we flip
+        let flippedY = bounds.height - location.y
+        let imageY = flippedY / imageScale
+
+        // Clamp to valid range
+        let scanline = max(0, min(paletteCount - 1, Int(imageY)))
+
+        if scanline != currentLine {
+            currentLine = scanline
+            onScanlineChanged?(scanline)
+        }
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        // Keep the last scanline when mouse exits (don't reset)
     }
 }
 

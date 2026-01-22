@@ -1,0 +1,548 @@
+import SwiftUI
+
+// MARK: - Help View
+
+struct HelpView: View {
+    @Environment(\.dismiss) private var dismiss
+    var initialSection: HelpSection = .gettingStarted
+    @State private var selectedSection: HelpSection = .gettingStarted
+
+    var body: some View {
+        NavigationSplitView {
+            List(HelpSection.allCases, selection: $selectedSection) { section in
+                Label(section.title, systemImage: section.icon)
+                    .tag(section)
+            }
+            .listStyle(.sidebar)
+            .frame(minWidth: 200)
+        } detail: {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    helpContent(for: selectedSection)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(minWidth: 800, minHeight: 600)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    dismiss()
+                }
+            }
+        }
+        .onAppear {
+            selectedSection = initialSection
+        }
+    }
+
+    @ViewBuilder
+    private func helpContent(for section: HelpSection) -> some View {
+        switch section {
+        case .gettingStarted:
+            gettingStartedContent
+        case .importingImages:
+            importingImagesContent
+        case .browsingImages:
+            browsingImagesContent
+        case .paletteEditing:
+            paletteEditingContent
+        case .exportingImages:
+            exportingImagesContent
+        case .supportedFormats:
+            supportedFormatsContent
+        case .keyboardShortcuts:
+            keyboardShortcutsContent
+        case .troubleshooting:
+            troubleshootingContent
+        }
+    }
+
+    // MARK: - Getting Started
+
+    private var gettingStartedContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Getting Started")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+
+            Text("Retro Graphics Converter is a powerful tool for viewing, editing, and converting vintage computer graphics from platforms like the Apple II, Apple IIgs, Commodore 64, Amiga, Atari ST, and more.")
+                .font(.body)
+
+            Divider()
+
+            HelpSectionHeader(title: "Quick Start", icon: "bolt.fill")
+
+            NumberedStep(number: 1, title: "Import Images", description: "Click the Import button or drag and drop image files or disk images into the window.")
+
+            NumberedStep(number: 2, title: "Browse & Select", description: "Use the sidebar to browse imported images. Click to select, or use Select All.")
+
+            NumberedStep(number: 3, title: "Preview & Edit", description: "View images in the preview area. Edit palette colors by clicking on them.")
+
+            NumberedStep(number: 4, title: "Export", description: "Click Export to save images in modern formats (PNG, JPEG, etc.) with optional scaling.")
+
+            Divider()
+
+            HelpSectionHeader(title: "Interface Overview", icon: "rectangle.3.group")
+
+            BulletPoint(text: "**Toolbar** - Import/Export buttons, zoom controls, crop tool, and undo")
+            BulletPoint(text: "**Sidebar** - Thumbnail browser with selection controls")
+            BulletPoint(text: "**Preview Area** - Large view of selected image with checkerboard background")
+            BulletPoint(text: "**Info Bar** - File information and palette display")
+            BulletPoint(text: "**Status Bar** - Counts for imported, selected, removed, and exported files")
+        }
+    }
+
+    // MARK: - Importing Images
+
+    private var importingImagesContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Importing Images")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+
+            Text("There are several ways to import retro graphics into the application.")
+                .font(.body)
+
+            Divider()
+
+            HelpSectionHeader(title: "Import Methods", icon: "square.and.arrow.down")
+
+            BulletPoint(text: "**Import Button** - Click to open a file picker dialog")
+            BulletPoint(text: "**Drag & Drop** - Drag files directly onto the window")
+            BulletPoint(text: "**Keyboard** - Press Cmd+O to open the import dialog")
+
+            Divider()
+
+            HelpSectionHeader(title: "Supported Input Types", icon: "doc.richtext")
+
+            BulletPoint(text: "**Individual image files** - SHR, HGR, DHGR, IFF, Degas, PCX, BMP, etc.")
+            BulletPoint(text: "**Disk images** - .dsk, .do, .po, .2mg, .hdv containing multiple images")
+            BulletPoint(text: "**ProDOS volumes** - PNT and PIC files are automatically detected")
+            BulletPoint(text: "**DOS 3.3 disks** - Binary graphics files")
+
+            Divider()
+
+            HelpSectionHeader(title: "Disk Image Browser", icon: "externaldrive")
+
+            Text("When you open a disk image, a catalog browser appears showing all recognized graphics files. You can:")
+                .font(.body)
+
+            BulletPoint(text: "Double-click files to import them individually")
+            BulletPoint(text: "Use Select All to select all images")
+            BulletPoint(text: "Import selected files with the Import button")
+        }
+    }
+
+    // MARK: - Browsing Images
+
+    private var browsingImagesContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Browsing Images")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+
+            Divider()
+
+            HelpSectionHeader(title: "Thumbnail Browser", icon: "photo.on.rectangle")
+
+            Text("The sidebar shows thumbnails of all imported images with file names and format information.")
+                .font(.body)
+
+            BulletPoint(text: "**Click** - Select a single image")
+            BulletPoint(text: "**Cmd+Click** - Add/remove from selection")
+            BulletPoint(text: "**Shift+Click** - Select a range")
+            BulletPoint(text: "**Select All** - Select all images in the browser")
+
+            Divider()
+
+            HelpSectionHeader(title: "Preview Controls", icon: "magnifyingglass")
+
+            BulletPoint(text: "**Zoom In/Out** - Use the + and - buttons or scroll wheel")
+            BulletPoint(text: "**Fit to Window** - Auto-scale image to fit the preview area")
+            BulletPoint(text: "**Zoom Percentage** - Shows current zoom level")
+
+            Divider()
+
+            HelpSectionHeader(title: "Crop Tool", icon: "crop")
+
+            Text("The crop tool allows you to select a region of the image:")
+                .font(.body)
+
+            NumberedStep(number: 1, title: "Activate", description: "Click the crop button in the toolbar")
+            NumberedStep(number: 2, title: "Select Region", description: "Click and drag to select the area to keep")
+            NumberedStep(number: 3, title: "Apply", description: "The crop is applied automatically")
+            NumberedStep(number: 4, title: "Undo", description: "Press Cmd+Z or click Undo to revert")
+
+            Divider()
+
+            HelpSectionHeader(title: "Removing Images", icon: "trash")
+
+            BulletPoint(text: "Select images and press Delete to remove them from the browser")
+            BulletPoint(text: "This does not delete the original files")
+        }
+    }
+
+    // MARK: - Palette Editing
+
+    private var paletteEditingContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Palette Editing")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+
+            Text("One of the most powerful features is the ability to edit palette colors with live preview.")
+                .font(.body)
+
+            Divider()
+
+            HelpSectionHeader(title: "How It Works", icon: "paintpalette")
+
+            Text("The palette display in the info bar shows the colors used by the current image. For editable palettes, you can modify colors to create custom color schemes.")
+                .font(.body)
+
+            BulletPoint(text: "**Click a color swatch** to open the macOS color picker")
+            BulletPoint(text: "**Choose a new color** and the preview updates instantly")
+            BulletPoint(text: "**Hover over colors** to see the color index and hex value")
+
+            Divider()
+
+            HelpSectionHeader(title: "Palette Types", icon: "square.grid.3x3")
+
+            BulletPoint(text: "**Fixed** - Non-editable system palettes (C64, ZX Spectrum)")
+            BulletPoint(text: "**Single** - One palette for the entire image (standard SHR, IFF)")
+            BulletPoint(text: "**Multiple** - Multiple palettes selectable per scanline (SHR)")
+            BulletPoint(text: "**Per-Scanline** - Unique palette for each line (3200-color mode)")
+
+            Divider()
+
+            HelpSectionHeader(title: "Scanline-Linked Palettes", icon: "line.3.horizontal")
+
+            Text("For 3200-color images, move your mouse over the preview to see the palette for each scanline. The palette display updates automatically as you move.")
+                .font(.body)
+
+            Divider()
+
+            HelpSectionHeader(title: "Important Notes", icon: "info.circle")
+
+            BulletPoint(text: "Palette edits affect **exported images only**")
+            BulletPoint(text: "Original files are **never modified**")
+            BulletPoint(text: "Edits are preserved until you close the app or remove the image")
+        }
+    }
+
+    // MARK: - Exporting Images
+
+    private var exportingImagesContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Exporting Images")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+
+            Divider()
+
+            HelpSectionHeader(title: "Export Dialog", icon: "square.and.arrow.up")
+
+            Text("Click the Export button to open the export dialog. You can configure:")
+                .font(.body)
+
+            BulletPoint(text: "**Output formats** - PNG, JPEG, TIFF, BMP, GIF")
+            BulletPoint(text: "**Scale factor** - 1x (original), 2x, or 4x")
+            BulletPoint(text: "**Output location** - Choose where to save files")
+
+            Divider()
+
+            HelpSectionHeader(title: "Format Recommendations", icon: "star")
+
+            BulletPoint(text: "**PNG** - Best for pixel art, lossless compression")
+            BulletPoint(text: "**JPEG** - Good for photos, smaller file size")
+            BulletPoint(text: "**TIFF** - Professional use, maximum quality")
+            BulletPoint(text: "**GIF** - Limited to 256 colors, good for simple graphics")
+            BulletPoint(text: "**BMP** - Universal compatibility, uncompressed")
+
+            Divider()
+
+            HelpSectionHeader(title: "Scaling", icon: "arrow.up.left.and.arrow.down.right")
+
+            Text("Retro graphics are typically small (280x192 to 640x400). Scaling enlarges them for modern displays:")
+                .font(.body)
+
+            BulletPoint(text: "**1x** - Original size, best for archival")
+            BulletPoint(text: "**2x** - Good for most uses")
+            BulletPoint(text: "**4x** - Large size for printing or wallpapers")
+
+            Divider()
+
+            HelpSectionHeader(title: "Palette Modifications", icon: "paintpalette.fill")
+
+            Text("If you've edited colors in the palette, exported images will use your modified colors. This is great for creating custom color schemes or correcting faded palettes.")
+                .font(.body)
+        }
+    }
+
+    // MARK: - Supported Formats
+
+    private var supportedFormatsContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Supported Formats")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+
+            Divider()
+
+            HelpSectionHeader(title: "Apple II Family", icon: "desktopcomputer")
+
+            FormatRow(format: "HGR", description: "Hi-Res Graphics (280x192, 6 colors)")
+            FormatRow(format: "DHGR", description: "Double Hi-Res (560x192, 16 colors)")
+            FormatRow(format: "SHR", description: "Super Hi-Res (320x200, 16 colors per line)")
+            FormatRow(format: "3200", description: "3200-color mode (unique palette per scanline)")
+            FormatRow(format: "3201", description: "Compressed 3200-color (PackBytes)")
+            FormatRow(format: "PNT/PIC", description: "ProDOS graphics files")
+            FormatRow(format: "816/Paint", description: "Baudville 816/Paint format")
+            FormatRow(format: "Paintworks", description: "Activision Paintworks format")
+            FormatRow(format: "APF", description: "Apple Preferred Format")
+            FormatRow(format: "DreamGrafix", description: "256 and 3200-color modes with LZW compression")
+
+            Divider()
+
+            HelpSectionHeader(title: "Commodore", icon: "cpu")
+
+            FormatRow(format: "Koala", description: "C64 multicolor bitmap (320x200)")
+            FormatRow(format: "Art Studio", description: "C64 high-res art format")
+
+            Divider()
+
+            HelpSectionHeader(title: "Amiga", icon: "memorychip")
+
+            FormatRow(format: "IFF/ILBM", description: "Interchange File Format (up to 256 colors)")
+
+            Divider()
+
+            HelpSectionHeader(title: "Atari ST", icon: "rectangle.split.3x1")
+
+            FormatRow(format: "Degas", description: "PI1/PI2/PI3 (16/4/2 colors)")
+
+            Divider()
+
+            HelpSectionHeader(title: "PC Formats", icon: "pc")
+
+            FormatRow(format: "PCX", description: "PC Paintbrush (1-24 bit)")
+            FormatRow(format: "BMP", description: "Windows Bitmap (1-24 bit)")
+
+            Divider()
+
+            HelpSectionHeader(title: "Other", icon: "square.grid.2x2")
+
+            FormatRow(format: "ZX Spectrum", description: "Spectrum screen files (256x192)")
+            FormatRow(format: "MacPaint", description: "Classic Mac 1-bit graphics")
+
+            Divider()
+
+            HelpSectionHeader(title: "Disk Images", icon: "externaldrive.fill")
+
+            FormatRow(format: ".dsk", description: "Apple II disk image (140K/800K)")
+            FormatRow(format: ".do", description: "DOS-ordered disk image")
+            FormatRow(format: ".po", description: "ProDOS-ordered disk image")
+            FormatRow(format: ".2mg", description: "Universal disk image format")
+            FormatRow(format: ".hdv", description: "Hard drive volume image")
+        }
+    }
+
+    // MARK: - Keyboard Shortcuts
+
+    private var keyboardShortcutsContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Keyboard Shortcuts")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+
+            Divider()
+
+            HelpSectionHeader(title: "File Operations", icon: "doc")
+
+            ShortcutRow(keys: "Cmd + O", action: "Import files")
+            ShortcutRow(keys: "Cmd + E", action: "Export selected images")
+            ShortcutRow(keys: "Cmd + A", action: "Select all images")
+
+            Divider()
+
+            HelpSectionHeader(title: "Editing", icon: "pencil")
+
+            ShortcutRow(keys: "Cmd + Z", action: "Undo last action")
+            ShortcutRow(keys: "Delete", action: "Remove selected images")
+
+            Divider()
+
+            HelpSectionHeader(title: "View", icon: "eye")
+
+            ShortcutRow(keys: "Cmd + +", action: "Zoom in")
+            ShortcutRow(keys: "Cmd + -", action: "Zoom out")
+            ShortcutRow(keys: "Cmd + 0", action: "Fit to window")
+
+            Divider()
+
+            HelpSectionHeader(title: "Navigation", icon: "arrow.left.arrow.right")
+
+            ShortcutRow(keys: "Up/Down Arrow", action: "Previous/Next image")
+            ShortcutRow(keys: "Home", action: "First image")
+            ShortcutRow(keys: "End", action: "Last image")
+        }
+    }
+
+    // MARK: - Troubleshooting
+
+    private var troubleshootingContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Troubleshooting")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+
+            Divider()
+
+            HelpSectionHeader(title: "Image Won't Load", icon: "exclamationmark.triangle")
+
+            BulletPoint(text: "Verify the file is a supported format")
+            BulletPoint(text: "Check that the file isn't corrupted")
+            BulletPoint(text: "For disk images, ensure the disk format is DOS 3.3 or ProDOS")
+            BulletPoint(text: "Some non-standard formats may not be recognized")
+
+            Divider()
+
+            HelpSectionHeader(title: "Colors Look Wrong", icon: "paintpalette")
+
+            BulletPoint(text: "Different emulators use different color palettes")
+            BulletPoint(text: "Use palette editing to adjust colors to your preference")
+            BulletPoint(text: "Apple II artifact colors vary based on monitor type")
+
+            Divider()
+
+            HelpSectionHeader(title: "Disk Image Issues", icon: "externaldrive.badge.exclamationmark")
+
+            BulletPoint(text: "Some copy-protected disks cannot be read")
+            BulletPoint(text: "Non-standard sector interleaving may cause issues")
+            BulletPoint(text: "Bootable slideshow disks use raw scanning mode")
+
+            Divider()
+
+            HelpSectionHeader(title: "Export Problems", icon: "square.and.arrow.up.trianglebadge.exclamationmark")
+
+            BulletPoint(text: "Ensure you have write permission to the output folder")
+            BulletPoint(text: "Check available disk space for large exports")
+            BulletPoint(text: "Try a different output format if one fails")
+
+            Divider()
+
+            HelpSectionHeader(title: "Getting Help", icon: "questionmark.circle")
+
+            Text("If you encounter issues not covered here:")
+                .font(.body)
+
+            BulletPoint(text: "Visit the project's GitHub page for support")
+            BulletPoint(text: "Check for updates that may fix your issue")
+            BulletPoint(text: "Report bugs with detailed reproduction steps")
+        }
+    }
+}
+
+// MARK: - Helper Views
+
+private struct HelpSectionHeader: View {
+    let title: String
+    let icon: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundColor(.accentColor)
+            Text(title)
+                .font(.title2)
+                .fontWeight(.semibold)
+        }
+        .padding(.top, 8)
+    }
+}
+
+private struct BulletPoint: View {
+    let text: LocalizedStringKey
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("•")
+                .foregroundColor(.secondary)
+            Text(text)
+                .font(.body)
+        }
+        .padding(.leading, 16)
+    }
+}
+
+private struct NumberedStep: View {
+    let number: Int
+    let title: String
+    let description: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(.headline)
+                .foregroundColor(.white)
+                .frame(width: 24, height: 24)
+                .background(Color.accentColor)
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                Text(description)
+                    .font(.body)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.leading, 8)
+    }
+}
+
+private struct FormatRow: View {
+    let format: String
+    let description: String
+
+    var body: some View {
+        HStack(alignment: .top) {
+            Text(format)
+                .font(.system(.body, design: .monospaced))
+                .fontWeight(.medium)
+                .frame(width: 100, alignment: .leading)
+            Text(description)
+                .font(.body)
+                .foregroundColor(.secondary)
+        }
+        .padding(.leading, 16)
+    }
+}
+
+private struct ShortcutRow: View {
+    let keys: String
+    let action: String
+
+    var body: some View {
+        HStack {
+            Text(keys)
+                .font(.system(.body, design: .monospaced))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(4)
+                .frame(width: 140, alignment: .leading)
+            Text(action)
+                .font(.body)
+        }
+        .padding(.leading, 16)
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    HelpView()
+}

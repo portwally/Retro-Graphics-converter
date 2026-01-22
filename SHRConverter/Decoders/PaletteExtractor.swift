@@ -827,12 +827,25 @@ struct PaletteExtractor {
     private static func extractBMPPalette(from data: Data, bitsPerPixel: Int) -> PaletteInfo? {
         guard bitsPerPixel <= 8, data.count > 54 else { return nil }
 
-        // BMP palette starts at offset 54 for standard headers
-        let numColors = 1 << bitsPerPixel
+        // Read DIB header size to find correct palette offset
+        let dibHeaderSize = Int(data[14]) | (Int(data[15]) << 8) | (Int(data[16]) << 16) | (Int(data[17]) << 24)
+        let paletteOffset = 14 + dibHeaderSize
+
+        // Check if file specifies number of colors used (at offset 46 for BITMAPINFOHEADER)
+        var numColors = 1 << bitsPerPixel
+        if dibHeaderSize >= 40 && data.count > 50 {
+            let colorsUsed = Int(data[46]) | (Int(data[47]) << 8) | (Int(data[48]) << 16) | (Int(data[49]) << 24)
+            if colorsUsed > 0 && colorsUsed < numColors {
+                numColors = colorsUsed
+            }
+        }
+
+        guard paletteOffset + (numColors * 4) <= data.count else { return nil }
+
         var colors: [PaletteColor] = []
 
         for i in 0..<numColors {
-            let offset = 54 + (i * 4)  // BGRA format
+            let offset = paletteOffset + (i * 4)  // BGRA format (4 bytes per color)
             if offset + 3 < data.count {
                 colors.append(PaletteColor(
                     r: data[offset + 2],  // R

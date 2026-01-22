@@ -78,7 +78,10 @@ struct ExportSheet: View {
     }
 
     private func formatToggle(for format: ExportFormat) -> some View {
-        HStack {
+        let isOriginalSelected = selectedFormats.contains(.original)
+        let isDisabled = format != .original && isOriginalSelected
+
+        return HStack {
             Toggle(isOn: binding(for: format)) {
                 HStack {
                     Text(format.rawValue)
@@ -90,6 +93,8 @@ struct ExportSheet: View {
                 }
             }
             .toggleStyle(.checkbox)
+            .disabled(isDisabled)
+            .opacity(isDisabled ? 0.5 : 1.0)
         }
     }
 
@@ -98,7 +103,14 @@ struct ExportSheet: View {
             get: { selectedFormats.contains(format) },
             set: { isSelected in
                 if isSelected {
-                    selectedFormats.insert(format)
+                    if format == .original {
+                        // Selecting original clears all modern formats
+                        selectedFormats = [.original]
+                    } else {
+                        // Selecting modern format clears original
+                        selectedFormats.remove(.original)
+                        selectedFormats.insert(format)
+                    }
                 } else {
                     selectedFormats.remove(format)
                 }

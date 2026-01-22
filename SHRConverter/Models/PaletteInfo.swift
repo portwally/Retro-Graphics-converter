@@ -29,7 +29,7 @@ struct PaletteColor: Identifiable, Equatable {
     }
 
     var nsColor: NSColor {
-        NSColor(red: CGFloat(r) / 255.0, green: CGFloat(g) / 255.0, blue: CGFloat(b) / 255.0, alpha: 1.0)
+        NSColor(srgbRed: CGFloat(r) / 255.0, green: CGFloat(g) / 255.0, blue: CGFloat(b) / 255.0, alpha: 1.0)
     }
 
     var swiftUIColor: Color {

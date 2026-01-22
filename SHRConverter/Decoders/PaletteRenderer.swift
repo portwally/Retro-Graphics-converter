@@ -21,7 +21,7 @@ struct PaletteRenderer {
         switch type {
         case .SHR(let mode, _, _):
             if mode.contains("3200") {
-                cgImage = renderSHR3200(data: data, palettes: palette.palettes)
+                cgImage = renderSHR3200(data: data, palettes: palette.palettes, mode: mode)
             } else {
                 cgImage = renderStandardSHR(data: data, palette: palette)
             }
@@ -101,21 +101,190 @@ struct PaletteRenderer {
 
     // MARK: - SHR 3200 Color Renderer
 
-    private static func renderSHR3200(data: Data, palettes: [[PaletteColor]]) -> CGImage? {
+    private static func renderSHR3200(data: Data, palettes: [[PaletteColor]], mode: String) -> CGImage? {
         let width = 320
         let height = 200
         var rgbaBuffer = [UInt8](repeating: 255, count: width * height * 4)
 
-        let pixelDataStart = 0
+        guard palettes.count >= 200 else { return nil }
 
-        guard data.count >= 32000, palettes.count >= 200 else { return nil }
+        // Get pixel data based on format
+        let pixelData: Data
+
+        if mode.contains("Packed") || mode.contains("3201") {
+            // 3201 format: header (4) + palettes (6400) + compressed pixels
+            // Need to decompress PackBytes data
+            guard data.count > 6404 else { return nil }
+            let compressedData = data.subdata(in: 6404..<data.count)
+            let decompressed = PackedSHRDecoder.unpackBytes(data: compressedData, maxOutputSize: 32000)
+            guard decompressed.count >= 32000 else { return nil }
+            pixelData = Data(decompressed)
+        } else if mode.contains("DreamGrafix") {
+            // DreamGrafix: LZW compressed, pixels at start of decompressed data
+            guard data.count >= 17 else { return nil }
+            let compressedData = data.subdata(in: 0..<(data.count - 17))
+            if let decompressed = decompressDreamGrafixLZW(data: compressedData), decompressed.count >= 32000 {
+                pixelData = decompressed.subdata(in: 0..<32000)
+            } else if data.count >= 32000 {
+                // Try using raw data if decompression fails
+                pixelData = data.subdata(in: 0..<32000)
+            } else {
+                return nil
+            }
+        } else {
+            // Standard 3200 format: pixel data at offset 0
+            guard data.count >= 32000 else { return nil }
+            pixelData = data.subdata(in: 0..<32000)
+        }
 
         for y in 0..<height {
             let currentPalette: [(r: UInt8, g: UInt8, b: UInt8)] = palettes[y].map { ($0.r, $0.g, $0.b) }
-            renderSHRLine(y: y, data: data, pixelStart: pixelDataStart, palette: currentPalette, to: &rgbaBuffer, width: width)
+            renderSHRLineFromData(y: y, pixelData: pixelData, palette: currentPalette, to: &rgbaBuffer, width: width)
         }
 
         return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+    }
+
+    private static func renderSHRLineFromData(y: Int, pixelData: Data, palette: [(r: UInt8, g: UInt8, b: UInt8)], to buffer: inout [UInt8], width: Int) {
+        let bytesPerLine = 160
+        let lineStart = y * bytesPerLine
+
+        guard lineStart + bytesPerLine <= pixelData.count else { return }
+
+        for xByte in 0..<bytesPerLine {
+            let byte = pixelData[lineStart + xByte]
+
+            let idx1 = Int((byte & 0xF0) >> 4)
+            let idx2 = Int(byte & 0x0F)
+
+            let c1 = idx1 < palette.count ? palette[idx1] : (r: UInt8(0), g: UInt8(0), b: UInt8(0))
+            let bufferIdx1 = (y * width + (xByte * 2)) * 4
+            buffer[bufferIdx1]     = c1.r
+            buffer[bufferIdx1 + 1] = c1.g
+            buffer[bufferIdx1 + 2] = c1.b
+            buffer[bufferIdx1 + 3] = 255
+
+            let c2 = idx2 < palette.count ? palette[idx2] : (r: UInt8(0), g: UInt8(0), b: UInt8(0))
+            let bufferIdx2 = (y * width + (xByte * 2) + 1) * 4
+            buffer[bufferIdx2]     = c2.r
+            buffer[bufferIdx2 + 1] = c2.g
+            buffer[bufferIdx2 + 2] = c2.b
+            buffer[bufferIdx2 + 3] = 255
+        }
+    }
+
+    // DreamGrafix LZW decompression (GIF-style variable width 9-12 bits)
+    private static func decompressDreamGrafixLZW(data: Data) -> Data? {
+        guard data.count > 0 else { return nil }
+
+        var output = Data()
+        output.reserveCapacity(65536)
+
+        let clearCode = 256
+        let endCode = 257
+        let maxCode = 4095
+
+        var codeWidth = 9
+        var nextCodeWidthThreshold = 512
+
+        var dictionary: [[UInt8]] = []
+
+        func resetDictionary() {
+            dictionary = []
+            for i in 0..<256 {
+                dictionary.append([UInt8(i)])
+            }
+            dictionary.append([])  // clear code
+            dictionary.append([])  // end code
+            codeWidth = 9
+            nextCodeWidthThreshold = 512
+        }
+
+        resetDictionary()
+
+        var bitBuffer: UInt32 = 0
+        var bitsInBuffer = 0
+        var bytePos = 0
+
+        func readCode() -> Int? {
+            while bitsInBuffer < codeWidth && bytePos < data.count {
+                bitBuffer |= UInt32(data[bytePos]) << bitsInBuffer
+                bitsInBuffer += 8
+                bytePos += 1
+            }
+            guard bitsInBuffer >= codeWidth else { return nil }
+            let mask = (1 << codeWidth) - 1
+            let code = Int(bitBuffer) & mask
+            bitBuffer >>= codeWidth
+            bitsInBuffer -= codeWidth
+            return code
+        }
+
+        guard let firstCodeValue = readCode() else { return nil }
+
+        var prevCode: Int
+
+        if firstCodeValue == clearCode {
+            guard let nextCode = readCode() else { return nil }
+            if nextCode == endCode { return output }
+            if nextCode < 256 { output.append(UInt8(nextCode)) }
+            prevCode = nextCode
+        } else if firstCodeValue < 256 {
+            output.append(UInt8(firstCodeValue))
+            prevCode = firstCodeValue
+        } else {
+            return nil
+        }
+
+        if prevCode == endCode { return output }
+
+        while let code = readCode() {
+            if code == endCode { break }
+
+            if code == clearCode {
+                resetDictionary()
+                guard let nextCode = readCode() else { break }
+                if nextCode == endCode { break }
+                if nextCode < 256 {
+                    output.append(UInt8(nextCode))
+                    prevCode = nextCode
+                }
+                continue
+            }
+
+            var sequence: [UInt8]
+
+            if code < dictionary.count {
+                sequence = dictionary[code]
+            } else if code == dictionary.count {
+                if prevCode < dictionary.count {
+                    let prevSequence = dictionary[prevCode]
+                    sequence = prevSequence + [prevSequence[0]]
+                } else {
+                    break
+                }
+            } else {
+                break
+            }
+
+            output.append(contentsOf: sequence)
+
+            if dictionary.count <= maxCode && prevCode < dictionary.count {
+                let prevSequence = dictionary[prevCode]
+                dictionary.append(prevSequence + [sequence[0]])
+
+                if dictionary.count == nextCodeWidthThreshold && codeWidth < 12 {
+                    codeWidth += 1
+                    nextCodeWidthThreshold *= 2
+                }
+            }
+
+            prevCode = code
+
+            if output.count > 50000 { break }
+        }
+
+        return output.isEmpty ? nil : output
     }
 
     private static func renderSHRLine(y: Int, data: Data, pixelStart: Int, palette: [(r: UInt8, g: UInt8, b: UInt8)], to buffer: inout [UInt8], width: Int) {
@@ -222,9 +391,80 @@ struct PaletteRenderer {
     // MARK: - HGR Renderer
 
     private static func renderHGR(data: Data, palette: PaletteInfo) -> CGImage? {
-        // HGR uses artifact colors, which are complex to re-render with palette changes
-        // For now, return nil to indicate not supported
-        return nil
+        let width = 280
+        let height = 192
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        guard data.count >= 8184 else { return nil }
+
+        let primaryPalette = palette.primaryPalette
+        guard primaryPalette.count >= 6 else { return nil }
+
+        // HGR palette order: Black, White, Green, Violet, Orange, Blue
+        let hgrPalette: [(r: UInt8, g: UInt8, b: UInt8)] = primaryPalette.prefix(6).map { ($0.r, $0.g, $0.b) }
+
+        for y in 0..<height {
+            let i = y % 8
+            let j = (y / 8) % 8
+            let k = y / 64
+
+            let fileOffset = (i * 1024) + (j * 128) + (k * 40)
+
+            guard fileOffset + 40 <= data.count else { continue }
+
+            for xByte in 0..<40 {
+                let currentByte = data[fileOffset + xByte]
+                let nextByte: UInt8 = (xByte + 1 < 40) ? data[fileOffset + xByte + 1] : 0
+
+                let highBit = (currentByte >> 7) & 0x1
+
+                for bitIndex in 0..<7 {
+                    let pixelIndex = (xByte * 7) + bitIndex
+                    let bufferIdx = (y * width + pixelIndex) * 4
+
+                    let bitA = (currentByte >> bitIndex) & 0x1
+
+                    let bitB: UInt8
+                    if bitIndex == 6 {
+                        bitB = (nextByte >> 0) & 0x1
+                    } else {
+                        bitB = (currentByte >> (bitIndex + 1)) & 0x1
+                    }
+
+                    var colorIndex = 0
+
+                    if bitA == 0 && bitB == 0 {
+                        colorIndex = 0  // Black
+                    } else if bitA == 1 && bitB == 1 {
+                        colorIndex = 1  // White
+                    } else {
+                        let isEvenColumn = (pixelIndex % 2) == 0
+
+                        if highBit == 1 {
+                            if isEvenColumn {
+                                colorIndex = (bitA == 1) ? 5 : 4  // Blue or Orange
+                            } else {
+                                colorIndex = (bitA == 1) ? 4 : 5  // Orange or Blue
+                            }
+                        } else {
+                            if isEvenColumn {
+                                colorIndex = (bitA == 1) ? 3 : 2  // Violet or Green
+                            } else {
+                                colorIndex = (bitA == 1) ? 2 : 3  // Green or Violet
+                            }
+                        }
+                    }
+
+                    let c = colorIndex < hgrPalette.count ? hgrPalette[colorIndex] : (r: UInt8(0), g: UInt8(0), b: UInt8(0))
+                    rgbaBuffer[bufferIdx] = c.r
+                    rgbaBuffer[bufferIdx + 1] = c.g
+                    rgbaBuffer[bufferIdx + 2] = c.b
+                    rgbaBuffer[bufferIdx + 3] = 255
+                }
+            }
+        }
+
+        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
     }
 
     // MARK: - IFF Renderer
