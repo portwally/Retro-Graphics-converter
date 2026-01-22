@@ -58,9 +58,14 @@ struct ContentView: View {
                 zoomScale: $zoomScale,
                 cropMode: $cropMode,
                 canUndo: !undoStack.isEmpty,
+                hasImage: selectedImage != nil,
                 onImport: { openFiles() },
                 onExport: { showExportSheet = true },
-                onUndo: { undoLastAction() }
+                onUndo: { undoLastAction() },
+                onRotateLeft: { rotateSelectedImage(clockwise: false) },
+                onRotateRight: { rotateSelectedImage(clockwise: true) },
+                onFlipHorizontal: { flipSelectedImage(horizontal: true) },
+                onFlipVertical: { flipSelectedImage(horizontal: false) }
             )
 
             Divider()
@@ -875,7 +880,7 @@ struct ContentView: View {
             statusMessage = "Nothing to undo"
             return
         }
-        
+
         // Find and restore the image
         if let index = imageItems.firstIndex(where: { $0.id == lastAction.id }) {
             // Behalte die gleiche ID bei!
@@ -892,12 +897,190 @@ struct ContentView: View {
 
             selectedImage = imageItems[index]
             statusMessage = "Undo successful"
-            
+
             // Update undo availability
             appState.setCanUndo(!undoStack.isEmpty)
         }
     }
-    
+
+    func rotateSelectedImage(clockwise: Bool) {
+        guard let current = selectedImage,
+              let index = imageItems.firstIndex(where: { $0.id == current.id }) else {
+            return
+        }
+
+        // Save to undo stack before rotating
+        let undoItem = (
+            id: current.id,
+            image: current.image,
+            type: current.type,
+            data: current.originalData,
+            paletteInfo: current.paletteInfo,
+            modifiedPalette: current.modifiedPalette
+        )
+        undoStack.append(undoItem)
+
+        // Limit undo stack to 10 items
+        if undoStack.count > 10 {
+            undoStack.removeFirst()
+        }
+
+        appState.setCanUndo(true)
+
+        // Rotate the image
+        guard let rotatedImage = rotateImage(current.image, clockwise: clockwise) else {
+            return
+        }
+
+        // Update the image item
+        var updatedItem = ImageItem(
+            id: current.id,
+            url: current.url,
+            image: rotatedImage,
+            type: current.type,
+            originalData: nil,  // Clear original data since image is modified
+            paletteInfo: current.paletteInfo
+        )
+        updatedItem.modifiedPalette = current.modifiedPalette
+        imageItems[index] = updatedItem
+        selectedImage = updatedItem
+
+        statusMessage = clockwise ? "Rotated right 90°" : "Rotated left 90°"
+    }
+
+    private func rotateImage(_ image: NSImage, clockwise: Bool) -> NSImage? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+
+        let width = cgImage.width
+        let height = cgImage.height
+
+        // Create a new bitmap context with swapped dimensions
+        guard let colorSpace = cgImage.colorSpace,
+              let context = CGContext(
+                data: nil,
+                width: height,
+                height: width,
+                bitsPerComponent: cgImage.bitsPerComponent,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: cgImage.bitmapInfo.rawValue
+              ) else {
+            return nil
+        }
+
+        // Apply rotation transform
+        if clockwise {
+            // Rotate 90° clockwise
+            context.translateBy(x: CGFloat(height), y: 0)
+            context.rotate(by: .pi / 2)
+        } else {
+            // Rotate 90° counter-clockwise
+            context.translateBy(x: 0, y: CGFloat(width))
+            context.rotate(by: -.pi / 2)
+        }
+
+        // Draw the original image
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        // Create the rotated image
+        guard let rotatedCGImage = context.makeImage() else {
+            return nil
+        }
+
+        return NSImage(cgImage: rotatedCGImage, size: NSSize(width: height, height: width))
+    }
+
+    func flipSelectedImage(horizontal: Bool) {
+        guard let current = selectedImage,
+              let index = imageItems.firstIndex(where: { $0.id == current.id }) else {
+            return
+        }
+
+        // Save to undo stack before flipping
+        let undoItem = (
+            id: current.id,
+            image: current.image,
+            type: current.type,
+            data: current.originalData,
+            paletteInfo: current.paletteInfo,
+            modifiedPalette: current.modifiedPalette
+        )
+        undoStack.append(undoItem)
+
+        // Limit undo stack to 10 items
+        if undoStack.count > 10 {
+            undoStack.removeFirst()
+        }
+
+        appState.setCanUndo(true)
+
+        // Flip the image
+        guard let flippedImage = flipImage(current.image, horizontal: horizontal) else {
+            return
+        }
+
+        // Update the image item
+        var updatedItem = ImageItem(
+            id: current.id,
+            url: current.url,
+            image: flippedImage,
+            type: current.type,
+            originalData: nil,  // Clear original data since image is modified
+            paletteInfo: current.paletteInfo
+        )
+        updatedItem.modifiedPalette = current.modifiedPalette
+        imageItems[index] = updatedItem
+        selectedImage = updatedItem
+
+        statusMessage = horizontal ? "Flipped horizontally" : "Flipped vertically"
+    }
+
+    private func flipImage(_ image: NSImage, horizontal: Bool) -> NSImage? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+
+        let width = cgImage.width
+        let height = cgImage.height
+
+        // Create a new bitmap context
+        guard let colorSpace = cgImage.colorSpace,
+              let context = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: cgImage.bitsPerComponent,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: cgImage.bitmapInfo.rawValue
+              ) else {
+            return nil
+        }
+
+        // Apply flip transform
+        if horizontal {
+            // Flip horizontally
+            context.translateBy(x: CGFloat(width), y: 0)
+            context.scaleBy(x: -1, y: 1)
+        } else {
+            // Flip vertically
+            context.translateBy(x: 0, y: CGFloat(height))
+            context.scaleBy(x: 1, y: -1)
+        }
+
+        // Draw the original image
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        // Create the flipped image
+        guard let flippedCGImage = context.makeImage() else {
+            return nil
+        }
+
+        return NSImage(cgImage: flippedCGImage, size: NSSize(width: width, height: height))
+    }
+
     func cropImageToRect(image: NSImage, start: CGPoint, end: CGPoint) -> NSImage? {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return nil

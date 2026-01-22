@@ -46,6 +46,8 @@ struct HelpView: View {
             importingImagesContent
         case .browsingImages:
             browsingImagesContent
+        case .imageTools:
+            imageToolsContent
         case .paletteEditing:
             paletteEditingContent
         case .exportingImages:
@@ -86,7 +88,7 @@ struct HelpView: View {
 
             HelpSectionHeader(title: "Interface Overview", icon: "rectangle.3.group")
 
-            BulletPoint(text: "**Toolbar** - Import/Export buttons, zoom controls, crop tool, and undo")
+            BulletPoint(text: "**Toolbar** - Import/Export, zoom, rotate, flip, crop, and undo tools")
             BulletPoint(text: "**Sidebar** - Thumbnail browser with selection controls")
             BulletPoint(text: "**Preview Area** - Large view of selected image with checkerboard background")
             BulletPoint(text: "**Info Bar** - File information and palette display")
@@ -181,6 +183,79 @@ struct HelpView: View {
 
             BulletPoint(text: "Select images and press Delete to remove them from the browser")
             BulletPoint(text: "This does not delete the original files")
+        }
+    }
+
+    // MARK: - Image Tools
+
+    private var imageToolsContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Image Tools")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+
+            Text("The toolbar provides powerful tools for transforming and editing your images.")
+                .font(.body)
+
+            Divider()
+
+            HelpSectionHeader(title: "Rotation", icon: "rotate.right")
+
+            Text("Rotate images in 90° increments:")
+                .font(.body)
+
+            BulletPoint(text: "**Rotate L** - Rotate 90° counter-clockwise (left)")
+            BulletPoint(text: "**Rotate R** - Rotate 90° clockwise (right)")
+
+            Divider()
+
+            HelpSectionHeader(title: "Flip / Mirror", icon: "arrow.left.and.right.righttriangle.left.righttriangle.right")
+
+            Text("Create mirror images:")
+                .font(.body)
+
+            BulletPoint(text: "**Flip H** - Flip horizontally (mirror left-right)")
+            BulletPoint(text: "**Flip V** - Flip vertically (mirror top-bottom)")
+
+            Divider()
+
+            HelpSectionHeader(title: "Zoom Controls", icon: "magnifyingglass")
+
+            BulletPoint(text: "**Zoom -** - Decrease magnification (min 25%)")
+            BulletPoint(text: "**Zoom +** - Increase magnification (max 800%)")
+            BulletPoint(text: "**Fit** - Auto-fit image to preview area")
+            BulletPoint(text: "**Percentage display** - Shows current zoom level")
+
+            Divider()
+
+            HelpSectionHeader(title: "Crop Tool", icon: "crop")
+
+            Text("Select and crop a region of the image:")
+                .font(.body)
+
+            NumberedStep(number: 1, title: "Activate", description: "Click the Crop button in the toolbar")
+            NumberedStep(number: 2, title: "Select", description: "Click and drag to draw a selection rectangle")
+            NumberedStep(number: 3, title: "Apply", description: "Release to crop to the selected area")
+
+            Divider()
+
+            HelpSectionHeader(title: "Undo", icon: "arrow.uturn.backward")
+
+            Text("All transformations (rotate, flip, crop) can be undone:")
+                .font(.body)
+
+            BulletPoint(text: "Click **Undo** in the toolbar or press **Cmd+Z**")
+            BulletPoint(text: "Up to 10 actions can be undone")
+            BulletPoint(text: "Undo restores the previous image state completely")
+
+            Divider()
+
+            HelpSectionHeader(title: "Important Notes", icon: "info.circle")
+
+            BulletPoint(text: "All transformations are applied to the **preview only**")
+            BulletPoint(text: "Original files are **never modified**")
+            BulletPoint(text: "Transformed images are saved when you **Export**")
+            BulletPoint(text: "Tools are disabled when no image is selected")
         }
     }
 

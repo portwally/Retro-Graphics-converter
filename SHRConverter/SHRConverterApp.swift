@@ -7,6 +7,7 @@ enum HelpSection: String, CaseIterable, Identifiable {
     case gettingStarted
     case importingImages
     case browsingImages
+    case imageTools
     case paletteEditing
     case exportingImages
     case supportedFormats
@@ -20,6 +21,7 @@ enum HelpSection: String, CaseIterable, Identifiable {
         case .gettingStarted: return "Getting Started"
         case .importingImages: return "Importing Images"
         case .browsingImages: return "Browsing Images"
+        case .imageTools: return "Image Tools"
         case .paletteEditing: return "Palette Editing"
         case .exportingImages: return "Exporting Images"
         case .supportedFormats: return "Supported Formats"
@@ -33,6 +35,7 @@ enum HelpSection: String, CaseIterable, Identifiable {
         case .gettingStarted: return "star"
         case .importingImages: return "square.and.arrow.down"
         case .browsingImages: return "photo.on.rectangle"
+        case .imageTools: return "wand.and.stars"
         case .paletteEditing: return "paintpalette"
         case .exportingImages: return "square.and.arrow.up"
         case .supportedFormats: return "doc.richtext"

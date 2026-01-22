@@ -54,6 +54,9 @@ struct PaletteRenderer {
         case .ZXSpectrum:
             cgImage = renderZXSpectrum(data: data, palette: palette)
 
+        case .MacPaint:
+            cgImage = renderMacPaint(data: data, palette: palette)
+
         default:
             return nil
         }
@@ -952,6 +955,88 @@ struct PaletteRenderer {
                         }
                     }
                 }
+            }
+        }
+
+        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+    }
+
+    // MARK: - MacPaint Renderer
+
+    private static func renderMacPaint(data: Data, palette: PaletteInfo) -> CGImage? {
+        let width = 576
+        let height = 720
+        let bytesPerRow = 72  // 576 pixels / 8 bits per byte
+
+        let primaryPalette = palette.primaryPalette
+        guard primaryPalette.count >= 2 else { return nil }
+
+        // MacPaint palette: index 0 = background (white), index 1 = foreground (black)
+        let color0 = (r: primaryPalette[0].r, g: primaryPalette[0].g, b: primaryPalette[0].b)
+        let color1 = (r: primaryPalette[1].r, g: primaryPalette[1].g, b: primaryPalette[1].b)
+
+        var rgbaBuffer = [UInt8](repeating: 255, count: width * height * 4)
+
+        // Skip 512-byte header
+        let headerSize = 512
+        guard data.count > headerSize else { return nil }
+
+        // Decompress PackBits data
+        var decompressedData: [UInt8] = []
+        let expectedSize = bytesPerRow * height  // 51,840 bytes
+        var offset = headerSize
+
+        while offset < data.count && decompressedData.count < expectedSize {
+            let cmd = Int8(bitPattern: data[offset])
+            offset += 1
+
+            if cmd >= 0 {
+                // Literal run: copy next (cmd + 1) bytes
+                let count = Int(cmd) + 1
+                for _ in 0..<count {
+                    if offset < data.count && decompressedData.count < expectedSize {
+                        decompressedData.append(data[offset])
+                        offset += 1
+                    }
+                }
+            } else if cmd != -128 {
+                // Repeat run: repeat next byte (-cmd + 1) times
+                let count = Int(-cmd) + 1
+                if offset < data.count {
+                    let repeatByte = data[offset]
+                    offset += 1
+                    for _ in 0..<count {
+                        if decompressedData.count < expectedSize {
+                            decompressedData.append(repeatByte)
+                        }
+                    }
+                }
+            }
+            // cmd == -128 is a no-op
+        }
+
+        // Render the 1-bit image
+        for y in 0..<height {
+            for x in 0..<width {
+                let byteIndex = y * bytesPerRow + (x / 8)
+                let bitIndex = 7 - (x % 8)  // MSB first
+
+                let bufferIdx = (y * width + x) * 4
+
+                if byteIndex < decompressedData.count {
+                    let bit = (decompressedData[byteIndex] >> bitIndex) & 1
+                    // bit 0 = white (palette[0]), bit 1 = black (palette[1])
+                    let color = bit == 0 ? color0 : color1
+                    rgbaBuffer[bufferIdx] = color.r
+                    rgbaBuffer[bufferIdx + 1] = color.g
+                    rgbaBuffer[bufferIdx + 2] = color.b
+                } else {
+                    // Default to white if data runs out
+                    rgbaBuffer[bufferIdx] = color0.r
+                    rgbaBuffer[bufferIdx + 1] = color0.g
+                    rgbaBuffer[bufferIdx + 2] = color0.b
+                }
+                rgbaBuffer[bufferIdx + 3] = 255
             }
         }
 

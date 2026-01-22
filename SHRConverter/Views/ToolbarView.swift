@@ -1,62 +1,203 @@
 import SwiftUI
 
+// MARK: - Labeled Toolbar Button (CyanHero style)
+
+struct LabeledToolbarButton: View {
+    let icon: String
+    let label: String
+    var isActive: Bool = false
+    var isDisabled: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: icon)
+                    .font(.system(size: 18))
+                    .frame(width: 36, height: 36)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(isActive ? Color.accentColor.opacity(0.2) : Color.clear)
+                    )
+                    .foregroundColor(isDisabled ? Color(NSColor.tertiaryLabelColor) : (isActive ? .accentColor : Color(NSColor.labelColor)))
+
+                Text(label)
+                    .font(.system(size: 9))
+                    .foregroundColor(isDisabled ? Color(NSColor.tertiaryLabelColor) : (isActive ? .accentColor : Color(NSColor.secondaryLabelColor)))
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .help(label)
+    }
+}
+
 // MARK: - Main Toolbar View
 
 struct MainToolbarView: View {
     @Binding var zoomScale: CGFloat
     @Binding var cropMode: Bool
     let canUndo: Bool
+    let hasImage: Bool
     let onImport: () -> Void
     let onExport: () -> Void
     let onUndo: () -> Void
+    let onRotateLeft: () -> Void
+    let onRotateRight: () -> Void
+    let onFlipHorizontal: () -> Void
+    let onFlipVertical: () -> Void
+
+    private var zoomPercentage: Int {
+        if zoomScale < 0 {
+            return 100
+        }
+        return Int(zoomScale * 100)
+    }
+
+    private var isFitMode: Bool {
+        zoomScale < 0
+    }
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Left side: Import/Export buttons
-            HStack(spacing: 4) {
-                Button(action: onImport) {
-                    Label("Import", systemImage: "square.and.arrow.down")
-                }
-                .buttonStyle(.borderedProminent)
+        HStack(spacing: 12) {
+            // Import/Export group (left side)
+            HStack(spacing: 8) {
+                LabeledToolbarButton(
+                    icon: "square.and.arrow.down",
+                    label: "Import",
+                    action: onImport
+                )
 
-                Button(action: onExport) {
-                    Label("Export", systemImage: "square.and.arrow.up")
-                }
-                .buttonStyle(.bordered)
+                LabeledToolbarButton(
+                    icon: "square.and.arrow.up",
+                    label: "Export",
+                    action: onExport
+                )
             }
 
             Spacer()
 
-            // Right side: Tools
-            HStack(spacing: 12) {
-                // Zoom controls
-                ZoomControlsView(zoomScale: $zoomScale)
+            // Zoom group
+            HStack(spacing: 8) {
+                LabeledToolbarButton(
+                    icon: "minus.magnifyingglass",
+                    label: "Zoom -",
+                    isDisabled: isFitMode,
+                    action: zoomOut
+                )
 
-                Divider()
-                    .frame(height: 20)
+                // Zoom percentage display
+                VStack(spacing: 2) {
+                    Text("\(zoomPercentage)%")
+                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        .frame(width: 50, height: 36)
+                        .foregroundColor(Color(NSColor.labelColor))
 
-                // Crop and Undo
-                CropToolsView(
-                    cropMode: $cropMode,
-                    canUndo: canUndo,
-                    onUndo: onUndo
+                    Text("Zoom")
+                        .font(.system(size: 9))
+                        .foregroundColor(Color(NSColor.secondaryLabelColor))
+                }
+
+                LabeledToolbarButton(
+                    icon: "plus.magnifyingglass",
+                    label: "Zoom +",
+                    action: zoomIn
+                )
+
+                LabeledToolbarButton(
+                    icon: "arrow.up.backward.and.arrow.down.forward",
+                    label: "Fit",
+                    isActive: isFitMode,
+                    action: fitToWindow
+                )
+            }
+
+            Divider()
+                .frame(height: 50)
+
+            // Transform group (Rotate & Flip)
+            HStack(spacing: 8) {
+                LabeledToolbarButton(
+                    icon: "rotate.left",
+                    label: "Rotate L",
+                    isDisabled: !hasImage,
+                    action: onRotateLeft
+                )
+
+                LabeledToolbarButton(
+                    icon: "rotate.right",
+                    label: "Rotate R",
+                    isDisabled: !hasImage,
+                    action: onRotateRight
+                )
+
+                LabeledToolbarButton(
+                    icon: "arrow.left.and.right.righttriangle.left.righttriangle.right",
+                    label: "Flip H",
+                    isDisabled: !hasImage,
+                    action: onFlipHorizontal
+                )
+
+                LabeledToolbarButton(
+                    icon: "arrow.up.and.down.righttriangle.up.righttriangle.down",
+                    label: "Flip V",
+                    isDisabled: !hasImage,
+                    action: onFlipVertical
+                )
+            }
+
+            Divider()
+                .frame(height: 50)
+
+            // Crop/Undo group
+            HStack(spacing: 8) {
+                LabeledToolbarButton(
+                    icon: "crop",
+                    label: "Crop",
+                    isActive: cropMode,
+                    action: { cropMode.toggle() }
+                )
+
+                LabeledToolbarButton(
+                    icon: "arrow.uturn.backward",
+                    label: "Undo",
+                    isDisabled: !canUndo,
+                    action: onUndo
                 )
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(Color(NSColor.controlBackgroundColor))
+    }
+
+    private func zoomOut() {
+        if zoomScale < 0 {
+            zoomScale = 1.0
+        }
+        zoomScale = max(0.25, zoomScale - 0.25)
+    }
+
+    private func zoomIn() {
+        if zoomScale < 0 {
+            zoomScale = 1.0
+        }
+        zoomScale = min(8.0, zoomScale + 0.25)
+    }
+
+    private func fitToWindow() {
+        zoomScale = -1.0
     }
 }
 
-// MARK: - Zoom Controls
+// MARK: - Zoom Controls (Legacy - kept for compatibility)
 
 struct ZoomControlsView: View {
     @Binding var zoomScale: CGFloat
 
     private var zoomPercentage: Int {
         if zoomScale < 0 {
-            return 100  // Fit mode
+            return 100
         }
         return Int(zoomScale * 100)
     }
@@ -117,7 +258,7 @@ struct ZoomControlsView: View {
     }
 }
 
-// MARK: - Crop Tools
+// MARK: - Crop Tools (Legacy - kept for compatibility)
 
 struct CropToolsView: View {
     @Binding var cropMode: Bool
@@ -147,24 +288,36 @@ struct CropToolsView: View {
 // MARK: - Preview
 
 #Preview {
-    VStack {
+    VStack(spacing: 0) {
         MainToolbarView(
             zoomScale: .constant(1.0),
             cropMode: .constant(false),
             canUndo: true,
+            hasImage: true,
             onImport: {},
             onExport: {},
-            onUndo: {}
+            onUndo: {},
+            onRotateLeft: {},
+            onRotateRight: {},
+            onFlipHorizontal: {},
+            onFlipVertical: {}
         )
+
+        Divider()
 
         MainToolbarView(
             zoomScale: .constant(-1.0),
             cropMode: .constant(true),
             canUndo: false,
+            hasImage: false,
             onImport: {},
             onExport: {},
-            onUndo: {}
+            onUndo: {},
+            onRotateLeft: {},
+            onRotateRight: {},
+            onFlipHorizontal: {},
+            onFlipVertical: {}
         )
     }
-    .frame(width: 600)
+    .frame(width: 800)
 }

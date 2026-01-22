@@ -228,9 +228,14 @@ struct ColorSwatchView: View {
     private func openColorPanel() {
         let colorPanel = NSColorPanel.shared
         let originalColor = color.nsColor
-        colorPanel.color = originalColor
+
+        // IMPORTANT: Clear target/action FIRST to prevent the old handler from firing
+        // when we set the new color (since isContinuous = true)
         colorPanel.setTarget(nil)
         colorPanel.setAction(nil)
+
+        // Now set the color - no action will fire since target is nil
+        colorPanel.color = originalColor
         colorPanel.isContinuous = true
         colorPanel.showsAlpha = false
 
@@ -437,9 +442,14 @@ struct AllPalettesView: View {
     private func openColorPicker(lineIndex: Int, colorIndex: Int, currentColor: PaletteColor) {
         let colorPanel = NSColorPanel.shared
         let originalColor = currentColor.nsColor
-        colorPanel.color = originalColor
+
+        // IMPORTANT: Clear target/action FIRST to prevent the old handler from firing
+        // when we set the new color (since isContinuous = true)
         colorPanel.setTarget(nil)
         colorPanel.setAction(nil)
+
+        // Now set the color - no action will fire since target is nil
+        colorPanel.color = originalColor
         colorPanel.isContinuous = true
         colorPanel.showsAlpha = false
 

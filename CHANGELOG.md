@@ -9,8 +9,10 @@ Complete redesign of the application interface with a modern, streamlined layout
 - **New Toolbar Layout**: Reorganized toolbar with Import/Export buttons on the left, zoom controls and tools on the right
 - **Bottom Info Bar**: File information and palette display moved to a dedicated info bar at the bottom of the window
 - **Status Bar**: New status bar showing real-time counts for Imported, Selected, Removed, and Exported images
-- **Export Sheet**: New modal export dialog with format checkboxes (PNG, JPEG, TIFF, BMP, GIF) and scale options (1x, 2x, 4x)
+- **Export Sheet**: New modal export dialog with format checkboxes (PNG, JPEG, TIFF, GIF, HEIC) and scale options (1x, 2x, 4x, 8x)
+- **Mutually Exclusive Export Formats**: "Original" format and modern formats are now mutually exclusive - selecting Original automatically deselects modern formats and vice versa
 - **Cleaner Preview Area**: Removed redundant status messages from preview panel for a cleaner look
+- **Image Browser Default Visibility**: The sidebar now shows by default when the app opens
 
 ### Live Palette Editing
 
@@ -18,6 +20,11 @@ Revolutionary new feature allowing real-time palette color modification:
 
 - **Click-to-Edit Colors**: Click any color swatch in the palette to open the macOS color picker
 - **Live Preview**: Modified colors instantly update the preview image in real-time
+- **All Palettes Editor**: New "Edit [count]" button for 3200-color and multi-palette images opens a sheet showing all palettes with:
+  - Scrollable list of all 200 scanlines (3200-color mode) or all palettes
+  - Current scanline highlighted with accent color
+  - Click any color to edit with the system color picker
+  - Hover tooltips showing line number, color index, and hex value
 - **Per-Format Support**: Palette editing works for:
   - Apple IIgs SHR (standard and 3200-color modes)
   - Apple II HGR (6-color artifact palette)
@@ -34,11 +41,12 @@ Revolutionary new feature allowing real-time palette color modification:
 
 Intelligent palette visualization that adapts to the image format:
 
-- **Scanline-Linked Palettes**: For 3200-color mode images, the palette display updates as you move the mouse over different scanlines
+- **Live Scanline Tracking**: For 3200-color mode images, hovering over the preview image updates the palette display in real-time to show the palette for that scanline
 - **Multi-Palette Support**: SHR images with SCB-controlled palettes show the active palette for the current scanline
 - **Palette Type Labels**: Clear indication of palette type (Fixed, Single, Multiple, Per-scanline)
 - **Color Tooltips**: Hover over any color to see its index and hex value
-- **Scrollable Large Palettes**: Palettes with more than 32 colors display in a scrollable view
+- **Adaptive Large Palette Layout**: Palettes with 256 colors now display in a compact grid (64 colors per row) without scrolling, using the full horizontal space
+- **Help View**: New Help menu option explaining all app features and supported formats
 
 ### New Palette System Architecture
 
@@ -73,6 +81,8 @@ Complete palette infrastructure for extraction, display, and re-rendering:
 
 ### Bug Fixes
 
+- **Fixed BMP palette extraction**: BMP files with 256-color palettes were only showing 16 colors. The palette offset was incorrectly hardcoded to 54 bytes. Now correctly calculates the offset as `14 + DIB header size` and respects the `colorsUsed` field from the BMP header.
+
 - **Fixed 3200-color image distortion when editing palette**: Different 3200-color format variants (standard, 3201/Packed, DreamGrafix) have different data layouts. The renderer now properly detects the format and extracts pixel data from the correct location.
 
 - **Fixed colors changing immediately when clicking palette**: Opening the color picker caused immediate color changes due to color space conversion. Fixed by using consistent sRGB color space and adding change tolerance detection.
@@ -87,17 +97,19 @@ Complete palette infrastructure for extraction, display, and re-rendering:
 - `SHRConverter/Decoders/PaletteExtractor.swift` - Palette extraction for all supported formats
 - `SHRConverter/Decoders/PaletteRenderer.swift` - Image re-rendering with modified palettes
 - `SHRConverter/Views/ToolbarView.swift` - New toolbar component with zoom controls
-- `SHRConverter/Views/PaletteView.swift` - Palette display with color editing
+- `SHRConverter/Views/PaletteView.swift` - Palette display with color editing and All Palettes sheet
 - `SHRConverter/Views/InfoBarView.swift` - Bottom info bar combining file info and palette
 - `SHRConverter/Views/StatusBarView.swift` - Status counter bar
 - `SHRConverter/Views/ExportSheet.swift` - Export dialog with format and scale options
+- `SHRConverter/Views/HelpView.swift` - Help documentation view with feature descriptions
 
 ### Files Modified
 
-- `SHRConverter/Views/ContentView.swift` - Major restructure for new layout, palette editing integration, status tracking
+- `SHRConverter/Views/ContentView.swift` - Major restructure for new layout, palette editing integration, status tracking, scanline tracking overlay for 3200-color mode
 - `SHRConverter/Models/DiskCatalog.swift` - Added paletteInfo and modifiedPalette to ImageItem
 - `SHRConverter/Decoders/SHRDecoder.swift` - 3201 format support, DreamGrafix detection improvements
 - `SHRConverter/Decoders/DreamGrafixDecoder.swift` - Enhanced 3200-color mode handling
+- `SHRConverter/SHRConverterApp.swift` - Added Help menu with HelpView
 
 ---
 
