@@ -40,6 +40,25 @@ File Management
 📁 Folder Support: Recursively scan folders for image files<br>
 🔄 Batch Processing: Process hundreds of files at once<br>
 🗑️ Clear All: Quick clear button to reset workspace<br>
+📂 Recent Folders: Quick access to previously opened folders from File menu<br>
+
+Image Tools
+
+🔄 Rotate: Rotate images 90° left or right<br>
+↔️ Flip: Mirror images horizontally or vertically<br>
+🔲 Invert: Swap colors (great for MacPaint/1-bit images)<br>
+✂️ Crop: Select and crop any region of an image<br>
+📋 Copy: Copy current image to clipboard for pasting into other apps<br>
+👁️ Before/After: Toggle between original and modified view<br>
+↩️ Undo: Revert up to 10 transformations (Cmd+Z)<br>
+📊 Batch Transform: Apply rotate/flip/invert to all selected images at once<br>
+
+Palette Editing
+
+🎨 Live Color Editing: Click any palette color to modify it in real-time<br>
+🖼️ Supported Formats: SHR, 3200-color, C64, Amiga IFF, Atari ST, ZX Spectrum, MacPaint, and more<br>
+📍 Scanline Palettes: For 3200-color images, hover to see per-scanline palettes<br>
+🔄 Reset: One-click reset to restore original palette<br>
 
 Export & Conversion
 
@@ -48,6 +67,13 @@ Export & Conversion
 📦 Batch Export: Export all images to chosen format<br>
 ✏️ Custom Naming: Export with patterns like {name}_{n} or converted_{n}<br>
 🎨 Format Preservation: Maintains authentic retro look with proper color palettes<br>
+
+User Interface
+
+🔍 Adjustable Thumbnails: Slider to resize preview thumbnails (50-150px)<br>
+ℹ️ Image Info: Click info button to see dimensions, file size, color count, format details<br>
+📊 Status Bar: Track imported, selected, removed, and exported file counts<br>
+🎛️ Modern Toolbar: CyanHero-style buttons with icons and labels<br>
 
 Smart Detection
 
