@@ -10,7 +10,8 @@ Was bored and added then more graphic formats...
 **NEW, now with files browser for .2mg, .po, .do, .dsk and .hdv and even C64 volumes**<br>
 Just drag and drop your disk images in the app and extract your pics from there. You also can export any file from within the app to your Mac.
 
-<img width="1445" height="887" alt="Screenshot 2026-01-12 at 16 38 14" src="https://github.com/user-attachments/assets/35768c53-519d-4fe0-af6f-d1694b160b83" />
+<img width="1608" height="1004" alt="Screenshot 2026-01-23 at 15 18 40" src="https://github.com/user-attachments/assets/373bd687-4562-4ae3-ba87-b657163663a7" />
+
 
 📂 Supported Formats (10 Platforms)
 Retro Platforms
