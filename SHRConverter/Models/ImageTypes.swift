@@ -36,6 +36,9 @@ enum AppleIIImageType: Equatable {
     case PCX(width: Int, height: Int, bitsPerPixel: Int)
     case BMP(width: Int, height: Int, bitsPerPixel: Int)
     case MacPaint
+    case MSX(mode: Int, colors: Int)
+    case BBCMicro(mode: Int, colors: Int)
+    case TRS80(model: String, resolution: String)
     case ModernImage(format: String, width: Int, height: Int)
     case Unknown
     
@@ -65,6 +68,33 @@ enum AppleIIImageType: Equatable {
         case .PCX(let width, let height, _): return (width, height)
         case .BMP(let width, let height, _): return (width, height)
         case .MacPaint: return (576, 720)
+        case .MSX(let mode, _):
+            switch mode {
+            case 1: return (256, 192)  // Screen 1 (text/tile mode)
+            case 2: return (256, 192)  // Screen 2 (Graphics 2)
+            case 3: return (64, 48)    // Screen 3 (Multicolor)
+            case 4: return (256, 212)  // Screen 4 (Graphics 3)
+            case 5: return (256, 212)  // Screen 5 (Graphics 4)
+            case 6: return (512, 212)  // Screen 6 (Graphics 5)
+            case 7: return (512, 212)  // Screen 7 (Graphics 6)
+            case 8: return (256, 212)  // Screen 8 (Graphics 7)
+            default: return (256, 192)
+            }
+        case .BBCMicro(let mode, _):
+            switch mode {
+            case 0: return (640, 256)  // 2 colors
+            case 1: return (320, 256)  // 4 colors
+            case 2: return (160, 256)  // 16 colors (logical)
+            case 4: return (320, 256)  // 2 colors
+            case 5: return (160, 256)  // 4 colors
+            default: return (320, 256)
+            }
+        case .TRS80(_, let resolution):
+            if resolution.contains("128x48") { return (128, 48) }
+            else if resolution.contains("256x192") { return (256, 192) }
+            else if resolution.contains("320x200") { return (320, 200) }  // CoCo
+            else if resolution.contains("640x200") { return (640, 200) }  // CoCo 3
+            else { return (128, 48) }
         case .ModernImage(_, let width, let height): return (width, height)
         case .Unknown: return (0, 0)
         }
@@ -93,11 +123,14 @@ enum AppleIIImageType: Equatable {
         case .PCX(let width, let height, let bpp): return "PCX (\(width)x\(height), \(bpp)-bit)"
         case .BMP(let width, let height, let bpp): return "BMP (\(width)x\(height), \(bpp)-bit)"
         case .MacPaint: return "MacPaint (576x720, 1-bit)"
+        case .MSX(let mode, let colors): return "MSX Screen \(mode) (\(colors) colors)"
+        case .BBCMicro(let mode, let colors): return "BBC Micro MODE \(mode) (\(colors) colors)"
+        case .TRS80(let model, let resolution): return "TRS-80 \(model) (\(resolution))"
         case .ModernImage(let format, let width, let height): return "\(format) (\(width)x\(height))"
         case .Unknown: return "Unknown"
         }
     }
-    
+
     var colorDepth: String {
         switch self {
         case .SHR(let mode, _, _):
@@ -125,6 +158,9 @@ enum AppleIIImageType: Equatable {
         case .PCX(_, _, let bpp): return "\(bpp)-bit"
         case .BMP(_, _, let bpp): return "\(bpp)-bit"
         case .MacPaint: return "1-bit (2 colors)"
+        case .MSX(_, let colors): return "\(colors) colors"
+        case .BBCMicro(_, let colors): return "\(colors) colors"
+        case .TRS80: return "1-bit (2 colors)"
         case .ModernImage(let format, _, _):
             switch format.uppercased() {
             case "PNG", "TIFF": return "24-bit/32-bit"

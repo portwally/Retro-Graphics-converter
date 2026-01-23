@@ -11,7 +11,7 @@ Just drag and drop your disk images in the app and extract your pics from there.
 
 <img width="1608" height="1004" alt="Screenshot 2026-01-23 at 21 27 44" src="https://github.com/user-attachments/assets/f9526914-2f72-41f8-bd90-cebcfd1576f4" />
 
-📂 Supported Formats (10 Platforms)
+📂 Supported Formats (13 Platforms)
 Retro Platforms
 
 🍎 Apple II/IIGS: SHR (Standard/3200/3200 Packed/816Paint/DreamGrafix), HGR, DHGR, PNT, PIC<br>
@@ -20,6 +20,9 @@ Retro Platforms
 💾 Commodore 64: Koala Painter, HIRES, Art Studio, D64 disk images<br>
 🎮 ZX Spectrum: SCR (6912 bytes)<br>
 💻 Amstrad CPC: Mode 0 (16 colors), Mode 1 (4 colors)<br>
+📺 MSX/MSX2: Screen 1, 2, 5, 8 (SC1/SC2/SC5/SC8 files, BSAVE format)<br>
+📻 BBC Micro: MODE 0-5 (2/4/16 colors, 10KB/20KB files)<br>
+🖳 TRS-80/CoCo: Model I/III block graphics, CoCo PMODE 3/4, CoCo 3 (16 colors)<br>
 🖨️ PC/DOS: PCX (1/2/4/8/24-bit with RLE compression)<br>
 🪟 Windows: BMP (1/4/8/24-bit)<br>
 🖼️ Classic Mac: MacPaint (1-bit with PackBits compression)<br>
@@ -55,7 +58,7 @@ Image Tools
 Palette Editing
 
 🎨 Live Color Editing: Click any palette color to modify it in real-time<br>
-🖼️ Supported Formats: SHR, 3200-color, C64, Amiga IFF, Atari ST, ZX Spectrum, MacPaint, and more<br>
+🖼️ Supported Formats: SHR, 3200-color, C64, Amiga IFF, Atari ST, ZX Spectrum, MSX, BBC Micro, TRS-80/CoCo, MacPaint, and more<br>
 📍 Scanline Palettes: For 3200-color images, hover to see per-scanline palettes<br>
 🔄 Reset: One-click reset to restore original palette<br>
 
@@ -99,9 +102,9 @@ Smart Detection
 
 Technical Highlights
 
-🎨 Accurate Color Palettes: C64, Apple II, EGA, CGA, ZX Spectrum palettes<br>
+🎨 Accurate Color Palettes: C64, Apple II, EGA, CGA, ZX Spectrum, MSX TMS9918, BBC Micro, CoCo palettes<br>
 🗜️ Decompression Support: RLE (PCX), PackBits (MacPaint), PackBytes (PNT/SHR), LZW (DreamGrafix), IFF compression<br>
-🔄 Format-Specific Decoding: Planar, chunky, interleaved bitmap handling<br>
+🔄 Format-Specific Decoding: Planar, chunky, interleaved, tile-based bitmap handling<br>
 📊 Resolution Accuracy: Proper aspect ratios and pixel layouts<br>
 
 🚀 Use Cases

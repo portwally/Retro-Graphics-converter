@@ -79,6 +79,15 @@ struct PaletteExtractor {
         case .MacPaint:
             return createMacPaintPalette()
 
+        case .MSX(let mode, _):
+            return createMSXPalette(mode: mode)
+
+        case .BBCMicro(let mode, _):
+            return createBBCMicroPalette(mode: mode)
+
+        case .TRS80(let model, _):
+            return createTRS80Palette(model: model)
+
         case .ModernImage:
             return nil  // Modern images don't have indexed palettes
 
@@ -866,5 +875,92 @@ struct PaletteExtractor {
             PaletteColor(r: 0, g: 0, b: 0)         // Black
         ]
         return PaletteInfo(singlePalette: colors, platformName: "MacPaint")
+    }
+
+    // MARK: - MSX Palette (TMS9918)
+
+    private static func createMSXPalette(mode: Int) -> PaletteInfo {
+        let colors: [PaletteColor] = [
+            PaletteColor(r: 0x00, g: 0x00, b: 0x00),  // 0: Transparent (rendered as black)
+            PaletteColor(r: 0x00, g: 0x00, b: 0x00),  // 1: Black
+            PaletteColor(r: 0x21, g: 0xC8, b: 0x42),  // 2: Medium Green
+            PaletteColor(r: 0x5E, g: 0xDC, b: 0x78),  // 3: Light Green
+            PaletteColor(r: 0x54, g: 0x55, b: 0xED),  // 4: Dark Blue
+            PaletteColor(r: 0x7D, g: 0x76, b: 0xFC),  // 5: Light Blue
+            PaletteColor(r: 0xD4, g: 0x52, b: 0x4D),  // 6: Dark Red
+            PaletteColor(r: 0x42, g: 0xEB, b: 0xF5),  // 7: Cyan
+            PaletteColor(r: 0xFC, g: 0x55, b: 0x54),  // 8: Medium Red
+            PaletteColor(r: 0xFF, g: 0x79, b: 0x78),  // 9: Light Red
+            PaletteColor(r: 0xD4, g: 0xC1, b: 0x54),  // 10: Dark Yellow
+            PaletteColor(r: 0xE6, g: 0xCE, b: 0x80),  // 11: Light Yellow
+            PaletteColor(r: 0x21, g: 0xB0, b: 0x3B),  // 12: Dark Green
+            PaletteColor(r: 0xC9, g: 0x5B, b: 0xBA),  // 13: Magenta
+            PaletteColor(r: 0xCC, g: 0xCC, b: 0xCC),  // 14: Gray
+            PaletteColor(r: 0xFF, g: 0xFF, b: 0xFF)   // 15: White
+        ]
+        return PaletteInfo(singlePalette: colors, platformName: "MSX Screen \(mode)")
+    }
+
+    // MARK: - BBC Micro Palette
+
+    private static func createBBCMicroPalette(mode: Int) -> PaletteInfo {
+        let fullPalette: [PaletteColor] = [
+            PaletteColor(r: 0x00, g: 0x00, b: 0x00),  // 0: Black
+            PaletteColor(r: 0xFF, g: 0x00, b: 0x00),  // 1: Red
+            PaletteColor(r: 0x00, g: 0xFF, b: 0x00),  // 2: Green
+            PaletteColor(r: 0xFF, g: 0xFF, b: 0x00),  // 3: Yellow
+            PaletteColor(r: 0x00, g: 0x00, b: 0xFF),  // 4: Blue
+            PaletteColor(r: 0xFF, g: 0x00, b: 0xFF),  // 5: Magenta
+            PaletteColor(r: 0x00, g: 0xFF, b: 0xFF),  // 6: Cyan
+            PaletteColor(r: 0xFF, g: 0xFF, b: 0xFF)   // 7: White
+        ]
+
+        let colors: [PaletteColor]
+        switch mode {
+        case 0, 4:  // 2 colors
+            colors = [fullPalette[0], fullPalette[7]]
+        case 1, 5:  // 4 colors
+            colors = [fullPalette[0], fullPalette[1], fullPalette[3], fullPalette[7]]
+        case 2:     // 16 logical colors (8 physical + flash)
+            colors = fullPalette + fullPalette  // Duplicate for flash colors
+        default:
+            colors = fullPalette
+        }
+
+        return PaletteInfo(singlePalette: colors, platformName: "BBC Micro MODE \(mode)")
+    }
+
+    // MARK: - TRS-80 / CoCo Palette
+
+    private static func createTRS80Palette(model: String) -> PaletteInfo {
+        if model.contains("CoCo") {
+            // Color Computer palette
+            let colors: [PaletteColor] = [
+                PaletteColor(r: 0x00, g: 0xFF, b: 0x00),  // 0: Green
+                PaletteColor(r: 0xFF, g: 0xFF, b: 0x00),  // 1: Yellow
+                PaletteColor(r: 0x00, g: 0x00, b: 0xFF),  // 2: Blue
+                PaletteColor(r: 0xFF, g: 0x00, b: 0x00),  // 3: Red
+                PaletteColor(r: 0xFF, g: 0xFF, b: 0xFF),  // 4: Buff (White)
+                PaletteColor(r: 0x00, g: 0xFF, b: 0xFF),  // 5: Cyan
+                PaletteColor(r: 0xFF, g: 0x00, b: 0xFF),  // 6: Magenta
+                PaletteColor(r: 0xFF, g: 0x80, b: 0x00),  // 7: Orange
+                PaletteColor(r: 0x00, g: 0x00, b: 0x00),  // 8: Black
+                PaletteColor(r: 0x00, g: 0x80, b: 0x00),  // 9: Dark Green
+                PaletteColor(r: 0x00, g: 0x00, b: 0x80),  // 10: Dark Blue
+                PaletteColor(r: 0x80, g: 0x00, b: 0x00),  // 11: Dark Red
+                PaletteColor(r: 0x80, g: 0x80, b: 0x80),  // 12: Gray
+                PaletteColor(r: 0x00, g: 0x80, b: 0x80),  // 13: Dark Cyan
+                PaletteColor(r: 0x80, g: 0x00, b: 0x80),  // 14: Dark Magenta
+                PaletteColor(r: 0x80, g: 0x40, b: 0x00)   // 15: Brown
+            ]
+            return PaletteInfo(singlePalette: colors, platformName: "TRS-80 \(model)")
+        } else {
+            // Model I/III - green phosphor
+            let colors: [PaletteColor] = [
+                PaletteColor(r: 0x00, g: 0x20, b: 0x00),  // Off (dark green)
+                PaletteColor(r: 0x33, g: 0xFF, b: 0x33)   // On (bright green)
+            ]
+            return PaletteInfo(singlePalette: colors, platformName: "TRS-80 \(model)")
+        }
     }
 }

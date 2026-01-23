@@ -39,6 +39,9 @@
 		3E75F2612F17200000C49434 /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2602F17200000C49434 /* HelpView.swift */; };
 		3E75F2632F18000000C49434 /* ScreensaverExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2622F18000000C49434 /* ScreensaverExportSheet.swift */; };
 		3E75F2652F19000000C49434 /* MovieExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2642F19000000C49434 /* MovieExportSheet.swift */; };
+		3E75F2672F1A000000C49434 /* MSXDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2662F1A000000C49434 /* MSXDecoder.swift */; };
+		3E75F2692F1A000000C49434 /* BBCMicroDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2682F1A000000C49434 /* BBCMicroDecoder.swift */; };
+		3E75F26B2F1A000000C49434 /* TRS80Decoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F26A2F1A000000C49434 /* TRS80Decoder.swift */; };
 		3E9F97B22F156505009196E9 /* ImageCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9F97B12F156505009196E9 /* ImageCropView.swift */; };
 /* End PBXBuildFile section */
 
@@ -75,6 +78,9 @@
 		3E75F2602F17200000C49434 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 		3E75F2622F18000000C49434 /* ScreensaverExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreensaverExportSheet.swift; sourceTree = "<group>"; };
 		3E75F2642F19000000C49434 /* MovieExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieExportSheet.swift; sourceTree = "<group>"; };
+		3E75F2662F1A000000C49434 /* MSXDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MSXDecoder.swift; sourceTree = "<group>"; };
+		3E75F2682F1A000000C49434 /* BBCMicroDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BBCMicroDecoder.swift; sourceTree = "<group>"; };
+		3E75F26A2F1A000000C49434 /* TRS80Decoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TRS80Decoder.swift; sourceTree = "<group>"; };
 		3E9C9E9A2EE37BDF00DEE453 /* Retro-Graphics-Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Retro-Graphics-Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E9F97B12F156505009196E9 /* ImageCropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -104,16 +110,19 @@
 				3E75F21D2F11204400C49434 /* AmigaIFFDecoder.swift */,
 				3E75F21E2F11204400C49434 /* AppleIIDecoder.swift */,
 				3E75F21F2F11204400C49434 /* AtariSTDecoder.swift */,
+				3E75F2682F1A000000C49434 /* BBCMicroDecoder.swift */,
 				3E75F2202F11204400C49434 /* C64Decoder.swift */,
 				3E75F2212F11204400C49434 /* DiskImageReader.swift */,
 				3E75F24B2F16300000C49434 /* DreamGrafixDecoder.swift */,
 				3E75F2222F11204400C49434 /* ModernImageDecoder.swift */,
+				3E75F2662F1A000000C49434 /* MSXDecoder.swift */,
 				3E75F2232F11204400C49434 /* PackedSHRDecoder.swift */,
 				3E75F2522F17000000C49434 /* PaletteExtractor.swift */,
 				3E75F25E2F17100000C49434 /* PaletteRenderer.swift */,
 				3E75F2242F11204400C49434 /* PCImageDecoder.swift */,
 				3E75F2252F11204400C49434 /* RetroDecoder.swift */,
 				3E75F2262F11204400C49434 /* SHRDecoder.swift */,
+				3E75F26A2F1A000000C49434 /* TRS80Decoder.swift */,
 			);
 			path = Decoders;
 			sourceTree = "<group>";
@@ -294,6 +303,9 @@
 				3E75F2612F17200000C49434 /* HelpView.swift in Sources */,
 				3E75F2632F18000000C49434 /* ScreensaverExportSheet.swift in Sources */,
 				3E75F2652F19000000C49434 /* MovieExportSheet.swift in Sources */,
+				3E75F2672F1A000000C49434 /* MSXDecoder.swift in Sources */,
+				3E75F2692F1A000000C49434 /* BBCMicroDecoder.swift in Sources */,
+				3E75F26B2F1A000000C49434 /* TRS80Decoder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -430,7 +442,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 460;
+				CURRENT_PROJECT_VERSION = 470;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = ZFE2VJD462;
 				ENABLE_APP_SANDBOX = NO;
@@ -467,7 +479,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 460;
+				CURRENT_PROJECT_VERSION = 470;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=macosx*]" = ZFE2VJD462;

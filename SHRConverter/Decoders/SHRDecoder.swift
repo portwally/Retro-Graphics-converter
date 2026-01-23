@@ -16,6 +16,24 @@ class SHRDecoder {
         if modernFormats.contains(fileExtension) {
             return ModernImageDecoder.decode(data: data, format: fileExtension)
         }
+
+        // MSX formats by extension
+        let msxExtensions = ["sc1", "sc2", "sr2", "sc5", "sr5", "sc8", "sr8"]
+        if msxExtensions.contains(fileExtension) {
+            return MSXDecoder.decode(data: data, filename: filename)
+        }
+
+        // BBC Micro formats by extension
+        let bbcExtensions = ["bbm0", "bbm1", "bbm2", "bbm4", "bbm5", "mode0", "mode1", "mode2", "mode4", "mode5"]
+        if bbcExtensions.contains(fileExtension) {
+            return BBCMicroDecoder.decode(data: data, filename: filename)
+        }
+
+        // TRS-80/CoCo formats by extension
+        let trs80Extensions = ["max", "cm3", "pi3"]
+        if trs80Extensions.contains(fileExtension) {
+            return TRS80Decoder.decode(data: data, filename: filename)
+        }
         
         // Magic byte detection
         if size >= 8 {
@@ -138,6 +156,30 @@ class SHRDecoder {
             return RetroDecoder.decodeZXSpectrum(data: data)
         case 16384:
             return handleSize16384(data: data, fileExtension: fileExtension)
+        case 54272...54279:
+            // MSX Screen 8 (256x212, 8bpp) - may have BSAVE header
+            return MSXDecoder.decodeScreen8(data: data)
+        case 27136...27143:
+            // MSX Screen 5 (256x212, 4bpp) - may have BSAVE header
+            return MSXDecoder.decodeScreen5(data: data)
+        case 14336...14343:
+            // MSX Screen 2 (256x192) - may have BSAVE header
+            return MSXDecoder.decodeScreen2(data: data)
+        case 20480, 20736:
+            // BBC Micro MODE 0/1/2 (20KB)
+            return BBCMicroDecoder.decode(data: data, filename: filename)
+        case 10240, 10496:
+            // BBC Micro MODE 4/5 (10KB)
+            return BBCMicroDecoder.decode(data: data, filename: filename)
+        case 1024:
+            // TRS-80 Model I/III block graphics
+            return TRS80Decoder.decodeBlockGraphics(data: data)
+        case 6144:
+            // CoCo PMODE 3/4 (128x192 or 256x192)
+            return TRS80Decoder.decodePMode4(data: data)
+        case 32000:
+            // CoCo 3 320x200 16-color mode
+            return TRS80Decoder.decodeCoCo3_320(data: data)
         default:
             break
         }

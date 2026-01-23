@@ -69,7 +69,7 @@ struct HelpView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
 
-            Text("Retro Graphics Converter is a powerful tool for viewing, editing, and converting vintage computer graphics from platforms like the Apple II, Apple IIgs, Commodore 64, Amiga, Atari ST, and more.")
+            Text("Retro Graphics Converter is a powerful tool for viewing, editing, and converting vintage computer graphics from platforms like the Apple II, Apple IIgs, Commodore 64, Amiga, Atari ST, MSX, BBC Micro, TRS-80/CoCo, and more.")
                 .font(.body)
 
             Divider()
@@ -469,9 +469,36 @@ struct HelpView: View {
 
             Divider()
 
+            HelpSectionHeader(title: "MSX", icon: "tv")
+
+            FormatRow(format: "Screen 1", description: "Text/tile mode (256x192, 16 colors)")
+            FormatRow(format: "Screen 2", description: "Graphics II mode (256x192, 16 colors)")
+            FormatRow(format: "Screen 5", description: "MSX2 bitmap (256x212, 16 colors)")
+            FormatRow(format: "Screen 8", description: "MSX2 256-color mode (256x212)")
+
+            Divider()
+
+            HelpSectionHeader(title: "BBC Micro", icon: "rectangle.on.rectangle")
+
+            FormatRow(format: "MODE 0", description: "High-res 2-color (640x256)")
+            FormatRow(format: "MODE 1", description: "4-color mode (320x256)")
+            FormatRow(format: "MODE 2", description: "16-color mode (160x256)")
+            FormatRow(format: "MODE 4/5", description: "Reduced memory modes (10KB)")
+
+            Divider()
+
+            HelpSectionHeader(title: "TRS-80 / CoCo", icon: "display")
+
+            FormatRow(format: "Model I/III", description: "Block graphics (128x48)")
+            FormatRow(format: "PMODE 3/4", description: "CoCo graphics (128x192, 256x192)")
+            FormatRow(format: "CoCo 3", description: "Enhanced modes (320x200, 16 colors)")
+
+            Divider()
+
             HelpSectionHeader(title: "Other", icon: "square.grid.2x2")
 
             FormatRow(format: "ZX Spectrum", description: "Spectrum screen files (256x192)")
+            FormatRow(format: "Amstrad CPC", description: "Mode 0/1 graphics (16/4 colors)")
             FormatRow(format: "MacPaint", description: "Classic Mac 1-bit graphics")
 
             Divider()

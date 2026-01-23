@@ -169,6 +169,9 @@ struct ImageItem: Identifiable {
         case .PCX: return "pcx"
         case .BMP: return "bmp"
         case .MacPaint: return "mac"
+        case .MSX(let mode, _): return "sc\(mode)"
+        case .BBCMicro(let mode, _): return "bbm\(mode)"
+        case .TRS80: return "bin"
         case .ModernImage(let format, _, _):
             return format.lowercased()
         case .Unknown: return "bin"
