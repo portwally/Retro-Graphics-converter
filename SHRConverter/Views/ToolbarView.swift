@@ -41,8 +41,10 @@ struct MainToolbarView: View {
     let hasImage: Bool
     let hasModification: Bool
     let hasSelection: Bool
+    let hasImages: Bool
     let onImport: () -> Void
     let onExport: () -> Void
+    let onScreensaver: () -> Void
     let onUndo: () -> Void
     let onRotateLeft: () -> Void
     let onRotateRight: () -> Void
@@ -78,6 +80,13 @@ struct MainToolbarView: View {
                     icon: "square.and.arrow.up",
                     label: "Export",
                     action: onExport
+                )
+
+                LabeledToolbarButton(
+                    icon: "tv",
+                    label: "Screensaver",
+                    isDisabled: !hasImages,
+                    action: onScreensaver
                 )
             }
 
@@ -330,8 +339,10 @@ struct CropToolsView: View {
             hasImage: true,
             hasModification: true,
             hasSelection: false,
+            hasImages: true,
             onImport: {},
             onExport: {},
+            onScreensaver: {},
             onUndo: {},
             onRotateLeft: {},
             onRotateRight: {},
@@ -352,8 +363,10 @@ struct CropToolsView: View {
             hasImage: false,
             hasModification: false,
             hasSelection: true,
+            hasImages: false,
             onImport: {},
             onExport: {},
+            onScreensaver: {},
             onUndo: {},
             onRotateLeft: {},
             onRotateRight: {},

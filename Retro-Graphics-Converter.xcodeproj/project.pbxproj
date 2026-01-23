@@ -37,6 +37,7 @@
 		3E75F25D2F17000000C49434 /* ExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F25C2F17000000C49434 /* ExportSheet.swift */; };
 		3E75F25F2F17100000C49434 /* PaletteRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F25E2F17100000C49434 /* PaletteRenderer.swift */; };
 		3E75F2612F17200000C49434 /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2602F17200000C49434 /* HelpView.swift */; };
+		3E75F2632F18000000C49434 /* ScreensaverExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2622F18000000C49434 /* ScreensaverExportSheet.swift */; };
 		3E9F97B22F156505009196E9 /* ImageCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9F97B12F156505009196E9 /* ImageCropView.swift */; };
 /* End PBXBuildFile section */
 
@@ -71,6 +72,7 @@
 		3E75F25C2F17000000C49434 /* ExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSheet.swift; sourceTree = "<group>"; };
 		3E75F25E2F17100000C49434 /* PaletteRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteRenderer.swift; sourceTree = "<group>"; };
 		3E75F2602F17200000C49434 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
+		3E75F2622F18000000C49434 /* ScreensaverExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreensaverExportSheet.swift; sourceTree = "<group>"; };
 		3E9C9E9A2EE37BDF00DEE453 /* Retro-Graphics-Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Retro-Graphics-Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E9F97B12F156505009196E9 /* ImageCropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -145,6 +147,7 @@
 				3E75F2322F11204400C49434 /* ImageThumbnailView.swift */,
 				3E75F25A2F17000000C49434 /* InfoBarView.swift */,
 				3E75F2582F17000000C49434 /* PaletteView.swift */,
+				3E75F2622F18000000C49434 /* ScreensaverExportSheet.swift */,
 				3E75F2542F17000000C49434 /* StatusBarView.swift */,
 				3E75F2562F17000000C49434 /* ToolbarView.swift */,
 			);
@@ -286,6 +289,7 @@
 				3E75F25D2F17000000C49434 /* ExportSheet.swift in Sources */,
 				3E75F25F2F17100000C49434 /* PaletteRenderer.swift in Sources */,
 				3E75F2612F17200000C49434 /* HelpView.swift in Sources */,
+				3E75F2632F18000000C49434 /* ScreensaverExportSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

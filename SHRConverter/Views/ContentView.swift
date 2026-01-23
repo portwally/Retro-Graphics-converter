@@ -28,6 +28,7 @@ struct ContentView: View {
 
     // New UI state
     @State private var showExportSheet = false
+    @State private var showScreensaverSheet = false
     @State private var currentScanline: Int? = 100
     @State private var removedCount = 0
     @State private var exportedCount = 0
@@ -85,8 +86,10 @@ struct ContentView: View {
                 hasImage: selectedImage != nil,
                 hasModification: selectedImage?.hasPaletteModification == true || selectedImage?.originalData == nil,
                 hasSelection: !selectedImages.isEmpty,
+                hasImages: !imageItems.isEmpty,
                 onImport: { openFiles() },
                 onExport: { showExportSheet = true },
+                onScreensaver: { showScreensaverSheet = true },
                 onUndo: { undoLastAction() },
                 onRotateLeft: { transformImages(transform: .rotateLeft) },
                 onRotateRight: { transformImages(transform: .rotateRight) },
@@ -143,6 +146,15 @@ struct ContentView: View {
                 selectedCount: selectedImages.isEmpty ? (selectedImage != nil ? 1 : imageItems.count) : selectedImages.count,
                 onExport: { formats, scale in
                     performBatchExport(formats: formats, scale: scale)
+                }
+            )
+        }
+        .sheet(isPresented: $showScreensaverSheet) {
+            ScreensaverExportSheet(
+                isPresented: $showScreensaverSheet,
+                selectedCount: selectedImages.isEmpty ? (selectedImage != nil ? 1 : imageItems.count) : selectedImages.count,
+                onExport: { name, scale, openSettings in
+                    exportAsScreensaver(name: name, scale: scale, openSettings: openSettings)
                 }
             )
         }
@@ -467,7 +479,89 @@ struct ContentView: View {
             }
         }
     }
-    
+
+    // MARK: - Screensaver Export
+
+    func exportAsScreensaver(name: String, scale: Int, openSettings: Bool) {
+        // Determine which images to export
+        var itemsToExport: [ImageItem] = []
+
+        if !selectedImages.isEmpty {
+            itemsToExport = imageItems.filter { selectedImages.contains($0.id) }
+        } else if let current = selectedImage {
+            itemsToExport = [current]
+        } else {
+            itemsToExport = imageItems
+        }
+
+        guard !itemsToExport.isEmpty else {
+            statusMessage = "No images to export"
+            return
+        }
+
+        // Create the destination folder
+        let picturesFolder = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Pictures")
+            .appendingPathComponent("Retro Screensavers")
+            .appendingPathComponent(name)
+
+        do {
+            try FileManager.default.createDirectory(at: picturesFolder, withIntermediateDirectories: true)
+        } catch {
+            statusMessage = "Failed to create folder: \(error.localizedDescription)"
+            return
+        }
+
+        isProcessing = true
+        let savedUpscale = upscaleFactor
+        upscaleFactor = scale
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            var totalExported = 0
+
+            for (index, item) in itemsToExport.enumerated() {
+                DispatchQueue.main.async {
+                    self.progressString = "Creating screensaver \(index + 1)/\(itemsToExport.count)"
+                }
+
+                let baseName = item.url.deletingPathExtension().lastPathComponent
+                // Add index to ensure unique filenames
+                let filename = "\(String(format: "%03d", index + 1))_\(baseName).png"
+                let outputURL = picturesFolder.appendingPathComponent(filename)
+
+                if self.saveImage(image: item.image, to: outputURL, format: .png, originalData: nil, originalExtension: "png") {
+                    totalExported += 1
+                }
+            }
+
+            DispatchQueue.main.async {
+                self.upscaleFactor = savedUpscale
+                self.isProcessing = false
+                self.exportedCount += totalExported
+                self.statusMessage = "Created screensaver '\(name)' with \(totalExported) images"
+                self.progressString = ""
+
+                // Open System Settings if requested
+                if openSettings {
+                    self.openScreenSaverSettings()
+                }
+
+                // Reveal in Finder
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: picturesFolder.path)
+            }
+        }
+    }
+
+    private func openScreenSaverSettings() {
+        // Try to open Screen Saver settings
+        // macOS 13+ uses the new System Settings app
+        if let url = URL(string: "x-apple.systempreferences:com.apple.ScreenSaver-Settings.extension") {
+            NSWorkspace.shared.open(url)
+        } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.desktopscreeneffect") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     // MARK: - File Handling
     
     func importCatalogEntries(_ entries: [DiskCatalogEntry]) {
