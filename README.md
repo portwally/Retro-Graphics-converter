@@ -59,7 +59,7 @@ Palette Editing
 
 🎨 Live Color Editing: Click any palette color to modify it in real-time<br>
 🖼️ Supported Formats: SHR, 3200-color, C64, Amiga IFF, Atari ST, ZX Spectrum, MSX, BBC Micro, TRS-80/CoCo, MacPaint, and more<br>
-📍 Scanline Palettes: For 3200-color images, hover to see per-scanline palettes<br>
+📍 Scanline Palettes: For 3200-color images<br>
 🔄 Reset: One-click reset to restore original palette<br>
 
 Export & Conversion
