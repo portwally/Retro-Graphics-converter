@@ -353,6 +353,68 @@ struct HelpView: View {
 
             Text("If you've edited colors in the palette, exported images will use your modified colors. This is great for creating custom color schemes or correcting faded palettes.")
                 .font(.body)
+
+            Divider()
+
+            HelpSectionHeader(title: "Create a Screensaver", icon: "tv")
+
+            Text("Turn your retro graphics collection into a macOS screensaver:")
+                .font(.body)
+
+            NumberedStep(number: 1, title: "Select Images", description: "Select the images you want in your screensaver (or leave unselected for all)")
+
+            NumberedStep(number: 2, title: "Click Screensaver", description: "Click the Screensaver button in the toolbar")
+
+            NumberedStep(number: 3, title: "Configure", description: "Enter a name and choose a scale (4x recommended for modern displays)")
+
+            NumberedStep(number: 4, title: "Create", description: "Click 'Create Screensaver' - images are saved to ~/Pictures/Retro Screensavers/")
+
+            Text("Setting up in System Settings:")
+                .font(.headline)
+                .padding(.top, 8)
+
+            NumberedStep(number: 1, title: "Open Settings", description: "The Wallpaper & Screen Saver panel opens automatically")
+
+            NumberedStep(number: 2, title: "Select Screen Saver", description: "Click 'Screen Saver' at the top of the panel")
+
+            NumberedStep(number: 3, title: "Choose Style", description: "Pick a style like Shuffle, Hello, or Shifting Tiles")
+
+            NumberedStep(number: 4, title: "Add Folder", description: "Click the preview image, then 'Add Folder...'")
+
+            NumberedStep(number: 5, title: "Select Your Folder", description: "Navigate to Pictures → Retro Screensavers → your folder name")
+
+            BulletPoint(text: "Your retro graphics will now display as your Mac screensaver!")
+
+            Divider()
+
+            HelpSectionHeader(title: "Create a Movie", icon: "film")
+
+            Text("Export your retro graphics as a video slideshow:")
+                .font(.body)
+
+            NumberedStep(number: 1, title: "Select Images", description: "Select the images you want in your movie (or leave unselected for all)")
+
+            NumberedStep(number: 2, title: "Click Movie", description: "Click the Movie button in the toolbar")
+
+            NumberedStep(number: 3, title: "Choose Format", description: "Select MP4 (universal) or MOV (macOS)")
+
+            NumberedStep(number: 4, title: "Configure Settings", description: "Set duration per image, transition style, resolution, and codec")
+
+            NumberedStep(number: 5, title: "Create", description: "Click 'Create Movie' and choose where to save")
+
+            Text("Movie Options:")
+                .font(.headline)
+                .padding(.top, 8)
+
+            BulletPoint(text: "**Duration** - How long each image displays (1-10 seconds)")
+
+            BulletPoint(text: "**Transitions** - None, Crossfade, Fade to Black, Slides, Wipes, Zooms, or Random")
+
+            BulletPoint(text: "**Resolution** - 720p, 1080p, or 4K output")
+
+            BulletPoint(text: "**Codec** - H.264 (compatible everywhere) or H.265 (better quality, smaller files)")
+
+            BulletPoint(text: "**Scale** - 2x, 4x, or 8x pixel scaling with nearest-neighbor interpolation")
         }
     }
 

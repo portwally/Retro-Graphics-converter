@@ -68,6 +68,22 @@ Export & Conversion
 ✏️ Custom Naming: Export with patterns like {name}_{n} or converted_{n}<br>
 🎨 Format Preservation: Maintains authentic retro look with proper color palettes<br>
 
+Screensaver Export
+
+📺 Create macOS Screensavers: Export your retro graphics as a folder for macOS photo screensavers<br>
+🖥️ Auto-Setup: Automatically opens System Settings to configure your screensaver<br>
+📏 Scale Options: 2x, 4x, or 8x scaling for crisp pixels on modern displays<br>
+📂 Organized Storage: Images saved to ~/Pictures/Retro Screensavers/<br>
+
+Movie Export
+
+🎬 Video Slideshow: Create MP4 or MOV videos from your images<br>
+⏱️ Timing Control: Set display duration per image (1-10 seconds)<br>
+🔀 Transitions: Crossfade, Fade to Black, Slides, Wipes, Zooms, or Random<br>
+📺 Resolution: Export in 720p, 1080p, or 4K<br>
+🎥 Codecs: H.264 (universal compatibility) or H.265/HEVC (better quality, smaller files)<br>
+📏 Pixel-Perfect: Nearest-neighbor scaling preserves the authentic retro look<br>
+
 User Interface
 
 🔍 Adjustable Thumbnails: Slider to resize preview thumbnails (50-150px)<br>
@@ -97,6 +113,8 @@ Technical Highlights
 📚 Collection Management: Browse and organize retro graphics libraries<br>
 🖼️ Comparison: View retro and modern images side-by-side<br>
 💿 Archive Processing: Extract and convert graphics from disk images (.2mg, .po, .do, .dsk, .hdv, .d64)<br>
+📺 Screensavers: Turn your retro art collection into a beautiful macOS screensaver<br>
+🎬 Video Slideshows: Create movies from your graphics with transitions for sharing or presentations<br>
 
 
 <img width="1492" height="831" alt="Bildschirmfoto 2025-12-10 um 14 49 07" src="https://github.com/user-attachments/assets/db620b3a-73e4-4c0c-988c-9c659bcfb75a" />

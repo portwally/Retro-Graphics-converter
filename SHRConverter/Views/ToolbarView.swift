@@ -45,6 +45,7 @@ struct MainToolbarView: View {
     let onImport: () -> Void
     let onExport: () -> Void
     let onScreensaver: () -> Void
+    let onMovie: () -> Void
     let onUndo: () -> Void
     let onRotateLeft: () -> Void
     let onRotateRight: () -> Void
@@ -88,6 +89,13 @@ struct MainToolbarView: View {
                     isDisabled: !hasImages,
                     action: onScreensaver
                 )
+
+                LabeledToolbarButton(
+                    icon: "film",
+                    label: "Movie",
+                    isDisabled: !hasImages,
+                    action: onMovie
+                )
             }
 
             Spacer()
@@ -96,7 +104,7 @@ struct MainToolbarView: View {
             HStack(spacing: 8) {
                 LabeledToolbarButton(
                     icon: "minus.magnifyingglass",
-                    label: "Zoom -",
+                    label: "−",
                     isDisabled: isFitMode,
                     action: zoomOut
                 )
@@ -115,7 +123,7 @@ struct MainToolbarView: View {
 
                 LabeledToolbarButton(
                     icon: "plus.magnifyingglass",
-                    label: "Zoom +",
+                    label: "+",
                     action: zoomIn
                 )
 
@@ -343,6 +351,7 @@ struct CropToolsView: View {
             onImport: {},
             onExport: {},
             onScreensaver: {},
+            onMovie: {},
             onUndo: {},
             onRotateLeft: {},
             onRotateRight: {},
@@ -367,6 +376,7 @@ struct CropToolsView: View {
             onImport: {},
             onExport: {},
             onScreensaver: {},
+            onMovie: {},
             onUndo: {},
             onRotateLeft: {},
             onRotateRight: {},

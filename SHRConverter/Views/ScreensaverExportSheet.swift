@@ -55,7 +55,7 @@ struct ScreensaverExportSheet: View {
             buttonSection
         }
         .padding(20)
-        .frame(width: 550, height: 620)
+        .frame(width: 550, height: 680)
     }
 
     // MARK: - Header Section
@@ -158,14 +158,20 @@ struct ScreensaverExportSheet: View {
                 Image(systemName: "info.circle")
                     .foregroundColor(.blue)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("How to use your screensaver:")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("How to set up your screensaver:")
                         .font(.subheadline)
                         .fontWeight(.medium)
 
-                    Text("1. After export, System Settings will open\n2. Select a photo-based screensaver (e.g., \"Shifting Tiles\")\n3. Click \"Choose Folder\" and select your exported folder\n4. Adjust timing and other options as desired")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("1. Click \"Screen Saver\" at the top of the panel")
+                        Text("2. Choose a style (Shuffle, Hello, Shifting Tiles...)")
+                        Text("3. Click the preview image, then \"Add Folder...\"")
+                        Text("4. Navigate to: Pictures → Retro Screensavers")
+                        Text("5. Select your folder and click \"Choose\"")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
                 }
             }
             .padding(10)

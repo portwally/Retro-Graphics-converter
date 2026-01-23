@@ -1,6 +1,9 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import AppKit
+import AVFoundation
+import CoreMedia
+import VideoToolbox
 
 // MARK: - Content View
 
@@ -29,6 +32,7 @@ struct ContentView: View {
     // New UI state
     @State private var showExportSheet = false
     @State private var showScreensaverSheet = false
+    @State private var showMovieSheet = false
     @State private var currentScanline: Int? = 100
     @State private var removedCount = 0
     @State private var exportedCount = 0
@@ -90,6 +94,7 @@ struct ContentView: View {
                 onImport: { openFiles() },
                 onExport: { showExportSheet = true },
                 onScreensaver: { showScreensaverSheet = true },
+                onMovie: { showMovieSheet = true },
                 onUndo: { undoLastAction() },
                 onRotateLeft: { transformImages(transform: .rotateLeft) },
                 onRotateRight: { transformImages(transform: .rotateRight) },
@@ -155,6 +160,15 @@ struct ContentView: View {
                 selectedCount: selectedImages.isEmpty ? (selectedImage != nil ? 1 : imageItems.count) : selectedImages.count,
                 onExport: { name, scale, openSettings in
                     exportAsScreensaver(name: name, scale: scale, openSettings: openSettings)
+                }
+            )
+        }
+        .sheet(isPresented: $showMovieSheet) {
+            MovieExportSheet(
+                isPresented: $showMovieSheet,
+                selectedCount: selectedImages.isEmpty ? (selectedImage != nil ? 1 : imageItems.count) : selectedImages.count,
+                onExport: { settings in
+                    exportAsMovie(settings: settings)
                 }
             )
         }
@@ -553,13 +567,453 @@ struct ContentView: View {
     }
 
     private func openScreenSaverSettings() {
-        // Try to open Screen Saver settings
-        // macOS 13+ uses the new System Settings app
-        if let url = URL(string: "x-apple.systempreferences:com.apple.ScreenSaver-Settings.extension") {
-            NSWorkspace.shared.open(url)
-        } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.desktopscreeneffect") {
-            NSWorkspace.shared.open(url)
+        // In macOS Sonoma/Sequoia, Screen Saver is part of Wallpaper settings
+        // Open using the 'open' command with the correct URL scheme
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["x-apple.systempreferences:com.apple.Wallpaper-Settings.extension"]
+        try? process.run()
+    }
+
+    // MARK: - Movie Export
+
+    func exportAsMovie(settings: MovieExportSettings) {
+        // Determine which images to export
+        var itemsToExport: [ImageItem] = []
+
+        if !selectedImages.isEmpty {
+            itemsToExport = imageItems.filter { selectedImages.contains($0.id) }
+        } else if let current = selectedImage {
+            itemsToExport = [current]
+        } else {
+            itemsToExport = imageItems
         }
+
+        guard itemsToExport.count >= 2 else {
+            statusMessage = "Need at least 2 images to create a movie"
+            return
+        }
+
+        // Show save panel
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = settings.format == .mov ? [UTType.quickTimeMovie] : [UTType.mpeg4Movie]
+        savePanel.nameFieldStringValue = "\(settings.name).\(settings.format.rawValue)"
+        savePanel.canCreateDirectories = true
+
+        guard savePanel.runModal() == .OK, let outputURL = savePanel.url else { return }
+
+        isProcessing = true
+        statusMessage = "Creating movie..."
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Scale images
+            let scaledImages = itemsToExport.compactMap { item -> CGImage? in
+                guard let cgImage = item.image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+                let newSize = CGSize(width: cgImage.width * settings.scale, height: cgImage.height * settings.scale)
+                return SHRDecoder.scaleCGImage(cgImage, to: newSize)
+            }
+
+            guard !scaledImages.isEmpty else {
+                DispatchQueue.main.async {
+                    self.isProcessing = false
+                    self.statusMessage = "Failed to process images"
+                }
+                return
+            }
+
+            let success = self.createVideoFile(images: scaledImages, outputURL: outputURL, settings: settings)
+
+            DispatchQueue.main.async {
+                self.isProcessing = false
+                if success {
+                    self.statusMessage = "Movie saved: \(outputURL.lastPathComponent)"
+                    NSWorkspace.shared.selectFile(outputURL.path, inFileViewerRootedAtPath: outputURL.deletingLastPathComponent().path)
+                } else {
+                    self.statusMessage = "Failed to create movie"
+                }
+            }
+        }
+    }
+
+    private func createVideoFile(images: [CGImage], outputURL: URL, settings: MovieExportSettings) -> Bool {
+        guard let firstImage = images.first else { return false }
+
+        // Use target resolution size directly
+        let outputSize = settings.resolution.size
+
+        // Remove existing file
+        try? FileManager.default.removeItem(at: outputURL)
+
+        // Create asset writer
+        guard let assetWriter = try? AVAssetWriter(outputURL: outputURL, fileType: settings.format == .mov ? .mov : .mp4) else {
+            return false
+        }
+
+        // Select codec based on settings
+        let codecType: AVVideoCodecType = settings.codec == .hevc ? .hevc : .h264
+        var compressionProperties: [String: Any] = [
+            AVVideoAverageBitRateKey: 10_000_000  // 10 Mbps
+        ]
+
+        // Add codec-specific settings
+        if settings.codec == .hevc {
+            compressionProperties[AVVideoProfileLevelKey] = kVTProfileLevel_HEVC_Main_AutoLevel
+        } else {
+            compressionProperties[AVVideoProfileLevelKey] = AVVideoProfileLevelH264HighAutoLevel
+        }
+
+        let videoSettings: [String: Any] = [
+            AVVideoCodecKey: codecType,
+            AVVideoWidthKey: Int(outputSize.width),
+            AVVideoHeightKey: Int(outputSize.height),
+            AVVideoCompressionPropertiesKey: compressionProperties
+        ]
+
+        let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        writerInput.expectsMediaDataInRealTime = false
+
+        let sourceBufferAttributes: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: Int(outputSize.width),
+            kCVPixelBufferHeightKey as String: Int(outputSize.height)
+        ]
+
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: writerInput,
+            sourcePixelBufferAttributes: sourceBufferAttributes
+        )
+
+        assetWriter.add(writerInput)
+
+        guard assetWriter.startWriting() else {
+            print("Failed to start writing: \(assetWriter.error?.localizedDescription ?? "unknown")")
+            return false
+        }
+        assetWriter.startSession(atSourceTime: .zero)
+
+        // Use 30fps for broad compatibility
+        let fps: Int32 = 30
+        let framesPerImage = Int(settings.duration * Double(fps))
+        let transitionFrameCount = settings.transition != .none ? 15 : 0
+        var frameNumber: Int64 = 0
+
+        for (index, image) in images.enumerated() {
+            // Write frames for this image's duration
+            let holdFrames = max(1, framesPerImage - (index < images.count - 1 ? transitionFrameCount : 0))
+
+            for _ in 0..<holdFrames {
+                while !writerInput.isReadyForMoreMediaData {
+                    Thread.sleep(forTimeInterval: 0.01)
+                }
+
+                if let pixelBuffer = createPixelBufferFromPool(adaptor: adaptor, image: image, size: outputSize) {
+                    let presentationTime = CMTime(value: frameNumber, timescale: fps)
+                    if !adaptor.append(pixelBuffer, withPresentationTime: presentationTime) {
+                        print("Failed to append frame \(frameNumber)")
+                    }
+                    frameNumber += 1
+                }
+            }
+
+            // Add transition to next image
+            if settings.transition != .none && index < images.count - 1 {
+                let nextImage = images[index + 1]
+                // Pick a random transition for each image, or use the selected one
+                let currentTransition = settings.transition == .random
+                    ? TransitionType.randomTransition()
+                    : settings.transition
+
+                for t in 1...transitionFrameCount {
+                    while !writerInput.isReadyForMoreMediaData {
+                        Thread.sleep(forTimeInterval: 0.01)
+                    }
+
+                    let progress = CGFloat(t) / CGFloat(transitionFrameCount)
+                    if let transitionImage = renderTransitionFrame(
+                        from: image,
+                        to: nextImage,
+                        progress: progress,
+                        transition: currentTransition,
+                        size: outputSize
+                    ),
+                       let pixelBuffer = createPixelBufferFromPool(adaptor: adaptor, image: transitionImage, size: outputSize) {
+                        let presentationTime = CMTime(value: frameNumber, timescale: fps)
+                        adaptor.append(pixelBuffer, withPresentationTime: presentationTime)
+                        frameNumber += 1
+                    }
+                }
+            }
+
+            DispatchQueue.main.async {
+                self.progressString = "Processing image \(index + 1)/\(images.count)"
+            }
+        }
+
+        writerInput.markAsFinished()
+
+        let semaphore = DispatchSemaphore(value: 0)
+        assetWriter.finishWriting {
+            semaphore.signal()
+        }
+        semaphore.wait()
+
+        DispatchQueue.main.async {
+            self.progressString = ""
+        }
+
+        return assetWriter.status == .completed
+    }
+
+    private func createPixelBufferFromPool(adaptor: AVAssetWriterInputPixelBufferAdaptor, image: CGImage, size: CGSize) -> CVPixelBuffer? {
+        guard let pool = adaptor.pixelBufferPool else { return nil }
+
+        var pixelBuffer: CVPixelBuffer?
+        let status = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pixelBuffer)
+        guard status == kCVReturnSuccess, let buffer = pixelBuffer else { return nil }
+
+        CVPixelBufferLockBaseAddress(buffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+
+        guard let context = CGContext(
+            data: CVPixelBufferGetBaseAddress(buffer),
+            width: Int(size.width),
+            height: Int(size.height),
+            bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else { return nil }
+
+        // Fill with black background
+        context.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+        context.fill(CGRect(origin: .zero, size: size))
+
+        // Calculate centered position with aspect ratio preservation
+        let imageSize = CGSize(width: image.width, height: image.height)
+        let scale = min(size.width / imageSize.width, size.height / imageSize.height)
+        let scaledSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+        let origin = CGPoint(
+            x: (size.width - scaledSize.width) / 2,
+            y: (size.height - scaledSize.height) / 2
+        )
+
+        context.interpolationQuality = .none  // Nearest neighbor for pixel art
+        context.draw(image, in: CGRect(origin: origin, size: scaledSize))
+
+        return buffer
+    }
+
+    private func createPixelBuffer(from image: CGImage, size: CGSize) -> CVPixelBuffer? {
+        var pixelBuffer: CVPixelBuffer?
+        let attrs: [String: Any] = [
+            kCVPixelBufferCGImageCompatibilityKey as String: true,
+            kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
+        ]
+
+        let status = CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            Int(size.width),
+            Int(size.height),
+            kCVPixelFormatType_32ARGB,
+            attrs as CFDictionary,
+            &pixelBuffer
+        )
+
+        guard status == kCVReturnSuccess, let buffer = pixelBuffer else { return nil }
+
+        CVPixelBufferLockBaseAddress(buffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+
+        guard let context = CGContext(
+            data: CVPixelBufferGetBaseAddress(buffer),
+            width: Int(size.width),
+            height: Int(size.height),
+            bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
+        ) else { return nil }
+
+        // Fill with black background
+        context.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+        context.fill(CGRect(origin: .zero, size: size))
+
+        // Calculate centered position
+        let imageSize = CGSize(width: image.width, height: image.height)
+        let scale = min(size.width / imageSize.width, size.height / imageSize.height)
+        let scaledSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+        let origin = CGPoint(
+            x: (size.width - scaledSize.width) / 2,
+            y: (size.height - scaledSize.height) / 2
+        )
+
+        context.interpolationQuality = .none  // Nearest neighbor for pixel art
+        context.draw(image, in: CGRect(origin: origin, size: scaledSize))
+
+        return buffer
+    }
+
+    private func blendImages(_ image1: CGImage, _ image2: CGImage, alpha: CGFloat, size: CGSize) -> CGImage? {
+        guard let context = CGContext(
+            data: nil,
+            width: Int(size.width),
+            height: Int(size.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        context.interpolationQuality = .none
+
+        // Calculate centered positions for both images
+        let image1Size = CGSize(width: image1.width, height: image1.height)
+        let scale1 = min(size.width / image1Size.width, size.height / image1Size.height)
+        let scaledSize1 = CGSize(width: image1Size.width * scale1, height: image1Size.height * scale1)
+        let origin1 = CGPoint(x: (size.width - scaledSize1.width) / 2, y: (size.height - scaledSize1.height) / 2)
+
+        let image2Size = CGSize(width: image2.width, height: image2.height)
+        let scale2 = min(size.width / image2Size.width, size.height / image2Size.height)
+        let scaledSize2 = CGSize(width: image2Size.width * scale2, height: image2Size.height * scale2)
+        let origin2 = CGPoint(x: (size.width - scaledSize2.width) / 2, y: (size.height - scaledSize2.height) / 2)
+
+        // Draw first image
+        context.setAlpha(1 - alpha)
+        context.draw(image1, in: CGRect(origin: origin1, size: scaledSize1))
+
+        // Draw second image blended
+        context.setAlpha(alpha)
+        context.draw(image2, in: CGRect(origin: origin2, size: scaledSize2))
+
+        return context.makeImage()
+    }
+
+    private func renderTransitionFrame(
+        from image1: CGImage,
+        to image2: CGImage,
+        progress: CGFloat,
+        transition: TransitionType,
+        size: CGSize
+    ) -> CGImage? {
+        guard let context = CGContext(
+            data: nil,
+            width: Int(size.width),
+            height: Int(size.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        context.interpolationQuality = .none
+
+        // Calculate centered positions for both images
+        let image1Size = CGSize(width: image1.width, height: image1.height)
+        let scale1 = min(size.width / image1Size.width, size.height / image1Size.height)
+        let scaledSize1 = CGSize(width: image1Size.width * scale1, height: image1Size.height * scale1)
+        let origin1 = CGPoint(x: (size.width - scaledSize1.width) / 2, y: (size.height - scaledSize1.height) / 2)
+
+        let image2Size = CGSize(width: image2.width, height: image2.height)
+        let scale2 = min(size.width / image2Size.width, size.height / image2Size.height)
+        let scaledSize2 = CGSize(width: image2Size.width * scale2, height: image2Size.height * scale2)
+        let origin2 = CGPoint(x: (size.width - scaledSize2.width) / 2, y: (size.height - scaledSize2.height) / 2)
+
+        switch transition {
+        case .none, .random:
+            // .none should not happen, .random is resolved before calling this function
+            // Fallback to crossfade
+            context.setAlpha(1 - progress)
+            context.draw(image1, in: CGRect(origin: origin1, size: scaledSize1))
+            context.setAlpha(progress)
+            context.draw(image2, in: CGRect(origin: origin2, size: scaledSize2))
+
+        case .crossfade:
+            // Draw first image fading out
+            context.setAlpha(1 - progress)
+            context.draw(image1, in: CGRect(origin: origin1, size: scaledSize1))
+            // Draw second image fading in
+            context.setAlpha(progress)
+            context.draw(image2, in: CGRect(origin: origin2, size: scaledSize2))
+
+        case .fadeBlack:
+            // First half: fade to black
+            // Second half: fade from black to new image
+            if progress < 0.5 {
+                let fadeOut = 1 - (progress * 2)
+                context.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+                context.fill(CGRect(origin: .zero, size: size))
+                context.setAlpha(fadeOut)
+                context.draw(image1, in: CGRect(origin: origin1, size: scaledSize1))
+            } else {
+                let fadeIn = (progress - 0.5) * 2
+                context.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+                context.fill(CGRect(origin: .zero, size: size))
+                context.setAlpha(fadeIn)
+                context.draw(image2, in: CGRect(origin: origin2, size: scaledSize2))
+            }
+
+        case .slideLeft:
+            let offset = size.width * progress
+            context.draw(image1, in: CGRect(x: origin1.x - offset, y: origin1.y, width: scaledSize1.width, height: scaledSize1.height))
+            context.draw(image2, in: CGRect(x: origin2.x + size.width - offset, y: origin2.y, width: scaledSize2.width, height: scaledSize2.height))
+
+        case .slideRight:
+            let offset = size.width * progress
+            context.draw(image1, in: CGRect(x: origin1.x + offset, y: origin1.y, width: scaledSize1.width, height: scaledSize1.height))
+            context.draw(image2, in: CGRect(x: origin2.x - size.width + offset, y: origin2.y, width: scaledSize2.width, height: scaledSize2.height))
+
+        case .slideUp:
+            let offset = size.height * progress
+            context.draw(image1, in: CGRect(x: origin1.x, y: origin1.y + offset, width: scaledSize1.width, height: scaledSize1.height))
+            context.draw(image2, in: CGRect(x: origin2.x, y: origin2.y - size.height + offset, width: scaledSize2.width, height: scaledSize2.height))
+
+        case .slideDown:
+            let offset = size.height * progress
+            context.draw(image1, in: CGRect(x: origin1.x, y: origin1.y - offset, width: scaledSize1.width, height: scaledSize1.height))
+            context.draw(image2, in: CGRect(x: origin2.x, y: origin2.y + size.height - offset, width: scaledSize2.width, height: scaledSize2.height))
+
+        case .wipeLeft:
+            // Draw new image, then draw old image clipped from right
+            context.draw(image2, in: CGRect(origin: origin2, size: scaledSize2))
+            let clipWidth = size.width * (1 - progress)
+            context.clip(to: CGRect(x: 0, y: 0, width: clipWidth, height: size.height))
+            context.draw(image1, in: CGRect(origin: origin1, size: scaledSize1))
+
+        case .wipeRight:
+            // Draw new image, then draw old image clipped from left
+            context.draw(image2, in: CGRect(origin: origin2, size: scaledSize2))
+            let clipOffset = size.width * progress
+            context.clip(to: CGRect(x: clipOffset, y: 0, width: size.width - clipOffset, height: size.height))
+            context.draw(image1, in: CGRect(origin: origin1, size: scaledSize1))
+
+        case .zoomIn:
+            // Old image zooms in and fades out
+            let zoomScale = 1.0 + (progress * 0.5)  // Zoom from 1x to 1.5x
+            let zoomedSize1 = CGSize(width: scaledSize1.width * zoomScale, height: scaledSize1.height * zoomScale)
+            let zoomedOrigin1 = CGPoint(
+                x: (size.width - zoomedSize1.width) / 2,
+                y: (size.height - zoomedSize1.height) / 2
+            )
+            context.setAlpha(1 - progress)
+            context.draw(image1, in: CGRect(origin: zoomedOrigin1, size: zoomedSize1))
+            context.setAlpha(progress)
+            context.draw(image2, in: CGRect(origin: origin2, size: scaledSize2))
+
+        case .zoomOut:
+            // Old image shrinks and fades out
+            let zoomScale = 1.0 - (progress * 0.5)  // Shrink from 1x to 0.5x
+            let zoomedSize1 = CGSize(width: scaledSize1.width * zoomScale, height: scaledSize1.height * zoomScale)
+            let zoomedOrigin1 = CGPoint(
+                x: (size.width - zoomedSize1.width) / 2,
+                y: (size.height - zoomedSize1.height) / 2
+            )
+            context.setAlpha(1 - progress)
+            context.draw(image1, in: CGRect(origin: zoomedOrigin1, size: zoomedSize1))
+            context.setAlpha(progress)
+            context.draw(image2, in: CGRect(origin: origin2, size: scaledSize2))
+        }
+
+        return context.makeImage()
     }
 
     // MARK: - File Handling
