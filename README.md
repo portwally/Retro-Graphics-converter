@@ -7,7 +7,7 @@ In the end I decided to code one myself in Swift. It started with SHR uncompress
 Newly added are now HGR and DHGR conversion and output formats like png, jpg, tiff, gif and heic.
 Was bored and added then more graphic formats...
 
-**NEW, now with files browser for .2mg, .po, .do, .dsk and .hdv volumes**<br>
+**NEW, now with files browser for .2mg, .po, .do, .dsk and .hdv and even C64 volumes**<br>
 Just drag and drop your disk images in the app and extract your pics from there. You also can export any file from within the app to your Mac.
 
 <img width="1445" height="887" alt="Screenshot 2026-01-12 at 16 38 14" src="https://github.com/user-attachments/assets/35768c53-519d-4fe0-af6f-d1694b160b83" />
