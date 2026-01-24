@@ -152,6 +152,8 @@ class SHRDecoder {
             return C64Decoder.decodeArtStudio(data: data)
         case 9009:
             return C64Decoder.decodeHires(data: data)
+        case 9002:
+            return C64Decoder.decodeArtStudioHires(data: data)
         case 6912:
             return RetroDecoder.decodeZXSpectrum(data: data)
         case 16384:

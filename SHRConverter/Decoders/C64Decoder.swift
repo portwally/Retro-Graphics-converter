@@ -161,8 +161,63 @@ class C64Decoder {
         return (cgImage, .C64(format: "C64 Multicolor (10018 bytes)"))
     }
     
+    // MARK: - Art Studio Hi-Res (.ART) - 9002 bytes
+
+    static func decodeArtStudioHires(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+        guard data.count == 9002 else {
+            return (nil, .Unknown)
+        }
+
+        let width = 320
+        let height = 200
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        let bitmapOffset = 2      // After 2-byte load address
+        let screenRAMOffset = 8002  // After bitmap (8000 bytes)
+
+        for cellY in 0..<25 {
+            for cellX in 0..<40 {
+                let cellIndex = cellY * 40 + cellX
+
+                let screenByte = data[screenRAMOffset + cellIndex]
+                let fgColor = Int((screenByte >> 4) & 0x0F)
+                let bgColor = Int(screenByte & 0x0F)
+
+                for row in 0..<8 {
+                    let bitmapByteOffset = bitmapOffset + (cellIndex * 8) + row
+                    if bitmapByteOffset >= data.count { continue }
+
+                    let bitmapByte = data[bitmapByteOffset]
+                    let y = cellY * 8 + row
+
+                    for bit in 0..<8 {
+                        let x = cellX * 8 + bit
+                        let bitVal = (bitmapByte >> (7 - bit)) & 1
+                        let colorIndex = (bitVal == 1) ? fgColor : bgColor
+
+                        let rgb = palette[colorIndex]
+                        let bufferIdx = (y * width + x) * 4
+
+                        if bufferIdx + 3 < rgbaBuffer.count {
+                            rgbaBuffer[bufferIdx] = rgb.r
+                            rgbaBuffer[bufferIdx + 1] = rgb.g
+                            rgbaBuffer[bufferIdx + 2] = rgb.b
+                            rgbaBuffer[bufferIdx + 3] = 255
+                        }
+                    }
+                }
+            }
+        }
+
+        guard let cgImage = ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height) else {
+            return (nil, .Unknown)
+        }
+
+        return (cgImage, .C64(format: "Art Studio Hi-Res"))
+    }
+
     // MARK: - HIRES - 9009 bytes
-    
+
     static func decodeHires(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         guard data.count == 9009 else {
             return (nil, .Unknown)
