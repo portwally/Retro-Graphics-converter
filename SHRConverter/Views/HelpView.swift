@@ -120,7 +120,8 @@ struct HelpView: View {
             HelpSectionHeader(title: "Supported Input Types", icon: "doc.richtext")
 
             BulletPoint(text: "**Individual image files** - SHR, HGR, DHGR, IFF, Degas, PCX, BMP, etc.")
-            BulletPoint(text: "**Disk images** - .dsk, .do, .po, .2mg, .hdv containing multiple images")
+            BulletPoint(text: "**Apple II disk images** - .dsk, .do, .po, .2mg, .hdv containing multiple images")
+            BulletPoint(text: "**C64 disk images** - .d64, .d71, .d81 (1541/1571/1581 floppy disks)")
             BulletPoint(text: "**ProDOS volumes** - PNT and PIC files are automatically detected")
             BulletPoint(text: "**DOS 3.3 disks** - Binary graphics files")
 
@@ -510,6 +511,9 @@ struct HelpView: View {
             FormatRow(format: ".po", description: "ProDOS-ordered disk image")
             FormatRow(format: ".2mg", description: "Universal disk image format")
             FormatRow(format: ".hdv", description: "Hard drive volume image")
+            FormatRow(format: ".d64", description: "C64 1541 floppy disk image (170K)")
+            FormatRow(format: ".d71", description: "C64 1571 dual-sided floppy (340K)")
+            FormatRow(format: ".d81", description: "C64 1581 3.5\" floppy (800K)")
         }
     }
 
@@ -602,7 +606,15 @@ struct HelpView: View {
             Text("If you encounter issues not covered here:")
                 .font(.body)
 
-            BulletPoint(text: "Visit the project's GitHub page for support")
+            HStack(alignment: .top, spacing: 8) {
+                Text("•")
+                    .foregroundColor(.secondary)
+                Link("Visit the project's GitHub page for support",
+                     destination: URL(string: "https://github.com/portwally/Retro-Graphics-converter")!)
+                    .font(.body)
+            }
+            .padding(.leading, 16)
+
             BulletPoint(text: "Check for updates that may fix your issue")
             BulletPoint(text: "Report bugs with detailed reproduction steps")
         }

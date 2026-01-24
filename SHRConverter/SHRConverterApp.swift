@@ -198,7 +198,7 @@ struct SHRConverterApp: App {
                 Divider()
 
                 Link("Visit GitHub Repository",
-                     destination: URL(string: "https://github.com")!)
+                     destination: URL(string: "https://github.com/portwally/Retro-Graphics-converter")!)
             }
         }
     }
