@@ -590,6 +590,13 @@ struct ContentView: View {
         }
 
         guard itemsToExport.count >= 2 else {
+            // Show alert dialog for better visibility
+            let alert = NSAlert()
+            alert.messageText = "Not Enough Images"
+            alert.informativeText = "You need at least 2 images to create a movie slideshow. Currently you have \(itemsToExport.count) image\(itemsToExport.count == 1 ? "" : "s") selected."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
             statusMessage = "Need at least 2 images to create a movie"
             return
         }
