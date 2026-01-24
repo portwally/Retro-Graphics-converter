@@ -56,6 +56,17 @@ struct MainToolbarView: View {
     let onCompare: () -> Void
     @Binding var showOriginal: Bool
 
+    // Adjustments
+    @Binding var showAdjustments: Bool
+    @Binding var adjustments: ImageAdjustments
+    let onAdjustmentsApply: () -> Void
+    let onAdjustmentsReset: () -> Void
+    let onAdjustmentsPreview: (ImageAdjustments) -> Void
+
+    // Histogram
+    let currentImage: NSImage?
+    @State private var showHistogram = false
+
     private var zoomPercentage: Int {
         if zoomScale < 0 {
             return 100
@@ -195,6 +206,42 @@ struct MainToolbarView: View {
                     isDisabled: !hasModification,
                     action: onCompare
                 )
+            }
+
+            Divider()
+                .frame(height: 50)
+
+            // Adjustments & Histogram group
+            HStack(spacing: 8) {
+                LabeledToolbarButton(
+                    icon: "slider.horizontal.3",
+                    label: "Adjust",
+                    isActive: showAdjustments,
+                    isDisabled: !hasImage,
+                    action: { showAdjustments.toggle() }
+                )
+                .popover(isPresented: $showAdjustments, arrowEdge: .bottom) {
+                    AdjustmentsView(
+                        adjustments: $adjustments,
+                        onApply: {
+                            showAdjustments = false
+                            onAdjustmentsApply()
+                        },
+                        onReset: onAdjustmentsReset,
+                        onPreview: onAdjustmentsPreview
+                    )
+                }
+
+                LabeledToolbarButton(
+                    icon: "chart.bar.fill",
+                    label: "Histo",
+                    isActive: showHistogram,
+                    isDisabled: !hasImage,
+                    action: { showHistogram.toggle() }
+                )
+                .popover(isPresented: $showHistogram, arrowEdge: .bottom) {
+                    HistogramView(image: currentImage)
+                }
             }
 
             Divider()
@@ -360,7 +407,13 @@ struct CropToolsView: View {
             onInvert: {},
             onCopy: {},
             onCompare: {},
-            showOriginal: .constant(false)
+            showOriginal: .constant(false),
+            showAdjustments: .constant(false),
+            adjustments: .constant(ImageAdjustments()),
+            onAdjustmentsApply: {},
+            onAdjustmentsReset: {},
+            onAdjustmentsPreview: { _ in },
+            currentImage: nil
         )
 
         Divider()
@@ -385,8 +438,14 @@ struct CropToolsView: View {
             onInvert: {},
             onCopy: {},
             onCompare: {},
-            showOriginal: .constant(true)
+            showOriginal: .constant(true),
+            showAdjustments: .constant(false),
+            adjustments: .constant(ImageAdjustments()),
+            onAdjustmentsApply: {},
+            onAdjustmentsReset: {},
+            onAdjustmentsPreview: { _ in },
+            currentImage: nil
         )
     }
-    .frame(width: 900)
+    .frame(width: 1100)
 }

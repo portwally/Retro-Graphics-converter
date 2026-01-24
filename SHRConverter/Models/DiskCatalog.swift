@@ -123,9 +123,10 @@ struct ImageItem: Identifiable {
     let originalData: Data?
     var paletteInfo: PaletteInfo?
     var modifiedPalette: PaletteInfo?
+    var hasImageModification: Bool  // Track transforms (rotate, flip, crop, adjustments)
 
     // Initializer mit optionaler ID - wenn keine ID übergeben wird, wird eine neue erstellt
-    init(id: UUID = UUID(), url: URL, image: NSImage, type: AppleIIImageType, originalData: Data?, paletteInfo: PaletteInfo? = nil) {
+    init(id: UUID = UUID(), url: URL, image: NSImage, type: AppleIIImageType, originalData: Data?, paletteInfo: PaletteInfo? = nil, hasImageModification: Bool = false) {
         self.id = id
         self.url = url
         self.image = image
@@ -133,6 +134,7 @@ struct ImageItem: Identifiable {
         self.originalData = originalData
         self.paletteInfo = paletteInfo
         self.modifiedPalette = nil
+        self.hasImageModification = hasImageModification
     }
 
     var filename: String {
@@ -147,6 +149,11 @@ struct ImageItem: Identifiable {
     /// Whether the palette has been modified
     var hasPaletteModification: Bool {
         modifiedPalette != nil
+    }
+
+    /// Whether the image has any modification (palette or transform)
+    var hasAnyModification: Bool {
+        hasPaletteModification || hasImageModification
     }
     
     var originalFileExtension: String {

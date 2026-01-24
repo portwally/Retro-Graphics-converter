@@ -42,6 +42,8 @@
 		3E75F2672F1A000000C49434 /* MSXDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2662F1A000000C49434 /* MSXDecoder.swift */; };
 		3E75F2692F1A000000C49434 /* BBCMicroDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2682F1A000000C49434 /* BBCMicroDecoder.swift */; };
 		3E75F26B2F1A000000C49434 /* TRS80Decoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F26A2F1A000000C49434 /* TRS80Decoder.swift */; };
+		3E75F26D2F1B000000C49434 /* AdjustmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F26C2F1B000000C49434 /* AdjustmentsView.swift */; };
+		3E75F26F2F1B000000C49434 /* HistogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F26E2F1B000000C49434 /* HistogramView.swift */; };
 		3E9F97B22F156505009196E9 /* ImageCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9F97B12F156505009196E9 /* ImageCropView.swift */; };
 /* End PBXBuildFile section */
 
@@ -81,6 +83,8 @@
 		3E75F2662F1A000000C49434 /* MSXDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MSXDecoder.swift; sourceTree = "<group>"; };
 		3E75F2682F1A000000C49434 /* BBCMicroDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BBCMicroDecoder.swift; sourceTree = "<group>"; };
 		3E75F26A2F1A000000C49434 /* TRS80Decoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TRS80Decoder.swift; sourceTree = "<group>"; };
+		3E75F26C2F1B000000C49434 /* AdjustmentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjustmentsView.swift; sourceTree = "<group>"; };
+		3E75F26E2F1B000000C49434 /* HistogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramView.swift; sourceTree = "<group>"; };
 		3E9C9E9A2EE37BDF00DEE453 /* Retro-Graphics-Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Retro-Graphics-Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E9F97B12F156505009196E9 /* ImageCropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -151,10 +155,12 @@
 		3E75F2332F11204400C49434 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				3E75F26C2F1B000000C49434 /* AdjustmentsView.swift */,
 				3E75F2302F11204400C49434 /* ContentView.swift */,
 				3E75F2312F11204400C49434 /* DiskCatalogBrowserView.swift */,
 				3E75F25C2F17000000C49434 /* ExportSheet.swift */,
 				3E75F2602F17200000C49434 /* HelpView.swift */,
+				3E75F26E2F1B000000C49434 /* HistogramView.swift */,
 				3E75F2322F11204400C49434 /* ImageThumbnailView.swift */,
 				3E75F25A2F17000000C49434 /* InfoBarView.swift */,
 				3E75F2642F19000000C49434 /* MovieExportSheet.swift */,
@@ -306,6 +312,8 @@
 				3E75F2672F1A000000C49434 /* MSXDecoder.swift in Sources */,
 				3E75F2692F1A000000C49434 /* BBCMicroDecoder.swift in Sources */,
 				3E75F26B2F1A000000C49434 /* TRS80Decoder.swift in Sources */,
+				3E75F26D2F1B000000C49434 /* AdjustmentsView.swift in Sources */,
+				3E75F26F2F1B000000C49434 /* HistogramView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -442,7 +450,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 498;
+				CURRENT_PROJECT_VERSION = 501;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = ZFE2VJD462;
 				ENABLE_APP_SANDBOX = NO;
@@ -479,7 +487,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 498;
+				CURRENT_PROJECT_VERSION = 501;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=macosx*]" = ZFE2VJD462;

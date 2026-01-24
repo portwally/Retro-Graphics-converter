@@ -27,7 +27,7 @@ struct ContentView: View {
     @State private var cropStart: CGPoint?
     @State private var cropEnd: CGPoint?
     @State private var cropScale: CGFloat = 1.0  // Store the scale used during crop selection
-    @State private var undoStack: [(id: UUID, image: NSImage, type: AppleIIImageType, data: Data?, paletteInfo: PaletteInfo?, modifiedPalette: PaletteInfo?)] = []
+    @State private var undoStack: [(id: UUID, image: NSImage, type: AppleIIImageType, data: Data?, paletteInfo: PaletteInfo?, modifiedPalette: PaletteInfo?, hasImageModification: Bool)] = []
 
     // New UI state
     @State private var showExportSheet = false
@@ -37,9 +37,14 @@ struct ContentView: View {
     @State private var removedCount = 0
     @State private var exportedCount = 0
     @State private var showOriginal = false
+
+    // Adjustments state
+    @State private var showAdjustments = false
+    @State private var currentAdjustments = ImageAdjustments()
+    @State private var previewAdjustments: ImageAdjustments?
     @State private var thumbnailSize: CGFloat = 80
     
-    // Computed property for the image to display (handles Before/After toggle)
+    // Computed property for the image to display (handles Before/After toggle and adjustments preview)
     var displayImage: NSImage? {
         guard let selected = selectedImage else { return nil }
 
@@ -55,6 +60,14 @@ struct ContentView: View {
             if let cgImage = result.image {
                 return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
             }
+        }
+
+        // Apply preview adjustments if any
+        if let adjustments = previewAdjustments, !adjustments.isIdentity {
+            return selected.image.adjustedImage(
+                brightness: adjustments.brightness,
+                contrast: adjustments.contrast
+            )
         }
 
         // Return the current (possibly modified) image
@@ -88,7 +101,7 @@ struct ContentView: View {
                 cropMode: $cropMode,
                 canUndo: !undoStack.isEmpty,
                 hasImage: selectedImage != nil,
-                hasModification: selectedImage?.hasPaletteModification == true || selectedImage?.originalData == nil,
+                hasModification: selectedImage?.hasAnyModification == true && selectedImage?.originalData != nil,
                 hasSelection: !selectedImages.isEmpty,
                 hasImages: !imageItems.isEmpty,
                 onImport: { openFiles() },
@@ -103,7 +116,13 @@ struct ContentView: View {
                 onInvert: { transformImages(transform: .invert) },
                 onCopy: { copyImageToClipboard() },
                 onCompare: { showOriginal.toggle() },
-                showOriginal: $showOriginal
+                showOriginal: $showOriginal,
+                showAdjustments: $showAdjustments,
+                adjustments: $currentAdjustments,
+                onAdjustmentsApply: { applyAdjustments() },
+                onAdjustmentsReset: { resetAdjustmentsPreview() },
+                onAdjustmentsPreview: { adjustments in previewAdjustments = adjustments },
+                currentImage: selectedImage?.image
             )
 
             Divider()
@@ -1454,7 +1473,8 @@ struct ContentView: View {
                     type: selectedImg.type,
                     data: selectedImg.originalData,
                     paletteInfo: selectedImg.paletteInfo,
-                    modifiedPalette: selectedImg.modifiedPalette
+                    modifiedPalette: selectedImg.modifiedPalette,
+                    hasImageModification: selectedImg.hasImageModification
                 )
                 undoStack.append(undoItem)
                 
@@ -1468,14 +1488,15 @@ struct ContentView: View {
                 
                 let newImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
 
-                // Behalte die gleiche ID bei!
+                // Behalte die gleiche ID bei! Preserve originalData for Original toggle
                 var croppedItem = ImageItem(
                     id: selectedImg.id,
                     url: selectedImg.url,
                     image: newImage,
                     type: selectedImg.type,
-                    originalData: nil,
-                    paletteInfo: selectedImg.paletteInfo
+                    originalData: selectedImg.originalData,  // Preserve original data
+                    paletteInfo: selectedImg.paletteInfo,
+                    hasImageModification: true  // Mark as modified
                 )
                 croppedItem.modifiedPalette = selectedImg.modifiedPalette
                 imageItems[index] = croppedItem
@@ -1505,7 +1526,8 @@ struct ContentView: View {
                 image: lastAction.image,
                 type: lastAction.type,
                 originalData: lastAction.data,
-                paletteInfo: lastAction.paletteInfo
+                paletteInfo: lastAction.paletteInfo,
+                hasImageModification: lastAction.hasImageModification
             )
             restoredItem.modifiedPalette = lastAction.modifiedPalette
             imageItems[index] = restoredItem
@@ -1531,7 +1553,8 @@ struct ContentView: View {
             type: current.type,
             data: current.originalData,
             paletteInfo: current.paletteInfo,
-            modifiedPalette: current.modifiedPalette
+            modifiedPalette: current.modifiedPalette,
+            hasImageModification: current.hasImageModification
         )
         undoStack.append(undoItem)
 
@@ -1547,14 +1570,15 @@ struct ContentView: View {
             return
         }
 
-        // Update the image item
+        // Update the image item - preserve originalData for Original toggle
         var updatedItem = ImageItem(
             id: current.id,
             url: current.url,
             image: rotatedImage,
             type: current.type,
-            originalData: nil,  // Clear original data since image is modified
-            paletteInfo: current.paletteInfo
+            originalData: current.originalData,  // Preserve original data
+            paletteInfo: current.paletteInfo,
+            hasImageModification: true  // Mark as modified
         )
         updatedItem.modifiedPalette = current.modifiedPalette
         imageItems[index] = updatedItem
@@ -1620,7 +1644,8 @@ struct ContentView: View {
             type: current.type,
             data: current.originalData,
             paletteInfo: current.paletteInfo,
-            modifiedPalette: current.modifiedPalette
+            modifiedPalette: current.modifiedPalette,
+            hasImageModification: current.hasImageModification
         )
         undoStack.append(undoItem)
 
@@ -1636,14 +1661,15 @@ struct ContentView: View {
             return
         }
 
-        // Update the image item
+        // Update the image item - preserve originalData for Original toggle
         var updatedItem = ImageItem(
             id: current.id,
             url: current.url,
             image: flippedImage,
             type: current.type,
-            originalData: nil,  // Clear original data since image is modified
-            paletteInfo: current.paletteInfo
+            originalData: current.originalData,  // Preserve original data
+            paletteInfo: current.paletteInfo,
+            hasImageModification: true  // Mark as modified
         )
         updatedItem.modifiedPalette = current.modifiedPalette
         imageItems[index] = updatedItem
@@ -1730,7 +1756,8 @@ struct ContentView: View {
                 type: item.type,
                 data: item.originalData,
                 paletteInfo: item.paletteInfo,
-                modifiedPalette: item.modifiedPalette
+                modifiedPalette: item.modifiedPalette,
+                hasImageModification: item.hasImageModification
             )
             undoStack.append(undoItem)
 
@@ -1751,14 +1778,15 @@ struct ContentView: View {
 
             guard let newImage = transformedImage else { continue }
 
-            // Update the image item
+            // Update the image item - preserve originalData so Original toggle works
             var updatedItem = ImageItem(
                 id: item.id,
                 url: item.url,
                 image: newImage,
                 type: item.type,
-                originalData: nil,  // Clear original data since image is modified
-                paletteInfo: item.paletteInfo
+                originalData: item.originalData,  // Preserve original data for Original toggle
+                paletteInfo: item.paletteInfo,
+                hasImageModification: true  // Mark as modified
             )
             updatedItem.modifiedPalette = item.modifiedPalette
             imageItems[index] = updatedItem
@@ -1850,6 +1878,59 @@ struct ContentView: View {
         pasteboard.writeObjects([current.image])
 
         statusMessage = "Image copied to clipboard (\(Int(current.image.size.width))×\(Int(current.image.size.height)))"
+    }
+
+    // MARK: - Adjustments
+
+    func applyAdjustments() {
+        guard let current = selectedImage,
+              !currentAdjustments.isIdentity else {
+            previewAdjustments = nil
+            return
+        }
+
+        // Push current state to undo stack
+        undoStack.append((
+            id: current.id,
+            image: current.image,
+            type: current.type,
+            data: current.originalData,
+            paletteInfo: current.paletteInfo,
+            modifiedPalette: current.modifiedPalette,
+            hasImageModification: current.hasImageModification
+        ))
+
+        // Apply adjustments
+        if let adjustedImage = current.image.adjustedImage(
+            brightness: currentAdjustments.brightness,
+            contrast: currentAdjustments.contrast
+        ) {
+            // Update the image item - preserve originalData so Original toggle works
+            if let index = imageItems.firstIndex(where: { $0.id == current.id }) {
+                var newItem = ImageItem(
+                    id: current.id,
+                    url: current.url,
+                    image: adjustedImage,
+                    type: current.type,
+                    originalData: current.originalData,  // Preserve original data for Original toggle
+                    paletteInfo: current.paletteInfo,
+                    hasImageModification: true  // Mark as modified
+                )
+                newItem.modifiedPalette = current.modifiedPalette
+                imageItems[index] = newItem
+                selectedImage = imageItems[index]
+            }
+            statusMessage = "Adjustments applied"
+        }
+
+        // Reset state
+        previewAdjustments = nil
+        currentAdjustments = ImageAdjustments()
+    }
+
+    func resetAdjustmentsPreview() {
+        previewAdjustments = nil
+        currentAdjustments = ImageAdjustments()
     }
 
     func cropImageToRect(image: NSImage, start: CGPoint, end: CGPoint) -> NSImage? {
