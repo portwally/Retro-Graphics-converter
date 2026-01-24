@@ -23,8 +23,10 @@ struct LabeledToolbarButton: View {
 
                 Text(label)
                     .font(.system(size: 9))
+                    .frame(height: 12)
                     .foregroundColor(isDisabled ? Color(NSColor.tertiaryLabelColor) : (isActive ? .accentColor : Color(NSColor.secondaryLabelColor)))
             }
+            .frame(height: 50)  // Fixed height for consistent alignment
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
@@ -79,9 +81,9 @@ struct MainToolbarView: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             // Import/Export group (left side)
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 LabeledToolbarButton(
                     icon: "square.and.arrow.down",
                     label: "Import",
@@ -112,7 +114,7 @@ struct MainToolbarView: View {
             Spacer()
 
             // Zoom group
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 LabeledToolbarButton(
                     icon: "minus.magnifyingglass",
                     label: "−",
@@ -129,8 +131,10 @@ struct MainToolbarView: View {
 
                     Text("Zoom")
                         .font(.system(size: 9))
+                        .frame(height: 12)
                         .foregroundColor(Color(NSColor.secondaryLabelColor))
                 }
+                .frame(height: 50)  // Fixed height for consistent alignment
 
                 LabeledToolbarButton(
                     icon: "plus.magnifyingglass",
@@ -150,7 +154,7 @@ struct MainToolbarView: View {
                 .frame(height: 50)
 
             // Transform group (Rotate, Flip, Invert)
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 LabeledToolbarButton(
                     icon: "rotate.left",
                     label: "Rotate L",
@@ -191,7 +195,7 @@ struct MainToolbarView: View {
                 .frame(height: 50)
 
             // Clipboard & Compare group
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 LabeledToolbarButton(
                     icon: "doc.on.doc",
                     label: "Copy",
@@ -212,7 +216,7 @@ struct MainToolbarView: View {
                 .frame(height: 50)
 
             // Adjustments & Histogram group
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 LabeledToolbarButton(
                     icon: "slider.horizontal.3",
                     label: "Adjust",
@@ -248,7 +252,7 @@ struct MainToolbarView: View {
                 .frame(height: 50)
 
             // Crop/Undo group
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 LabeledToolbarButton(
                     icon: "crop",
                     label: "Crop",
