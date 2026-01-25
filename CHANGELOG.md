@@ -18,6 +18,7 @@
 ### Bug Fixes
 
 - **Fixed MSX Palette Editing**: MSX Screen 5, Screen 8, and Screen 2 images now support live palette editing with proper re-rendering.
+- **Fixed Paintworks/Packed SHR Palette Editing**: Paintworks and Packed SHR format images now support live palette editing. Previously these compressed formats couldn't re-render with modified palettes.
 
 - **Fixed Packed SHR Palette Display**: Packed SHR format images now correctly show their palettes. The extractor now decompresses the data before reading palette information.
 - **Fixed PI3 Format Detection**: Atari ST Degas .PI3 files were incorrectly identified as TRS-80 CoCo images. Added proper Degas extension detection for .PI1, .PI2, .PI3 files.

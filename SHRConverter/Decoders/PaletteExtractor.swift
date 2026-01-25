@@ -35,11 +35,8 @@ struct PaletteExtractor {
                 // Apple Preferred Format - palette embedded in MAIN block
                 return extractAPFPalette(from: data, is3200: false)
             } else if mode.contains("Paintworks") {
-                // Paintworks format - try APF extraction first, then standard
-                if let palette = extractAPFPalette(from: data, is3200: false) {
-                    return palette
-                }
-                return extractStandardSHRPalette(from: data)
+                // Paintworks format - palette at offset 0x00-0x1F
+                return extractPaintworksPalette(from: data)
             } else if mode.contains("Packed") {
                 // Packed SHR - decompress first, then extract palette
                 return extractPackedSHRPalette(from: data)
@@ -168,6 +165,32 @@ struct PaletteExtractor {
         }
 
         return nil
+    }
+
+    /// Extract palette from Paintworks format (PNT $0000)
+    /// Paintworks stores a single 16-color palette at offset 0x00-0x1F
+    private static func extractPaintworksPalette(from data: Data) -> PaletteInfo? {
+        // Paintworks needs at least 32 bytes for palette
+        guard data.count >= 32 else { return nil }
+
+        // Read Super Hi-Res Palette (offset +$00 to +$1F)
+        // Format: 2 bytes per color, 16 colors
+        // Low byte: GB (green in high nibble, blue in low nibble)
+        // High byte: 0R (red in low nibble)
+        var colors: [PaletteColor] = []
+        for i in 0..<16 {
+            let low = data[i * 2]
+            let high = data[i * 2 + 1]
+            let red = UInt8((high & 0x0F) * 17)
+            let green = UInt8(((low >> 4) & 0x0F) * 17)
+            let blue = UInt8((low & 0x0F) * 17)
+            colors.append(PaletteColor(r: red, g: green, b: blue))
+        }
+
+        return PaletteInfo(
+            singlePalette: colors,
+            platformName: "Apple IIgs Paintworks"
+        )
     }
 
     /// Extract 3200-color mode palette (200 palettes, one per scanline)

@@ -22,6 +22,10 @@ struct PaletteRenderer {
         case .SHR(let mode, _, _):
             if mode.contains("3200") {
                 cgImage = renderSHR3200(data: data, palettes: palette.palettes, mode: mode)
+            } else if mode.contains("Paintworks") {
+                cgImage = renderPaintworks(data: data, palette: palette)
+            } else if mode.contains("Packed") {
+                cgImage = renderPackedSHR(data: data, palette: palette)
             } else {
                 cgImage = renderStandardSHR(data: data, palette: palette)
             }
@@ -1233,6 +1237,155 @@ struct PaletteRenderer {
                         rgbaBuffer[bufferIdx + 3] = 255
                     }
                 }
+            }
+        }
+
+        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+    }
+
+    // MARK: - Paintworks Renderer
+
+    private static func renderPaintworks(data: Data, palette: PaletteInfo) -> CGImage? {
+        guard data.count >= 0x222 else { return nil }
+
+        // Paintworks format:
+        // Offset 0x00-0x1F: Palette (16 colors x 2 bytes) - we ignore this and use modified palette
+        // Offset 0x20-0x21: Background color
+        // Offset 0x22-0x221: Patterns
+        // Offset 0x222+: Compressed pixel data
+
+        let startOffset = 0x222
+        guard data.count > startOffset else { return nil }
+
+        let remainingData = data.subdata(in: startOffset..<data.count)
+        let width = 320
+        let bytesPerLine = 160
+
+        // Try different decompression methods (same as PackedSHRDecoder)
+        var unpackedData: Data?
+        var decodedHeight = 200
+
+        // Method 1: Apple IIgs PackBytes
+        let packedBytes = PackedSHRDecoder.unpackBytes(data: remainingData, maxOutputSize: 64000)
+        if packedBytes.count >= 32000 {
+            unpackedData = packedBytes
+            decodedHeight = min(packedBytes.count / bytesPerLine, 396)
+        }
+
+        // Method 2: PackBits
+        if unpackedData == nil || unpackedData!.count < 32000 {
+            let packed = PackedSHRDecoder.unpackBits(data: remainingData, maxOutputSize: 64000)
+            if packed.count >= 32000 {
+                unpackedData = packed
+                decodedHeight = min(packed.count / bytesPerLine, 396)
+            }
+        }
+
+        // Method 3: Check if already uncompressed
+        if unpackedData == nil || unpackedData!.count < 32000 {
+            if remainingData.count >= 32000 && remainingData.count <= 33000 {
+                unpackedData = Data(remainingData.prefix(32000))
+                decodedHeight = 200
+            }
+        }
+
+        guard let finalData = unpackedData, finalData.count >= bytesPerLine else {
+            return nil
+        }
+
+        let height = min(decodedHeight, finalData.count / bytesPerLine)
+        guard height > 0 else { return nil }
+
+        let primaryPalette = palette.primaryPalette
+        guard primaryPalette.count >= 16 else { return nil }
+
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        for y in 0..<height {
+            for xByte in 0..<bytesPerLine {
+                let dataIndex = y * bytesPerLine + xByte
+                guard dataIndex < finalData.count else { continue }
+                let byte = finalData[dataIndex]
+
+                let x = xByte * 2
+
+                // First pixel (high nibble)
+                let colorIdx1 = Int((byte >> 4) & 0x0F)
+                let color1 = colorIdx1 < primaryPalette.count ? primaryPalette[colorIdx1] : primaryPalette[0]
+                let bufIdx1 = (y * width + x) * 4
+                rgbaBuffer[bufIdx1] = color1.r
+                rgbaBuffer[bufIdx1 + 1] = color1.g
+                rgbaBuffer[bufIdx1 + 2] = color1.b
+                rgbaBuffer[bufIdx1 + 3] = 255
+
+                // Second pixel (low nibble)
+                let colorIdx2 = Int(byte & 0x0F)
+                let color2 = colorIdx2 < primaryPalette.count ? primaryPalette[colorIdx2] : primaryPalette[0]
+                let bufIdx2 = (y * width + x + 1) * 4
+                rgbaBuffer[bufIdx2] = color2.r
+                rgbaBuffer[bufIdx2 + 1] = color2.g
+                rgbaBuffer[bufIdx2 + 2] = color2.b
+                rgbaBuffer[bufIdx2 + 3] = 255
+            }
+        }
+
+        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+    }
+
+    // MARK: - Packed SHR Renderer
+
+    private static func renderPackedSHR(data: Data, palette: PaletteInfo) -> CGImage? {
+        // Decompress the packed data first
+        let decompressedData = PackedSHRDecoder.unpackBytes(data: data, maxOutputSize: 65536)
+
+        guard decompressedData.count >= 32768 else { return nil }
+
+        let width = 320
+        let height = 200
+        var rgbaBuffer = [UInt8](repeating: 255, count: width * height * 4)
+
+        let pixelDataStart = 0
+        let scbOffset = 32000
+
+        // Convert PaletteInfo palettes to the tuple format used by renderer
+        let palettes: [[(r: UInt8, g: UInt8, b: UInt8)]] = palette.palettes.map { paletteColors in
+            paletteColors.map { ($0.r, $0.g, $0.b) }
+        }
+
+        guard !palettes.isEmpty else { return nil }
+
+        for y in 0..<height {
+            let scb: UInt8
+            if scbOffset + y < decompressedData.count {
+                scb = decompressedData[scbOffset + y]
+            } else {
+                scb = 0
+            }
+            let paletteIndex = Int(scb & 0x0F)
+            let currentPalette = paletteIndex < palettes.count ? palettes[paletteIndex] : palettes[0]
+
+            // Render the line using decompressed data
+            for x in 0..<(width / 2) {
+                let byteOffset = pixelDataStart + y * 160 + x
+                guard byteOffset < decompressedData.count else { continue }
+
+                let byte = decompressedData[byteOffset]
+                let pixel1 = Int((byte >> 4) & 0x0F)
+                let pixel2 = Int(byte & 0x0F)
+
+                let bufferIdx1 = (y * width + x * 2) * 4
+                let color1 = pixel1 < currentPalette.count ? currentPalette[pixel1] : currentPalette[0]
+                rgbaBuffer[bufferIdx1] = color1.r
+                rgbaBuffer[bufferIdx1 + 1] = color1.g
+                rgbaBuffer[bufferIdx1 + 2] = color1.b
+                rgbaBuffer[bufferIdx1 + 3] = 255
+
+                let bufferIdx2 = (y * width + x * 2 + 1) * 4
+                let color2 = pixel2 < currentPalette.count ? currentPalette[pixel2] : currentPalette[0]
+                rgbaBuffer[bufferIdx2] = color2.r
+                rgbaBuffer[bufferIdx2 + 1] = color2.g
+                rgbaBuffer[bufferIdx2 + 2] = color2.b
+                rgbaBuffer[bufferIdx2 + 3] = 255
             }
         }
 
