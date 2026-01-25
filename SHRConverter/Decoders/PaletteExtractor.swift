@@ -40,6 +40,9 @@ struct PaletteExtractor {
                     return palette
                 }
                 return extractStandardSHRPalette(from: data)
+            } else if mode.contains("Packed") {
+                // Packed SHR - decompress first, then extract palette
+                return extractPackedSHRPalette(from: data)
             } else {
                 // Standard SHR - try standard extraction first
                 if let palette = extractStandardSHRPalette(from: data) {
@@ -134,6 +137,37 @@ struct PaletteExtractor {
             platformName: "Apple IIgs",
             scbMapping: scbMapping
         )
+    }
+
+    /// Extract palette from packed SHR format (PNT $0001)
+    /// Decompresses the data first, then extracts palette from decompressed data
+    private static func extractPackedSHRPalette(from data: Data) -> PaletteInfo? {
+        // Decompress the packed data
+        let decompressedData = PackedSHRDecoder.unpackBytes(data: data, maxOutputSize: 65536)
+
+        // Need at least standard SHR size with palette
+        guard decompressedData.count >= 32768 else {
+            // Try with less data - some packed files may have partial palette
+            if decompressedData.count >= 32512 {
+                // Has at least some palette data
+                return extractStandardSHRPalette(from: decompressedData)
+            }
+            return nil
+        }
+
+        // Extract palette from decompressed data
+        if let palette = extractStandardSHRPalette(from: decompressedData) {
+            // Update platform name to indicate packed source
+            return PaletteInfo(
+                type: palette.type,
+                palettes: palette.palettes,
+                colorsPerPalette: palette.colorsPerPalette,
+                platformName: "Apple IIgs Packed",
+                scbMapping: palette.scbMapping
+            )
+        }
+
+        return nil
     }
 
     /// Extract 3200-color mode palette (200 palettes, one per scanline)

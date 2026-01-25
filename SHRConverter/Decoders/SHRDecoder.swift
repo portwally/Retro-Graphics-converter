@@ -30,9 +30,15 @@ class SHRDecoder {
         }
 
         // TRS-80/CoCo formats by extension
-        let trs80Extensions = ["max", "cm3", "pi3"]
+        let trs80Extensions = ["max", "cm3"]
         if trs80Extensions.contains(fileExtension) {
             return TRS80Decoder.decode(data: data, filename: filename)
+        }
+
+        // Atari ST Degas formats by extension (.PI1, .PI2, .PI3)
+        let degasExtensions = ["pi1", "pi2", "pi3"]
+        if degasExtensions.contains(fileExtension) {
+            return AtariSTDecoder.decodeDegas(data: data)
         }
         
         // Magic byte detection

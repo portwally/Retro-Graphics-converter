@@ -21,21 +21,19 @@ struct PaletteView: View {
                 HStack(alignment: .top, spacing: 8) {
                     paletteColorsView(colors: colors)
 
-                    // Show edit button for multi-palette modes (3200-color, SHR with multiple palettes)
-                    if let info = paletteInfo, info.paletteCount > 1 {
+                    // Show edit button for all formats with palettes
+                    if let info = paletteInfo, info.paletteCount >= 1 {
                         Button(action: { showAllPalettes = true }) {
                             VStack(spacing: 2) {
                                 Image(systemName: "square.grid.3x3")
                                     .font(.system(size: 14))
                                 Text("Edit")
                                     .font(.system(size: 9))
-                                Text("\(info.paletteCount)")
-                                    .font(.system(size: 9, weight: .medium))
                             }
                             .frame(width: 40)
                         }
                         .buttonStyle(.bordered)
-                        .help("Edit all \(info.paletteCount) palettes")
+                        .help(info.paletteCount > 1 ? "Edit all \(info.paletteCount) palettes" : "Edit palette")
                     }
                 }
             } else {
@@ -51,6 +49,7 @@ struct PaletteView: View {
                     .foregroundColor(.secondary)
             }
         }
+        .padding(.bottom, 4)
         .sheet(isPresented: $showAllPalettes) {
             if let info = paletteInfo {
                 AllPalettesView(
@@ -182,9 +181,7 @@ struct PaletteView: View {
                                 isHovered: hoveredColorIndex == index,
                                 swatchSize: config.swatchSize,
                                 onHover: { hoveredColorIndex = $0 ? index : nil },
-                                onEdit: { newColor in
-                                    onColorEdit?(currentPaletteIndex, index, newColor)
-                                }
+                                onTap: { showAllPalettes = true }
                             )
                         } else {
                             // Empty space for grid alignment
@@ -198,7 +195,7 @@ struct PaletteView: View {
     }
 }
 
-// MARK: - Color Swatch View
+// MARK: - Color Swatch View (Main palette bar - clicking opens editor)
 
 struct ColorSwatchView: View {
     let color: PaletteColor
@@ -207,7 +204,7 @@ struct ColorSwatchView: View {
     let isHovered: Bool
     var swatchSize: CGFloat = 16
     let onHover: (Bool) -> Void
-    let onEdit: (NSColor) -> Void
+    let onTap: () -> Void  // Opens the palette editor
 
     var body: some View {
         Rectangle()
@@ -219,73 +216,14 @@ struct ColorSwatchView: View {
             }
             .onTapGesture {
                 if isEditable {
-                    openColorPanel()
+                    onTap()
                 }
             }
-            .help("Color \(index): \(color.hexString)")
-    }
-
-    private func openColorPanel() {
-        let colorPanel = NSColorPanel.shared
-        let originalColor = color.nsColor
-
-        // IMPORTANT: Clear target/action FIRST to prevent the old handler from firing
-        // when we set the new color (since isContinuous = true)
-        colorPanel.setTarget(nil)
-        colorPanel.setAction(nil)
-
-        // Now set the color - no action will fire since target is nil
-        colorPanel.color = originalColor
-        colorPanel.isContinuous = true
-        colorPanel.showsAlpha = false
-
-        // Create a handler for color changes that checks if color actually changed
-        let handler = ColorPanelHandler(originalColor: originalColor, onColorChange: onEdit)
-        colorPanel.setTarget(handler)
-        colorPanel.setAction(#selector(ColorPanelHandler.colorChanged(_:)))
-
-        // Store handler to keep it alive
-        objc_setAssociatedObject(colorPanel, "colorHandler", handler, .OBJC_ASSOCIATION_RETAIN)
-
-        colorPanel.orderFront(nil)
+            .help(isEditable ? "Click to edit palette" : "Color \(index): \(color.hexString)")
     }
 }
 
-// MARK: - Color Panel Handler
-
-class ColorPanelHandler: NSObject {
-    let originalColor: NSColor
-    let onColorChange: (NSColor) -> Void
-
-    init(originalColor: NSColor, onColorChange: @escaping (NSColor) -> Void) {
-        self.originalColor = originalColor
-        self.onColorChange = onColorChange
-    }
-
-    @objc func colorChanged(_ sender: NSColorPanel) {
-        let newColor = sender.color
-
-        // Convert both colors to sRGB for comparison
-        guard let origSRGB = originalColor.usingColorSpace(.sRGB),
-              let newSRGB = newColor.usingColorSpace(.sRGB) else {
-            onColorChange(newColor)
-            return
-        }
-
-        // Only fire change if color actually differs (with small tolerance for floating point)
-        let rDiff = abs(origSRGB.redComponent - newSRGB.redComponent)
-        let gDiff = abs(origSRGB.greenComponent - newSRGB.greenComponent)
-        let bDiff = abs(origSRGB.blueComponent - newSRGB.blueComponent)
-
-        let tolerance: CGFloat = 1.0 / 512.0  // Less than half a color step
-
-        if rDiff > tolerance || gDiff > tolerance || bDiff > tolerance {
-            onColorChange(newColor)
-        }
-    }
-}
-
-// MARK: - All Palettes View (for 3200-color mode)
+// MARK: - All Palettes View (BitPast-style split view editor)
 
 struct AllPalettesView: View {
     let paletteInfo: PaletteInfo
@@ -293,12 +231,29 @@ struct AllPalettesView: View {
     let onColorEdit: ((Int, Int, NSColor) -> Void)?
     @Binding var isPresented: Bool
 
-    @State private var hoveredLine: Int? = nil
-    @State private var hoveredColor: Int? = nil
-    @State private var selectedLine: Int = 0
+    @State private var selectedPaletteIndex: Int = 0
+    @State private var selectedColorIndex: Int? = nil
+    @State private var copiedPalette: [PaletteColor]? = nil
+    @State private var originalPalettes: [[PaletteColor]] = []
 
-    private let swatchSize: CGFloat = 12
     private let colorsPerPalette = 16
+    private let is3200Mode: Bool
+    private let hasLargePalette: Bool
+
+    // Check if palettes have been modified from original
+    private var hasChanges: Bool {
+        guard !originalPalettes.isEmpty else { return false }
+        return paletteInfo.palettes != originalPalettes
+    }
+
+    init(paletteInfo: PaletteInfo, currentScanline: Int?, onColorEdit: ((Int, Int, NSColor) -> Void)?, isPresented: Binding<Bool>) {
+        self.paletteInfo = paletteInfo
+        self.currentScanline = currentScanline
+        self.onColorEdit = onColorEdit
+        self._isPresented = isPresented
+        self.is3200Mode = paletteInfo.type == .perScanline
+        self.hasLargePalette = paletteInfo.colorsPerPalette > 64
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -307,154 +262,257 @@ struct AllPalettesView: View {
 
             Divider()
 
-            // Palette grid - all scanlines
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: true) {
-                    LazyVStack(alignment: .leading, spacing: 1) {
-                        ForEach(0..<paletteInfo.paletteCount, id: \.self) { lineIndex in
-                            paletteRowView(lineIndex: lineIndex)
-                                .id(lineIndex)
-                        }
-                    }
-                    .padding(8)
+            // Main content - split view for multiple palettes, single view for one palette
+            if paletteInfo.paletteCount > 1 {
+                HSplitView {
+                    // Left: Palette list
+                    paletteListView
+
+                    // Right: Color grid for selected palette
+                    colorGridView
                 }
-                .onAppear {
-                    // Scroll to current scanline
-                    if let line = currentScanline {
-                        selectedLine = line
-                        proxy.scrollTo(line, anchor: .center)
-                    }
-                }
+            } else {
+                // Single palette - no need for list, just show color grid
+                colorGridView
             }
 
             Divider()
 
-            // Footer with info
+            // Footer buttons
             footerView
         }
-        .frame(width: 420, height: 500)
+        .frame(minWidth: hasLargePalette ? 500 : 650, minHeight: hasLargePalette ? 550 : 500)
+        .onAppear {
+            if let line = currentScanline, line < paletteInfo.paletteCount {
+                selectedPaletteIndex = line
+            }
+            // Store original palettes for reset functionality
+            originalPalettes = paletteInfo.palettes
+        }
     }
 
     // MARK: - Header
 
     private var headerView: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("All Palettes")
-                    .font(.headline)
-                let label = paletteInfo.type == .perScanline ? "scanlines" : "palettes"
-                Text("\(paletteInfo.paletteCount) \(label) × \(colorsPerPalette) colors")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
+            Text("Palette Editor")
+                .font(.headline)
             Spacer()
-
-            Button("Done") {
-                isPresented = false
-            }
-            .keyboardShortcut(.cancelAction)
+            Text(headerSubtitle)
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
         .padding()
+        .background(Color(NSColor.windowBackgroundColor))
     }
 
-    // MARK: - Palette Row
+    private var headerSubtitle: String {
+        if is3200Mode {
+            return "3200 Colors (\(paletteInfo.paletteCount) Scanlines)"
+        } else if paletteInfo.paletteCount == 1 {
+            return "\(paletteInfo.colorsPerPalette) Colors"
+        } else {
+            return "\(paletteInfo.paletteCount) Palettes"
+        }
+    }
 
-    private func paletteRowView(lineIndex: Int) -> some View {
-        let isCurrentLine = lineIndex == currentScanline
-        let isHoveredLine = lineIndex == hoveredLine
-        let palette = paletteInfo.palettes[safe: lineIndex] ?? []
+    // MARK: - Palette List (Left Side)
 
-        return HStack(spacing: 4) {
-            // Line number
-            Text("\(lineIndex)")
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundColor(isCurrentLine ? .accentColor : .secondary)
-                .frame(width: 28, alignment: .trailing)
+    private var paletteListView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Palettes")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.top, 8)
 
-            // Color swatches
-            HStack(spacing: 1) {
-                ForEach(0..<colorsPerPalette, id: \.self) { colorIndex in
-                    if colorIndex < palette.count {
-                        let color = palette[colorIndex]
-                        Rectangle()
-                            .fill(Color(color.nsColor))
-                            .frame(width: swatchSize, height: swatchSize)
-                            .border(
-                                (hoveredLine == lineIndex && hoveredColor == colorIndex) ? Color.white : Color.clear,
-                                width: 1
-                            )
-                            .onHover { hovering in
-                                if hovering {
-                                    hoveredLine = lineIndex
-                                    hoveredColor = colorIndex
-                                } else if hoveredLine == lineIndex && hoveredColor == colorIndex {
-                                    hoveredLine = nil
-                                    hoveredColor = nil
+            ScrollViewReader { proxy in
+                List(selection: $selectedPaletteIndex) {
+                    ForEach(0..<paletteInfo.paletteCount, id: \.self) { index in
+                        HStack(spacing: 4) {
+                            Text(is3200Mode ? "Line \(index)" : "Palette \(index)")
+                                .font(.caption)
+                                .frame(width: 70, alignment: .leading)
+
+                            // Mini preview of palette colors
+                            HStack(spacing: 1) {
+                                ForEach(0..<min(16, paletteInfo.palettes[safe: index]?.count ?? 0), id: \.self) { colorIdx in
+                                    if let palette = paletteInfo.palettes[safe: index], colorIdx < palette.count {
+                                        Rectangle()
+                                            .fill(Color(palette[colorIdx].nsColor))
+                                            .frame(width: 8, height: 12)
+                                    }
                                 }
                             }
-                            .onTapGesture {
-                                if paletteInfo.isEditable {
-                                    openColorPicker(lineIndex: lineIndex, colorIndex: colorIndex, currentColor: color)
-                                }
-                            }
-                            .help("Line \(lineIndex), Color \(colorIndex): \(color.hexString)")
-                    } else {
-                        Color.gray.opacity(0.3)
-                            .frame(width: swatchSize, height: swatchSize)
+                        }
+                        .tag(index)
+                    }
+                }
+                .listStyle(.sidebar)
+                .onAppear {
+                    if let line = currentScanline {
+                        proxy.scrollTo(line, anchor: .center)
                     }
                 }
             }
-
-            Spacer()
         }
-        .padding(.vertical, 1)
-        .padding(.horizontal, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 3)
-                .fill(isCurrentLine ? Color.accentColor.opacity(0.15) : (isHoveredLine ? Color.gray.opacity(0.1) : Color.clear))
-        )
+        .frame(minWidth: 220, maxWidth: 280)
+    }
+
+    // MARK: - Color Grid (Right Side)
+
+    // Grid configuration based on palette size
+    private func gridConfig(for colorCount: Int) -> (columns: Int, cellSize: CGFloat, spacing: CGFloat) {
+        if colorCount <= 16 {
+            return (4, 50, 8)       // 4x4 grid, large cells
+        } else if colorCount <= 64 {
+            return (8, 32, 4)       // 8x8 grid, medium cells
+        } else {
+            return (16, 20, 2)      // 16x16 grid, small cells
+        }
+    }
+
+    private var colorGridView: some View {
+        VStack(spacing: 12) {
+            if selectedPaletteIndex < paletteInfo.paletteCount,
+               let palette = paletteInfo.palettes[safe: selectedPaletteIndex] {
+
+                Text(is3200Mode ? "Scanline \(selectedPaletteIndex)" : "Palette \(selectedPaletteIndex)")
+                    .font(.headline)
+                    .padding(.top, 12)
+
+                let config = gridConfig(for: palette.count)
+
+                // Scrollable color grid for large palettes
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(config.cellSize + config.spacing), spacing: config.spacing), count: config.columns), spacing: config.spacing) {
+                        ForEach(0..<palette.count, id: \.self) { colorIdx in
+                            PaletteColorCellCompact(
+                                color: palette[colorIdx],
+                                index: colorIdx,
+                                isSelected: selectedColorIndex == colorIdx,
+                                isEditable: paletteInfo.isEditable,
+                                cellSize: config.cellSize,
+                                showIndex: palette.count <= 64
+                            ) {
+                                selectedColorIndex = colorIdx
+                                if paletteInfo.isEditable {
+                                    openColorPicker(paletteIndex: selectedPaletteIndex, colorIndex: colorIdx, currentColor: palette[colorIdx])
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                }
+
+                // Selected color info
+                if let colorIdx = selectedColorIndex, colorIdx < palette.count {
+                    let color = palette[colorIdx]
+                    VStack(spacing: 4) {
+                        Text("Color \(colorIdx)")
+                            .font(.caption)
+                        Text(color.hexString)
+                            .font(.system(.caption, design: .monospaced))
+                        Text("RGB: \(Int(color.r)), \(Int(color.g)), \(Int(color.b))")
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                // Copy/Paste palette buttons
+                if paletteInfo.isEditable {
+                    HStack {
+                        Button("Copy Palette") {
+                            copyPalette()
+                        }
+                        Button("Paste Palette") {
+                            pastePalette()
+                        }
+                        .disabled(copiedPalette == nil)
+                    }
+                    .padding(.bottom, 12)
+                }
+            } else {
+                Text("Select a palette")
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+        }
+        .frame(minWidth: 320)
     }
 
     // MARK: - Footer
 
     private var footerView: some View {
         HStack {
-            if let line = hoveredLine, let color = hoveredColor,
-               let palette = paletteInfo.palettes[safe: line],
-               color < palette.count {
-                Text("Line \(line), Color \(color): \(palette[color].hexString)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } else {
-                Text("Click a color to edit • Hover for details")
+            if !paletteInfo.isEditable {
+                Text("This palette is fixed and cannot be edited")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+
             Spacer()
+
+            if paletteInfo.isEditable {
+                Button("Reset") {
+                    resetPalettes()
+                }
+                .disabled(!hasChanges)
+                .help("Reset all colors to original values")
+            }
+
+            Button("Done") {
+                closeColorPanel()
+                isPresented = false
+            }
+            .keyboardShortcut(.defaultAction)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding()
+    }
+
+    // MARK: - Copy/Paste
+
+    private func copyPalette() {
+        if let palette = paletteInfo.palettes[safe: selectedPaletteIndex] {
+            copiedPalette = palette
+        }
+    }
+
+    private func pastePalette() {
+        guard let copied = copiedPalette, paletteInfo.isEditable else { return }
+        for (colorIndex, color) in copied.enumerated() {
+            onColorEdit?(selectedPaletteIndex, colorIndex, color.nsColor)
+        }
+    }
+
+    // MARK: - Reset
+
+    private func resetPalettes() {
+        // Restore all original colors
+        for (paletteIndex, palette) in originalPalettes.enumerated() {
+            for (colorIndex, color) in palette.enumerated() {
+                onColorEdit?(paletteIndex, colorIndex, color.nsColor)
+            }
+        }
     }
 
     // MARK: - Color Picker
 
-    private func openColorPicker(lineIndex: Int, colorIndex: Int, currentColor: PaletteColor) {
+    private func openColorPicker(paletteIndex: Int, colorIndex: Int, currentColor: PaletteColor) {
         let colorPanel = NSColorPanel.shared
         let originalColor = currentColor.nsColor
 
-        // IMPORTANT: Clear target/action FIRST to prevent the old handler from firing
-        // when we set the new color (since isContinuous = true)
         colorPanel.setTarget(nil)
         colorPanel.setAction(nil)
 
-        // Now set the color - no action will fire since target is nil
         colorPanel.color = originalColor
         colorPanel.isContinuous = true
         colorPanel.showsAlpha = false
 
         let handler = AllPalettesColorHandler(
-            lineIndex: lineIndex,
+            lineIndex: paletteIndex,
             colorIndex: colorIndex,
             originalColor: originalColor,
             onColorChange: onColorEdit
@@ -464,6 +522,71 @@ struct AllPalettesView: View {
 
         objc_setAssociatedObject(colorPanel, "colorHandler", handler, .OBJC_ASSOCIATION_RETAIN)
         colorPanel.orderFront(nil)
+    }
+
+    private func closeColorPanel() {
+        let colorPanel = NSColorPanel.shared
+        colorPanel.setTarget(nil)
+        colorPanel.setAction(nil)
+        colorPanel.close()
+    }
+}
+
+// MARK: - Palette Color Cell
+
+struct PaletteColorCell: View {
+    let color: PaletteColor
+    let index: Int
+    let isSelected: Bool
+    let isEditable: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Rectangle()
+                .fill(Color(color.nsColor))
+                .frame(width: 50, height: 50)
+                .border(isSelected ? Color.accentColor : Color.gray.opacity(0.5), width: isSelected ? 3 : 1)
+                .onTapGesture {
+                    onTap()
+                }
+
+            Text("\(index)")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.secondary)
+        }
+        .help(isEditable ? "Click to edit color \(index)" : "Color \(index): \(color.hexString)")
+    }
+}
+
+// MARK: - Compact Palette Color Cell (for large palettes)
+
+struct PaletteColorCellCompact: View {
+    let color: PaletteColor
+    let index: Int
+    let isSelected: Bool
+    let isEditable: Bool
+    let cellSize: CGFloat
+    let showIndex: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Rectangle()
+                .fill(Color(color.nsColor))
+                .frame(width: cellSize, height: cellSize)
+                .border(isSelected ? Color.accentColor : Color.gray.opacity(0.3), width: isSelected ? 2 : 0.5)
+                .onTapGesture {
+                    onTap()
+                }
+
+            if showIndex {
+                Text("\(index)")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .help(isEditable ? "Click to edit color \(index)" : "Color \(index): \(color.hexString)")
     }
 }
 
