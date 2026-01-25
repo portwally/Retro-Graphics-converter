@@ -3,10 +3,9 @@
 
 I was in search of a tool for MacOS that could batch convert Apple IIgs SHR graphics into png format but could not find anything.
 In the end I decided to code one myself in Swift. It started with SHR uncompressed graphic files to png format.
-Newly added are now HGR and DHGR conversion and output formats like png, jpg, tiff, gif and heic.
+Then i added HGR and DHGR conversion and output formats like png, jpg, tiff, gif and heic.
 Was bored and added then more graphic formats...
 
-**NEW, now with files browser for .2mg, .po, .do, .dsk and .hdv and even C64 volumes**<br>
 Just drag and drop your disk images in the app and extract your pics from there. You also can export any file from within the app to your Mac.
 
 <img width="1608" height="1004" alt="Screenshot 2026-01-23 at 21 27 44" src="https://github.com/user-attachments/assets/f9526914-2f72-41f8-bd90-cebcfd1576f4" />
@@ -91,7 +90,7 @@ User Interface
 🔍 Adjustable Thumbnails: Slider to resize preview thumbnails (50-150px)<br>
 ℹ️ Image Info: Click info button to see dimensions, file size, color count, format details<br>
 📊 Status Bar: Track imported, selected, removed, and exported file counts<br>
-🎛️ Modern Toolbar: CyanHero-style buttons with icons and labels<br>
+🎛️ Modern Toolbar: Hero-style buttons with icons and labels<br>
 
 Smart Detection
 
