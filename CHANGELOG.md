@@ -1,5 +1,36 @@
 # Changelog
 
+## Version 4.1 - 2026-01-25
+
+### Palette Editor Improvements
+
+- **Reset Button**: Added Reset button in palette editor footer to restore all colors to their original values. Button is disabled when no changes have been made.
+- **Improved Click Behavior**: Clicking on color swatches in the main palette bar now opens the full palette editor instead of the color picker directly. This provides a more consistent editing experience.
+- **BitPast-Style Editor**: Redesigned palette editor with split view layout featuring palette list on left, color grid on right, larger color swatches (50x50), and color index numbers below each swatch.
+- **256-Color Support**: Palette editor now properly displays palettes with up to 256 colors using dynamic grid sizing (4x4 for ≤16, 8x8 for ≤64, 16x16 for >64 colors).
+- **Single Palette Mode**: For formats with only one palette, the editor now shows just the color grid without the sidebar list.
+
+### New Format Support
+
+- **C64 Art Studio Hi-Res**: Added support for 9002-byte C64 Art Studio Hi-Res format (2-byte load address + 8000-byte bitmap + 1000-byte screen RAM).
+- **MSX Graphics Editor Extensions**: Added support for .GE1, .GE2, .GE5, .GE7, .GE8, .GR5, .GR7, .GR8 MSX graphics file extensions.
+
+### Bug Fixes
+
+- **Fixed MSX Palette Editing**: MSX Screen 5, Screen 8, and Screen 2 images now support live palette editing with proper re-rendering.
+
+- **Fixed Packed SHR Palette Display**: Packed SHR format images now correctly show their palettes. The extractor now decompresses the data before reading palette information.
+- **Fixed PI3 Format Detection**: Atari ST Degas .PI3 files were incorrectly identified as TRS-80 CoCo images. Added proper Degas extension detection for .PI1, .PI2, .PI3 files.
+- **Fixed Palette Display Cutoff**: Added bottom padding to prevent palette text from being cut off by the status bar.
+- **Edit Button Visibility**: The Edit button now appears for all formats with palettes (previously only showed for multi-palette formats).
+
+### Documentation
+
+- **GitHub Link**: Fixed the GitHub repository link in the Help menu to point to the correct URL.
+- **C64 Disk Formats**: Added documentation for C64 disk image formats (.d64, .d71, .d81) in Help view and README.
+
+---
+
 ## Version 4.0 - 2026-01-22
 
 ### Major UI Overhaul

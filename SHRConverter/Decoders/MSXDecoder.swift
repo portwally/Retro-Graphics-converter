@@ -370,16 +370,20 @@ class MSXDecoder {
         let dataSize = data.count - offset
 
         // Try to determine format by file extension
+        // SC* = Screen, SR* = Screen Raw, GE* = Graphics Editor, GR* = Graphics
         let ext = filename?.split(separator: ".").last?.lowercased() ?? ""
 
         switch ext {
-        case "sc1":
+        case "sc1", "ge1":
             return decodeScreen1(data: data)
-        case "sc2", "sr2":
+        case "sc2", "sr2", "ge2":
             return decodeScreen2(data: data)
-        case "sc5", "sr5":
+        case "sc5", "sr5", "ge5", "gr5":
             return decodeScreen5(data: data)
-        case "sc8", "sr8", "pic":
+        case "sc7", "ge7", "gr7":
+            // Screen 7 is 512x212 at 16 colors - use Screen 5 decoder as fallback
+            return decodeScreen5(data: data)
+        case "sc8", "sr8", "ge8", "gr8", "pic":
             if dataSize >= 54272 {
                 return decodeScreen8(data: data)
             }

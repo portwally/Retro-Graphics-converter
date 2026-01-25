@@ -57,6 +57,9 @@ struct PaletteRenderer {
         case .MacPaint:
             cgImage = renderMacPaint(data: data, palette: palette)
 
+        case .MSX(let mode, _):
+            cgImage = renderMSX(data: data, palette: palette, mode: mode)
+
         default:
             return nil
         }
@@ -1037,6 +1040,199 @@ struct PaletteRenderer {
                     rgbaBuffer[bufferIdx + 2] = color0.b
                 }
                 rgbaBuffer[bufferIdx + 3] = 255
+            }
+        }
+
+        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+    }
+
+    // MARK: - MSX Renderer
+
+    private static func renderMSX(data: Data, palette: PaletteInfo, mode: Int) -> CGImage? {
+        switch mode {
+        case 5:
+            return renderMSXScreen5(data: data, palette: palette)
+        case 8:
+            return renderMSXScreen8(data: data, palette: palette)
+        default:
+            // For other modes (1, 2), use Screen 2 renderer as fallback
+            return renderMSXScreen2(data: data, palette: palette)
+        }
+    }
+
+    private static func renderMSXScreen5(data: Data, palette: PaletteInfo) -> CGImage? {
+        let width = 256
+        let height = 212
+
+        var offset = 0
+
+        // Check for BSAVE header
+        if data.count >= 7 && data[0] == 0xFE {
+            offset = 7
+        }
+
+        let dataSize = data.count - offset
+        guard dataSize >= 27136 else { return nil }
+
+        let primaryPalette = palette.primaryPalette
+        guard primaryPalette.count >= 16 else { return nil }
+
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        for y in 0..<height {
+            for x in 0..<(width / 2) {
+                let byteOffset = offset + y * 128 + x
+                guard byteOffset < data.count else { continue }
+
+                let byte = data[byteOffset]
+                let pixel1 = Int((byte >> 4) & 0x0F)
+                let pixel2 = Int(byte & 0x0F)
+
+                // First pixel
+                let bufferIdx1 = (y * width + x * 2) * 4
+                let color1 = pixel1 < primaryPalette.count ? primaryPalette[pixel1] : primaryPalette[0]
+                rgbaBuffer[bufferIdx1] = color1.r
+                rgbaBuffer[bufferIdx1 + 1] = color1.g
+                rgbaBuffer[bufferIdx1 + 2] = color1.b
+                rgbaBuffer[bufferIdx1 + 3] = 255
+
+                // Second pixel
+                let bufferIdx2 = (y * width + x * 2 + 1) * 4
+                let color2 = pixel2 < primaryPalette.count ? primaryPalette[pixel2] : primaryPalette[0]
+                rgbaBuffer[bufferIdx2] = color2.r
+                rgbaBuffer[bufferIdx2 + 1] = color2.g
+                rgbaBuffer[bufferIdx2 + 2] = color2.b
+                rgbaBuffer[bufferIdx2 + 3] = 255
+            }
+        }
+
+        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+    }
+
+    private static func renderMSXScreen8(data: Data, palette: PaletteInfo) -> CGImage? {
+        // Screen 8 is 256 colors, fixed palette (GGGRRRBB format)
+        // Palette editing doesn't apply since colors are direct
+        let width = 256
+        let height = 212
+
+        var offset = 0
+
+        if data.count >= 7 && data[0] == 0xFE {
+            offset = 7
+        }
+
+        let dataSize = data.count - offset
+        guard dataSize >= 54272 else { return nil }
+
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        for y in 0..<height {
+            for x in 0..<width {
+                let byteOffset = offset + y * width + x
+                guard byteOffset < data.count else { continue }
+
+                let colorByte = data[byteOffset]
+                // MSX2 Screen 8: GGGRRRBB format
+                let g = UInt8((Int((colorByte >> 5) & 0x07) * 255) / 7)
+                let r = UInt8((Int((colorByte >> 2) & 0x07) * 255) / 7)
+                let b = UInt8((Int(colorByte & 0x03) * 255) / 3)
+
+                let bufferIdx = (y * width + x) * 4
+                rgbaBuffer[bufferIdx] = r
+                rgbaBuffer[bufferIdx + 1] = g
+                rgbaBuffer[bufferIdx + 2] = b
+                rgbaBuffer[bufferIdx + 3] = 255
+            }
+        }
+
+        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+    }
+
+    private static func renderMSXScreen2(data: Data, palette: PaletteInfo) -> CGImage? {
+        let width = 256
+        let height = 192
+
+        var offset = 0
+
+        if data.count >= 7 && data[0] == 0xFE {
+            offset = 7
+        }
+
+        let dataSize = data.count - offset
+        guard dataSize >= 6912 else { return nil }
+
+        let primaryPalette = palette.primaryPalette
+        guard primaryPalette.count >= 16 else { return nil }
+
+        // Determine layout based on file size
+        let patternNameTableOffset: Int
+        let patternGeneratorOffset: Int
+        let colorTableOffset: Int
+
+        if dataSize >= 16384 {
+            patternNameTableOffset = offset + 0x1800
+            patternGeneratorOffset = offset + 0x0000
+            colorTableOffset = offset + 0x2000
+        } else if dataSize >= 14336 {
+            patternNameTableOffset = offset
+            patternGeneratorOffset = offset + 768
+            colorTableOffset = offset + 768 + 6144
+        } else {
+            patternNameTableOffset = offset
+            patternGeneratorOffset = offset
+            colorTableOffset = offset + 6144
+        }
+
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        for tileRow in 0..<24 {
+            for tileCol in 0..<32 {
+                let tileIndex = tileRow * 32 + tileCol
+
+                let patternNum: Int
+                if patternNameTableOffset + tileIndex < data.count {
+                    patternNum = Int(data[patternNameTableOffset + tileIndex])
+                } else {
+                    patternNum = tileIndex % 256
+                }
+
+                let bank = tileRow / 8
+                let patternOffset = patternGeneratorOffset + (bank * 2048) + (patternNum * 8)
+                let colorOffset = colorTableOffset + (bank * 2048) + (patternNum * 8)
+
+                for line in 0..<8 {
+                    let patternByteOffset = patternOffset + line
+                    let colorByteOffset = colorOffset + line
+
+                    var patternByte: UInt8 = 0
+                    var colorByte: UInt8 = 0
+
+                    if patternByteOffset < data.count {
+                        patternByte = data[patternByteOffset]
+                    }
+                    if colorByteOffset < data.count {
+                        colorByte = data[colorByteOffset]
+                    }
+
+                    let fgColorIdx = Int((colorByte >> 4) & 0x0F)
+                    let bgColorIdx = Int(colorByte & 0x0F)
+
+                    for pixel in 0..<8 {
+                        let bit = (patternByte >> (7 - pixel)) & 1
+                        let colorIdx = bit == 1 ? fgColorIdx : bgColorIdx
+                        let actualColorIdx = colorIdx == 0 ? 1 : colorIdx
+
+                        let x = tileCol * 8 + pixel
+                        let y = tileRow * 8 + line
+                        let bufferIdx = (y * width + x) * 4
+
+                        let color = actualColorIdx < primaryPalette.count ? primaryPalette[actualColorIdx] : primaryPalette[0]
+                        rgbaBuffer[bufferIdx] = color.r
+                        rgbaBuffer[bufferIdx + 1] = color.g
+                        rgbaBuffer[bufferIdx + 2] = color.b
+                        rgbaBuffer[bufferIdx + 3] = 255
+                    }
+                }
             }
         }
 

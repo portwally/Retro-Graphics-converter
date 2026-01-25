@@ -18,7 +18,9 @@ class SHRDecoder {
         }
 
         // MSX formats by extension
-        let msxExtensions = ["sc1", "sc2", "sr2", "sc5", "sr5", "sc8", "sr8"]
+        // SC* = Screen, SR* = Screen Raw, GE* = Graphics Editor, GR* = Graphics
+        let msxExtensions = ["sc1", "sc2", "sr2", "sc5", "sr5", "sc8", "sr8",
+                             "ge1", "ge2", "ge5", "ge7", "ge8", "gr5", "gr7", "gr8"]
         if msxExtensions.contains(fileExtension) {
             return MSXDecoder.decode(data: data, filename: filename)
         }
