@@ -14,7 +14,7 @@ Just drag and drop your disk images in the app and extract your pics from there.
 Retro Platforms
 
 🍎 Apple II/IIGS: SHR (Standard/3200/3200 Packed/816Paint/DreamGrafix), HGR, DHGR, PNT, PIC<br>
-🖥️ Amiga: IFF/ILBM (8-bit indexed, 24-bit RGB)<br>
+🖥️ Amiga: IFF/ILBM (8-bit indexed, 24-bit RGB, HAM6 4096 colors, HAM8 262144 colors)<br>
 🕹️ Atari ST: Degas (PI1/PI2/PI3)<br>
 💾 Commodore 64: Koala Painter, HIRES, Art Studio, D64/D71/D81 disk images<br>
 🎮 ZX Spectrum: SCR (6912 bytes)<br>
@@ -104,6 +104,7 @@ Technical Highlights
 🎨 Accurate Color Palettes: C64, Apple II, EGA, CGA, ZX Spectrum, MSX TMS9918, BBC Micro, CoCo palettes<br>
 🗜️ Decompression Support: RLE (PCX), PackBits (MacPaint), PackBytes (PNT/SHR), LZW (DreamGrafix), IFF compression<br>
 🔄 Format-Specific Decoding: Planar, chunky, interleaved, tile-based bitmap handling<br>
+🎯 Amiga HAM Decoding: Full Hold-And-Modify algorithm for HAM6 (4096 colors) and HAM8 (262144 colors)<br>
 📊 Resolution Accuracy: Proper aspect ratios and pixel layouts<br>
 
 🚀 Use Cases

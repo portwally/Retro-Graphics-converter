@@ -1,5 +1,24 @@
 # Changelog
 
+## Version 4.2 - 2026-01-29
+
+### Amiga HAM Mode Support
+
+- **HAM6/HAM8 Decoding**: Added full support for Amiga Hold-And-Modify (HAM) mode images. HAM6 displays up to 4096 colors, HAM8 displays up to 262144 colors.
+- **CAMG Chunk Parsing**: IFF decoder now parses the CAMG chunk to detect HAM and EHB (Extra Half-Brite) viewport modes.
+- **HAM Palette Display**: Palette editor now shows the actual colors extracted from the rendered HAM image (up to 256 most frequent colors), sorted by frequency. This provides a useful view of the colors actually used in the image rather than just the base palette.
+
+### Histogram Improvements
+
+- **Accurate Color Count**: Fixed the histogram "Colors" statistic to correctly count unique RGB colors in the image. Previously it counted histogram bins rather than actual unique color combinations.
+- **HAM Color Accuracy**: HAM images now show the actual number of unique colors displayed (e.g., hundreds or thousands) rather than just the base palette size.
+
+### Bug Fixes
+
+- **Paintworks Palette Display**: Fixed palette extraction for Paintworks format files (from previous session).
+
+---
+
 ## Version 4.1 - 2026-01-25
 
 ### Palette Editor Improvements

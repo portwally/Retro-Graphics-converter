@@ -713,17 +713,34 @@ struct PaletteExtractor {
     // MARK: - Amiga IFF Palette
 
     private static func extractIFFPalette(from data: Data) -> PaletteInfo? {
-        // Find CMAP chunk
+        // Parse IFF chunks to find CMAP and detect HAM/EHB mode
         var offset = 12  // Skip FORM header
+        var colors: [PaletteColor] = []
+        var isHAM = false
+        var isEHB = false
+        var numPlanes = 0
 
         while offset + 8 < data.count {
             let chunkType = String(data: data[offset..<offset+4], encoding: .ascii) ?? ""
             let chunkSize = Int(ImageHelpers.readBigEndianUInt32(data: data, offset: offset + 4))
 
-            if chunkType == "CMAP" {
-                let numColors = chunkSize / 3
-                var colors: [PaletteColor] = []
+            switch chunkType {
+            case "BMHD":
+                // Get number of bitplanes
+                if chunkSize >= 9 && offset + 8 + 8 < data.count {
+                    numPlanes = Int(data[offset + 8 + 8])
+                }
 
+            case "CAMG":
+                // Amiga viewport mode flags
+                if chunkSize >= 4 {
+                    let camgFlags = ImageHelpers.readBigEndianUInt32(data: data, offset: offset + 8)
+                    isHAM = (camgFlags & 0x0800) != 0
+                    isEHB = (camgFlags & 0x0080) != 0
+                }
+
+            case "CMAP":
+                let numColors = chunkSize / 3
                 for i in 0..<numColors {
                     let colorOffset = offset + 8 + (i * 3)
                     if colorOffset + 2 < data.count {
@@ -735,17 +752,99 @@ struct PaletteExtractor {
                     }
                 }
 
-                return PaletteInfo(
-                    singlePalette: colors,
-                    platformName: "Amiga"
-                )
+            default:
+                break
             }
 
             offset += 8 + chunkSize
             if chunkSize % 2 != 0 { offset += 1 }  // Padding
         }
 
-        return nil
+        guard !colors.isEmpty else { return nil }
+
+        // For HAM mode, extract actual colors from the decoded image
+        if isHAM {
+            let hamType = numPlanes == 8 ? "HAM8" : "HAM6"
+            let maxColors = numPlanes == 8 ? "262144" : "4096"
+            let platformName = "Amiga \(hamType) (\(maxColors) colors)"
+
+            // Decode the image to extract actual colors
+            let (cgImage, _) = AmigaIFFDecoder.decode(data: data)
+            if let image = cgImage {
+                let extractedColors = extractColorsFromImage(image, maxColors: 256)
+                if !extractedColors.isEmpty {
+                    return PaletteInfo(
+                        fixedPalette: extractedColors,
+                        platformName: platformName
+                    )
+                }
+            }
+
+            // Fallback to base palette if extraction fails
+            return PaletteInfo(
+                fixedPalette: colors,
+                platformName: platformName + " (base palette)"
+            )
+        }
+
+        // Determine platform name based on mode
+        let platformName: String
+        if isEHB {
+            platformName = "Amiga EHB"
+        } else {
+            platformName = "Amiga"
+        }
+
+        return PaletteInfo(
+            singlePalette: colors,
+            platformName: platformName
+        )
+    }
+
+    /// Extract unique colors from a CGImage (for HAM and other generated palettes)
+    private static func extractColorsFromImage(_ image: CGImage, maxColors: Int) -> [PaletteColor] {
+        let width = image.width
+        let height = image.height
+
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return []
+        }
+
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        guard let data = context.data else { return [] }
+        let pixels = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
+
+        // Count color occurrences
+        var colorCounts: [UInt32: Int] = [:]
+        for i in 0..<(width * height) {
+            let offset = i * 4
+            let r = pixels[offset]
+            let g = pixels[offset + 1]
+            let b = pixels[offset + 2]
+            let colorKey = UInt32(r) << 16 | UInt32(g) << 8 | UInt32(b)
+            colorCounts[colorKey, default: 0] += 1
+        }
+
+        // Sort by frequency and take top colors
+        let sortedColors = colorCounts.sorted { $0.value > $1.value }
+        let topColors = sortedColors.prefix(maxColors)
+
+        return topColors.map { (colorKey, _) in
+            let r = UInt8((colorKey >> 16) & 0xFF)
+            let g = UInt8((colorKey >> 8) & 0xFF)
+            let b = UInt8(colorKey & 0xFF)
+            return PaletteColor(r: r, g: g, b: b)
+        }
     }
 
     // MARK: - Atari ST Degas Palette

@@ -30,7 +30,9 @@ class AmigaIFFDecoder {
         var bodyOffset = 0
         var bodySize = 0
         var masking: UInt8 = 0
-        
+        var isHAM = false
+        var isEHB = false
+
         while offset + 8 <= data.count {
             guard let chunkID = String(data: data.subdata(in: offset..<offset+4), encoding: .ascii) else {
                 break
@@ -68,7 +70,15 @@ class AmigaIFFDecoder {
             case "BODY":
                 bodyOffset = offset
                 bodySize = chunkSize
-            
+
+            case "CAMG":
+                // Amiga viewport mode flags
+                if chunkSize >= 4 {
+                    let camgFlags = ImageHelpers.readBigEndianUInt32(data: data, offset: offset)
+                    isHAM = (camgFlags & 0x0800) != 0  // HAM flag
+                    isEHB = (camgFlags & 0x0080) != 0  // Extra Half-Brite flag
+                }
+
             default:
                 break
             }
@@ -84,7 +94,7 @@ class AmigaIFFDecoder {
         }
         
         let is24Bit = (numPlanes == 24 || numPlanes == 25 || numPlanes == 32)
-        
+
         let cgImage: CGImage?
         if is24Bit {
             cgImage = decodeILBM24Body(
@@ -96,6 +106,17 @@ class AmigaIFFDecoder {
                 numPlanes: numPlanes,
                 compression: compression,
                 masking: masking
+            )
+        } else if isHAM {
+            cgImage = decodeHAMBody(
+                data: data,
+                bodyOffset: bodyOffset,
+                bodySize: bodySize,
+                width: width,
+                height: height,
+                numPlanes: numPlanes,
+                compression: compression,
+                palette: palette
             )
         } else {
             cgImage = decodeILBMBody(
@@ -148,7 +169,18 @@ class AmigaIFFDecoder {
             }
         }
         
-        let colorDescription = is24Bit ? "24-bit RGB" : "\(1 << numPlanes) colors"
+        let colorDescription: String
+        if is24Bit {
+            colorDescription = "24-bit RGB"
+        } else if isHAM {
+            // HAM6 = 4096 colors, HAM8 = 262144 colors
+            let hamColors = numPlanes == 6 ? "4096" : "262144"
+            colorDescription = "HAM\(numPlanes) (\(hamColors) colors)"
+        } else if isEHB {
+            colorDescription = "EHB (\(1 << numPlanes) colors)"
+        } else {
+            colorDescription = "\(1 << numPlanes) colors"
+        }
         return (correctedImage, .IFF(width: width, height: height, colors: colorDescription))
     }
     
@@ -335,6 +367,171 @@ class AmigaIFFDecoder {
             }
         }
         
+        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+    }
+
+    // MARK: - HAM (Hold And Modify) Decoding
+    // HAM6: 6 bitplanes, 16-color base palette, 4096 possible colors
+    // HAM8: 8 bitplanes, 64-color base palette, 262144 possible colors
+    //
+    // Top 2 bits are control bits:
+    //   00: Use data bits as palette index
+    //   01: Hold R and G, modify B
+    //   10: Hold G and B, modify R
+    //   11: Hold R and B, modify G
+
+    private static func decodeHAMBody(data: Data, bodyOffset: Int, bodySize: Int, width: Int, height: Int, numPlanes: Int, compression: UInt8, palette: [(r: UInt8, g: UInt8, b: UInt8)]) -> CGImage? {
+        let bytesPerRow = ((width + 15) / 16) * 2
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        // HAM6 uses 4 data bits (16 colors), HAM8 uses 6 data bits (64 colors)
+        let dataBits = numPlanes - 2
+        let paletteSize = 1 << dataBits
+
+        // Ensure we have a proper palette
+        var finalPalette = palette
+        if finalPalette.count < paletteSize {
+            // Extend palette if needed
+            while finalPalette.count < paletteSize {
+                finalPalette.append((0, 0, 0))
+            }
+        }
+
+        var srcOffset = bodyOffset
+
+        for y in 0..<height {
+            var planeBits: [[UInt8]] = Array(repeating: [], count: numPlanes)
+
+            // Decompress/read plane data for this row
+            for plane in 0..<numPlanes {
+                var rowData: [UInt8] = []
+
+                if compression == 1 {
+                    var bytesRead = 0
+                    while bytesRead < bytesPerRow && srcOffset < bodyOffset + bodySize {
+                        let cmd = Int8(bitPattern: data[srcOffset])
+                        srcOffset += 1
+
+                        if cmd >= 0 {
+                            let count = Int(cmd) + 1
+                            for _ in 0..<count {
+                                if srcOffset < bodyOffset + bodySize && bytesRead < bytesPerRow {
+                                    rowData.append(data[srcOffset])
+                                    srcOffset += 1
+                                    bytesRead += 1
+                                }
+                            }
+                        } else if cmd != -128 {
+                            let count = Int(-cmd) + 1
+                            if srcOffset < bodyOffset + bodySize {
+                                let repeatByte = data[srcOffset]
+                                srcOffset += 1
+                                for _ in 0..<count {
+                                    if bytesRead < bytesPerRow {
+                                        rowData.append(repeatByte)
+                                        bytesRead += 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    for _ in 0..<bytesPerRow {
+                        if srcOffset < bodyOffset + bodySize {
+                            rowData.append(data[srcOffset])
+                            srcOffset += 1
+                        }
+                    }
+                }
+
+                planeBits[plane] = rowData
+            }
+
+            // Process pixels with HAM decoding
+            // At the start of each line, initialize to the border/background color (palette index 0)
+            var prevR: UInt8 = finalPalette[0].r
+            var prevG: UInt8 = finalPalette[0].g
+            var prevB: UInt8 = finalPalette[0].b
+
+            for x in 0..<width {
+                let byteIndex = x / 8
+                let bitIndex = 7 - (x % 8)
+
+                // Extract all bits from bitplanes
+                var pixelValue = 0
+                for plane in 0..<numPlanes {
+                    if byteIndex < planeBits[plane].count {
+                        let bit = (planeBits[plane][byteIndex] >> bitIndex) & 1
+                        pixelValue |= Int(bit) << plane
+                    }
+                }
+
+                // Split into control bits (top 2) and data bits (remaining)
+                let controlBits = (pixelValue >> dataBits) & 0x03
+                let dataValue = pixelValue & ((1 << dataBits) - 1)
+
+                var r: UInt8
+                var g: UInt8
+                var b: UInt8
+
+                switch controlBits {
+                case 0:
+                    // Use palette color directly
+                    let color = finalPalette[min(dataValue, finalPalette.count - 1)]
+                    r = color.r
+                    g = color.g
+                    b = color.b
+
+                case 1:
+                    // Modify Blue, hold Red and Green
+                    r = prevR
+                    g = prevG
+                    // Expand data bits to 8 bits
+                    if dataBits == 4 {
+                        b = UInt8(dataValue << 4 | dataValue)  // HAM6: 4-bit to 8-bit
+                    } else {
+                        b = UInt8(dataValue << 2 | (dataValue >> 4))  // HAM8: 6-bit to 8-bit
+                    }
+
+                case 2:
+                    // Modify Red, hold Green and Blue
+                    g = prevG
+                    b = prevB
+                    if dataBits == 4 {
+                        r = UInt8(dataValue << 4 | dataValue)
+                    } else {
+                        r = UInt8(dataValue << 2 | (dataValue >> 4))
+                    }
+
+                case 3:
+                    // Modify Green, hold Red and Blue
+                    r = prevR
+                    b = prevB
+                    if dataBits == 4 {
+                        g = UInt8(dataValue << 4 | dataValue)
+                    } else {
+                        g = UInt8(dataValue << 2 | (dataValue >> 4))
+                    }
+
+                default:
+                    r = prevR
+                    g = prevG
+                    b = prevB
+                }
+
+                // Store for next pixel
+                prevR = r
+                prevG = g
+                prevB = b
+
+                let bufferIdx = (y * width + x) * 4
+                rgbaBuffer[bufferIdx] = r
+                rgbaBuffer[bufferIdx + 1] = g
+                rgbaBuffer[bufferIdx + 2] = b
+                rgbaBuffer[bufferIdx + 3] = 255
+            }
+        }
+
         return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
     }
 }

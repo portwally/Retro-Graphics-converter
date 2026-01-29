@@ -8,12 +8,14 @@ struct HistogramData {
     var green: [Int]
     var blue: [Int]
     var luminance: [Int]
+    var uniqueColorCount: Int
 
     static let empty = HistogramData(
         red: Array(repeating: 0, count: 256),
         green: Array(repeating: 0, count: 256),
         blue: Array(repeating: 0, count: 256),
-        luminance: Array(repeating: 0, count: 256)
+        luminance: Array(repeating: 0, count: 256),
+        uniqueColorCount: 0
     )
 
     var maxValue: Int {
@@ -54,6 +56,7 @@ struct HistogramData {
         var green = Array(repeating: 0, count: 256)
         var blue = Array(repeating: 0, count: 256)
         var luminance = Array(repeating: 0, count: 256)
+        var uniqueColors = Set<UInt32>()
 
         for i in 0..<(width * height) {
             let offset = i * 4
@@ -68,9 +71,13 @@ struct HistogramData {
             // Calculate luminance using standard coefficients
             let lum = Int(0.299 * Double(r) + 0.587 * Double(g) + 0.114 * Double(b))
             luminance[min(255, lum)] += 1
+
+            // Track unique colors (pack RGB into 32-bit value)
+            let colorKey = UInt32(r) << 16 | UInt32(g) << 8 | UInt32(b)
+            uniqueColors.insert(colorKey)
         }
 
-        return HistogramData(red: red, green: green, blue: blue, luminance: luminance)
+        return HistogramData(red: red, green: green, blue: blue, luminance: luminance, uniqueColorCount: uniqueColors.count)
     }
 }
 
@@ -144,11 +151,7 @@ struct HistogramView: View {
 
     private var colorCount: String {
         guard image != nil else { return "-" }
-        // Count unique colors based on histogram
-        let uniqueColors = zip(zip(histogramData.red, histogramData.green), histogramData.blue)
-            .filter { $0.0.0 > 0 || $0.0.1 > 0 || $0.1 > 0 }
-            .count
-        return "\(uniqueColors)"
+        return "\(histogramData.uniqueColorCount)"
     }
 
     private var meanValue: String {
