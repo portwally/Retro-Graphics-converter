@@ -707,6 +707,7 @@ struct PaletteRenderer {
     private static func renderPCX(data: Data, palette: PaletteInfo, bitsPerPixel: Int) -> CGImage? {
         guard data.count >= 128, data[0] == 0x0A else { return nil }
 
+        let headerBitsPerPixel = Int(data[3])
         let xMin = Int(data[4]) | (Int(data[5]) << 8)
         let yMin = Int(data[6]) | (Int(data[7]) << 8)
         let xMax = Int(data[8]) | (Int(data[9]) << 8)
@@ -718,6 +719,10 @@ struct PaletteRenderer {
 
         guard width > 0, height > 0, width < 10000, height < 10000 else { return nil }
 
+        // Detect CGA header mismatch (header says 1bpp but bytesPerLine indicates 2bpp)
+        let calculatedBitsPerPixel = width > 0 ? (bytesPerLine * 8) / width : headerBitsPerPixel
+        let isCGA4Color = headerBitsPerPixel == 1 && numPlanes == 1 && calculatedBitsPerPixel == 2
+
         let primaryPalette = palette.primaryPalette
         guard !primaryPalette.isEmpty else { return nil }
 
@@ -726,7 +731,8 @@ struct PaletteRenderer {
         // Decompress RLE data
         var decompressedData: [UInt8] = []
         var offset = 128
-        let expectedSize = numPlanes == 0 ? bytesPerLine * height : bytesPerLine * numPlanes * height
+        let scanlineSize = bytesPerLine * numPlanes
+        let expectedSize = scanlineSize * height
 
         while offset < data.count && decompressedData.count < expectedSize {
             let byte = data[offset]
@@ -747,8 +753,8 @@ struct PaletteRenderer {
 
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
 
-        if bitsPerPixel == 8 && numPlanes == 1 {
-            // 256-color mode
+        // VGA 256-color mode (8bpp, 1 plane)
+        if headerBitsPerPixel == 8 && numPlanes == 1 {
             for y in 0..<height {
                 for x in 0..<width {
                     let dataIndex = y * bytesPerLine + x
@@ -761,15 +767,109 @@ struct PaletteRenderer {
                     rgbaBuffer[bufferIdx + 3] = 255
                 }
             }
-        } else if bitsPerPixel <= 4 {
-            // 16-color or less
+        }
+        // EGA 16-color planar (1bpp, 4 planes)
+        else if headerBitsPerPixel == 1 && numPlanes == 4 {
+            for y in 0..<height {
+                let rowOffset = y * scanlineSize
+                for x in 0..<width {
+                    let byteIndex = x / 8
+                    let bitIndex = 7 - (x % 8)
+
+                    var colorIndex = 0
+                    for plane in 0..<4 {
+                        let planeOffset = rowOffset + plane * bytesPerLine + byteIndex
+                        if planeOffset < decompressedData.count {
+                            let bit = (decompressedData[planeOffset] >> bitIndex) & 1
+                            colorIndex |= Int(bit) << plane
+                        }
+                    }
+
+                    let color = pcxPalette[min(colorIndex, pcxPalette.count - 1)]
+                    let bufferIdx = (y * width + x) * 4
+                    rgbaBuffer[bufferIdx] = color.r
+                    rgbaBuffer[bufferIdx + 1] = color.g
+                    rgbaBuffer[bufferIdx + 2] = color.b
+                    rgbaBuffer[bufferIdx + 3] = 255
+                }
+            }
+        }
+        // EGA 64-color planar (2bpp, 4 planes)
+        else if headerBitsPerPixel == 2 && numPlanes == 4 {
+            for y in 0..<height {
+                let rowOffset = y * scanlineSize
+                for x in 0..<width {
+                    let byteIndex = x / 4
+                    let pixelInByte = 3 - (x % 4)
+                    let shift = pixelInByte * 2
+
+                    var colorIndex = 0
+                    for plane in 0..<4 {
+                        let planeOffset = rowOffset + plane * bytesPerLine + byteIndex
+                        if planeOffset < decompressedData.count {
+                            let bits = (decompressedData[planeOffset] >> shift) & 0x03
+                            colorIndex |= Int(bits) << (plane * 2)
+                        }
+                    }
+
+                    let color = pcxPalette[min(colorIndex, pcxPalette.count - 1)]
+                    let bufferIdx = (y * width + x) * 4
+                    rgbaBuffer[bufferIdx] = color.r
+                    rgbaBuffer[bufferIdx + 1] = color.g
+                    rgbaBuffer[bufferIdx + 2] = color.b
+                    rgbaBuffer[bufferIdx + 3] = 255
+                }
+            }
+        }
+        // CGA 4-color (2bpp, 1 plane) - including header mismatch detection
+        else if isCGA4Color || (headerBitsPerPixel == 2 && numPlanes == 1) {
+            for y in 0..<height {
+                for x in 0..<width {
+                    let byteIndex = y * bytesPerLine + (x / 4)
+                    let pixelInByte = 3 - (x % 4)
+                    if byteIndex < decompressedData.count {
+                        let colorIndex = Int((decompressedData[byteIndex] >> (pixelInByte * 2)) & 0x03)
+                        let color = pcxPalette[min(colorIndex, pcxPalette.count - 1)]
+                        let bufferIdx = (y * width + x) * 4
+                        rgbaBuffer[bufferIdx] = color.r
+                        rgbaBuffer[bufferIdx + 1] = color.g
+                        rgbaBuffer[bufferIdx + 2] = color.b
+                        rgbaBuffer[bufferIdx + 3] = 255
+                    }
+                }
+            }
+        }
+        // Monochrome (1bpp, 1 plane)
+        else if headerBitsPerPixel == 1 && numPlanes == 1 {
             for y in 0..<height {
                 for x in 0..<width {
                     let byteIndex = y * bytesPerLine + (x / 8)
                     let bitIndex = 7 - (x % 8)
                     if byteIndex < decompressedData.count {
-                        let bit = (decompressedData[byteIndex] >> bitIndex) & 1
-                        let color = Int(bit) < pcxPalette.count ? pcxPalette[Int(bit)] : (r: UInt8(0), g: UInt8(0), b: UInt8(0))
+                        let bit = Int((decompressedData[byteIndex] >> bitIndex) & 1)
+                        let color = pcxPalette[min(bit, pcxPalette.count - 1)]
+                        let bufferIdx = (y * width + x) * 4
+                        rgbaBuffer[bufferIdx] = color.r
+                        rgbaBuffer[bufferIdx + 1] = color.g
+                        rgbaBuffer[bufferIdx + 2] = color.b
+                        rgbaBuffer[bufferIdx + 3] = 255
+                    }
+                }
+            }
+        }
+        // 4-bit single plane (16 colors, 2 pixels per byte)
+        else if headerBitsPerPixel == 4 && numPlanes == 1 {
+            for y in 0..<height {
+                for x in 0..<width {
+                    let byteIndex = y * bytesPerLine + (x / 2)
+                    if byteIndex < decompressedData.count {
+                        let colorIndex: Int
+                        if x % 2 == 0 {
+                            colorIndex = Int(decompressedData[byteIndex] >> 4)
+                        } else {
+                            colorIndex = Int(decompressedData[byteIndex] & 0x0F)
+                        }
+                        let color = pcxPalette[min(colorIndex, pcxPalette.count - 1)]
                         let bufferIdx = (y * width + x) * 4
                         rgbaBuffer[bufferIdx] = color.r
                         rgbaBuffer[bufferIdx + 1] = color.g

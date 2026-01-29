@@ -966,8 +966,84 @@ struct PaletteExtractor {
     // MARK: - PCX Palette
 
     private static func extractPCXPalette(from data: Data, bitsPerPixel: Int) -> PaletteInfo? {
-        if bitsPerPixel <= 8 && data.count > 769 {
-            // VGA palette at end of file (256 colors × 3 bytes + 0x0C marker)
+        guard data.count >= 128, data[0] == 0x0A else { return nil }
+
+        // Read header info
+        let headerBitsPerPixel = Int(data[3])
+        let xMin = Int(data[4]) | (Int(data[5]) << 8)
+        let xMax = Int(data[8]) | (Int(data[9]) << 8)
+        let width = xMax - xMin + 1
+        let numPlanes = Int(data[65])
+        let bytesPerLine = Int(data[66]) | (Int(data[67]) << 8)
+
+        // Detect CGA header mismatch (header says 1bpp but bytesPerLine indicates 2bpp)
+        let calculatedBitsPerPixel = width > 0 ? (bytesPerLine * 8) / width : headerBitsPerPixel
+        let isCGA4Color = headerBitsPerPixel == 1 && numPlanes == 1 && calculatedBitsPerPixel == 2
+
+        // Read header palette (16 colors at offset 16-63)
+        var headerPalette: [PaletteColor] = []
+        for i in 0..<16 {
+            let offset = 16 + i * 3
+            if offset + 2 < data.count {
+                headerPalette.append(PaletteColor(
+                    r: data[offset],
+                    g: data[offset + 1],
+                    b: data[offset + 2]
+                ))
+            }
+        }
+
+        // CGA 4-color mode (2bpp, 1 plane)
+        if isCGA4Color {
+            let cgaPalette: [PaletteColor]
+            if !headerPalette.isEmpty && headerPalette.count >= 4 {
+                cgaPalette = Array(headerPalette.prefix(4))
+            } else {
+                // Default CGA palette 1 (cyan, magenta, white)
+                cgaPalette = [
+                    PaletteColor(r: 0, g: 0, b: 0),
+                    PaletteColor(r: 0, g: 170, b: 170),
+                    PaletteColor(r: 170, g: 0, b: 170),
+                    PaletteColor(r: 170, g: 170, b: 170)
+                ]
+            }
+            return PaletteInfo(singlePalette: cgaPalette, platformName: "PCX CGA")
+        }
+
+        // EGA 16-color planar mode (1bpp, 4 planes)
+        if headerBitsPerPixel == 1 && numPlanes == 4 {
+            let egaPalette = !headerPalette.isEmpty ? headerPalette : createEGAPalette()
+            return PaletteInfo(singlePalette: egaPalette, platformName: "PCX EGA 16-color")
+        }
+
+        // EGA 64-color planar mode (2bpp, 4 planes)
+        if headerBitsPerPixel == 2 && numPlanes == 4 {
+            let ega64Palette = createEGA64Palette()
+            return PaletteInfo(singlePalette: ega64Palette, platformName: "PCX EGA 64-color")
+        }
+
+        // 4-bit single plane (16 colors)
+        if headerBitsPerPixel == 4 && numPlanes == 1 {
+            let egaPalette = !headerPalette.isEmpty ? headerPalette : createEGAPalette()
+            return PaletteInfo(singlePalette: egaPalette, platformName: "PCX 16-color")
+        }
+
+        // Monochrome (1bpp, 1 plane)
+        if headerBitsPerPixel == 1 && numPlanes == 1 {
+            let monoPalette: [PaletteColor]
+            if headerPalette.count >= 2 {
+                monoPalette = Array(headerPalette.prefix(2))
+            } else {
+                monoPalette = [
+                    PaletteColor(r: 0, g: 0, b: 0),
+                    PaletteColor(r: 255, g: 255, b: 255)
+                ]
+            }
+            return PaletteInfo(singlePalette: monoPalette, platformName: "PCX Monochrome")
+        }
+
+        // VGA 256-color mode (8bpp, 1 plane) - palette at end of file
+        if headerBitsPerPixel == 8 && numPlanes == 1 && data.count > 769 {
             let markerOffset = data.count - 769
             if data[markerOffset] == 0x0C {
                 var colors: [PaletteColor] = []
@@ -981,10 +1057,51 @@ struct PaletteExtractor {
                         ))
                     }
                 }
-                return PaletteInfo(singlePalette: colors, platformName: "PCX")
+                return PaletteInfo(singlePalette: colors, platformName: "PCX VGA")
             }
         }
+
+        // Fallback: use header palette if available
+        if !headerPalette.isEmpty {
+            return PaletteInfo(singlePalette: headerPalette, platformName: "PCX")
+        }
+
         return nil
+    }
+
+    // MARK: - PCX Palette Helpers
+
+    private static func createEGAPalette() -> [PaletteColor] {
+        return [
+            PaletteColor(r: 0, g: 0, b: 0),       // 0: Black
+            PaletteColor(r: 0, g: 0, b: 170),     // 1: Blue
+            PaletteColor(r: 0, g: 170, b: 0),     // 2: Green
+            PaletteColor(r: 0, g: 170, b: 170),   // 3: Cyan
+            PaletteColor(r: 170, g: 0, b: 0),     // 4: Red
+            PaletteColor(r: 170, g: 0, b: 170),   // 5: Magenta
+            PaletteColor(r: 170, g: 85, b: 0),    // 6: Brown
+            PaletteColor(r: 170, g: 170, b: 170), // 7: Light Gray
+            PaletteColor(r: 85, g: 85, b: 85),    // 8: Dark Gray
+            PaletteColor(r: 85, g: 85, b: 255),   // 9: Light Blue
+            PaletteColor(r: 85, g: 255, b: 85),   // 10: Light Green
+            PaletteColor(r: 85, g: 255, b: 255),  // 11: Light Cyan
+            PaletteColor(r: 255, g: 85, b: 85),   // 12: Light Red
+            PaletteColor(r: 255, g: 85, b: 255),  // 13: Light Magenta
+            PaletteColor(r: 255, g: 255, b: 85),  // 14: Yellow
+            PaletteColor(r: 255, g: 255, b: 255)  // 15: White
+        ]
+    }
+
+    private static func createEGA64Palette() -> [PaletteColor] {
+        var palette: [PaletteColor] = []
+        for i in 0..<64 {
+            // EGA 64-color: RrGgBb format (2 bits each)
+            let r = ((i >> 5) & 1) * 170 + ((i >> 2) & 1) * 85
+            let g = ((i >> 4) & 1) * 170 + ((i >> 1) & 1) * 85
+            let b = ((i >> 3) & 1) * 170 + (i & 1) * 85
+            palette.append(PaletteColor(r: UInt8(r), g: UInt8(g), b: UInt8(b)))
+        }
+        return palette
     }
 
     // MARK: - BMP Palette

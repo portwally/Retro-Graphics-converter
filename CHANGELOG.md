@@ -13,6 +13,16 @@
 - **Accurate Color Count**: Fixed the histogram "Colors" statistic to correctly count unique RGB colors in the image. Previously it counted histogram bins rather than actual unique color combinations.
 - **HAM Color Accuracy**: HAM images now show the actual number of unique colors displayed (e.g., hundreds or thousands) rather than just the base palette size.
 
+### PCX Format Improvements
+
+- **EGA 16-Color Planar**: Fixed decoding of EGA 16-color PCX files (1 bit/pixel, 4 planes). Previously showed only 1/4 of the image with wrong colors.
+- **EGA 64-Color Planar**: Added support for EGA 64-color mode PCX files (2 bits/pixel, 4 planes) with proper 6-bit RGB palette.
+- **CGA 4-Color Mode**: Fixed CGA PCX files that have incorrect headers (claims 1 bit/pixel but bytesPerLine indicates 2 bits/pixel). Now auto-detects this mismatch and decodes correctly.
+- **4-Bit Packed Mode**: Added support for 16-color packed PCX files (4 bits/pixel, 1 plane).
+- **Monochrome Mode**: Fixed 1-bit monochrome PCX files (1 bit/pixel, 1 plane).
+- **Standard EGA/VGA Palettes**: Added proper default EGA 16-color and EGA 64-color palettes when header palette is missing.
+- **PCX Palette Editing**: Added full palette editor support for all PCX formats (CGA 4-color, EGA 16-color, EGA 64-color, VGA 256-color, monochrome). Click any color to edit it and see the image update in real-time.
+
 ### Bug Fixes
 
 - **Paintworks Palette Display**: Fixed palette extraction for Paintworks format files (from previous session).
