@@ -22,7 +22,7 @@ Retro Platforms
 📺 MSX/MSX2: Screen 1, 2, 5, 8 (SC1/SC2/SC5/SC8 files, BSAVE format)<br>
 📻 BBC Micro: MODE 0-5 (2/4/16 colors, 10KB/20KB files)<br>
 🖳 TRS-80/CoCo: Model I/III block graphics, CoCo PMODE 3/4, CoCo 3 (16 colors)<br>
-🖨️ PC/DOS: PCX (1/2/4/8/24-bit with RLE compression)<br>
+🖨️ PC/DOS: PCX (CGA 4-color, EGA 16-color, EGA 64-color, VGA 256-color, 24-bit RGB with RLE compression)<br>
 🪟 Windows: BMP (1/4/8/24-bit)<br>
 🖼️ Classic Mac: MacPaint (1-bit with PackBits compression)<br>
 

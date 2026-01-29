@@ -364,7 +364,7 @@ struct ContentView: View {
                 }
                 
                 if isProcessing {
-                    VStack(spacing: 10) { ProgressView().scaleEffect(1.5); Text(progressString).font(.caption).padding(.top, 10) }
+                    VStack(spacing: 10) { ProgressView().controlSize(.large); Text(progressString).font(.caption).padding(.top, 10) }
                         .padding().background(Color(NSColor.windowBackgroundColor).opacity(0.9)).cornerRadius(10)
                 }
             }
@@ -376,7 +376,7 @@ struct ContentView: View {
                 HStack(spacing: 12) {
                     Spacer()
                     ProgressView()
-                        .scaleEffect(0.7)
+                        .controlSize(.small)
                     Text(progressString)
                         .font(.caption)
                         .foregroundColor(.secondary)
