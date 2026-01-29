@@ -26,7 +26,7 @@ class SHRDecoder {
         }
 
         // BBC Micro formats by extension
-        let bbcExtensions = ["bbm0", "bbm1", "bbm2", "bbm4", "bbm5", "mode0", "mode1", "mode2", "mode4", "mode5"]
+        let bbcExtensions = ["bbc", "bbm0", "bbm1", "bbm2", "bbm4", "bbm5", "mode0", "mode1", "mode2", "mode4", "mode5"]
         if bbcExtensions.contains(fileExtension) {
             return BBCMicroDecoder.decode(data: data, filename: filename)
         }

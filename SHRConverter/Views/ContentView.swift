@@ -231,7 +231,7 @@ struct ContentView: View {
                     }
                 }.padding(.horizontal, 5)
             }
-            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
+            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
 
             Divider()
 
@@ -369,7 +369,7 @@ struct ContentView: View {
                 }
             }
             .frame(maxHeight: .infinity)
-            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
+            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
 
             // Bottom quick actions bar (only show when processing)
             if isProcessing {

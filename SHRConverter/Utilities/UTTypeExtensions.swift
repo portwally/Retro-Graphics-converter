@@ -38,4 +38,8 @@ extension UTType {
     static var po: UTType {
         UTType(filenameExtension: "po") ?? .data
     }
+
+    static var bbc: UTType {
+        UTType(filenameExtension: "bbc") ?? .data
+    }
 }

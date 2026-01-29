@@ -27,12 +27,12 @@ class BBCMicroDecoder {
 
     // MARK: - MODE 0 Decoder (640x256, 2 colors, 1bpp)
     // Screen memory: 20KB (0x5000 bytes)
+    // BBC Micro uses character-cell organization: 8 consecutive bytes form a vertical column of 8 pixels
 
     static func decodeMode0(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         let width = 640
         let height = 256
-        let bytesPerLine = 80  // 640 pixels / 8 bits per byte
-        let expectedSize = bytesPerLine * height  // 20480 bytes
+        let expectedSize = 20480
 
         guard data.count >= expectedSize else {
             return (nil, .Unknown)
@@ -40,24 +40,33 @@ class BBCMicroDecoder {
 
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
 
-        // BBC Micro screen memory is interleaved - 8 character rows
-        // Each character row is 8 pixel rows, stored sequentially
-        for charRow in 0..<32 {  // 256 / 8 = 32 character rows
-            for pixelRow in 0..<8 {
-                for byteCol in 0..<bytesPerLine {
-                    let offset = charRow * (bytesPerLine * 8) + pixelRow * bytesPerLine + byteCol
+        // BBC Micro MODE 0: character-cell based layout
+        // Each character cell is 8x8 pixels
+        // Memory is organized: 8 bytes per character column, then next column
+        // 80 character columns per character row, 32 character rows
+        let charsPerRow = 80
+        let charRows = 32
+
+        for charRow in 0..<charRows {
+            for charCol in 0..<charsPerRow {
+                let baseOffset = (charRow * charsPerRow + charCol) * 8
+
+                for row in 0..<8 {
+                    let offset = baseOffset + row
                     guard offset < data.count else { continue }
 
                     let byte = data[offset]
-                    let y = charRow * 8 + pixelRow
+                    let y = charRow * 8 + row
+                    let baseX = charCol * 8
 
-                    // Each byte contains 8 pixels
+                    // Each byte contains 8 horizontal pixels (MSB = leftmost)
                     for bit in 0..<8 {
                         let pixel = (byte >> (7 - bit)) & 1
-                        let x = byteCol * 8 + bit
+                        let x = baseX + bit
 
+                        guard x < width && y < height else { continue }
                         let bufferIdx = (y * width + x) * 4
-                        let rgb = bbcPalette[pixel == 1 ? 7 : 0]  // White or Black
+                        let rgb = bbcPalette[pixel == 1 ? 7 : 0]
                         rgbaBuffer[bufferIdx] = rgb.r
                         rgbaBuffer[bufferIdx + 1] = rgb.g
                         rgbaBuffer[bufferIdx + 2] = rgb.b
@@ -76,12 +85,12 @@ class BBCMicroDecoder {
 
     // MARK: - MODE 1 Decoder (320x256, 4 colors, 2bpp)
     // Screen memory: 20KB (0x5000 bytes)
+    // Character-cell layout: 8 bytes per character column
 
     static func decodeMode1(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         let width = 320
         let height = 256
-        let bytesPerLine = 80  // 320 pixels * 2 bits / 8 = 80 bytes
-        let expectedSize = bytesPerLine * height  // 20480 bytes
+        let expectedSize = 20480
 
         guard data.count >= expectedSize else {
             return (nil, .Unknown)
@@ -92,14 +101,22 @@ class BBCMicroDecoder {
         // Default MODE 1 palette: Black, Red, Yellow, White
         let mode1Colors = [0, 1, 3, 7]
 
-        for charRow in 0..<32 {
-            for pixelRow in 0..<8 {
-                for byteCol in 0..<bytesPerLine {
-                    let offset = charRow * (bytesPerLine * 8) + pixelRow * bytesPerLine + byteCol
+        // MODE 1: 80 character columns, 32 character rows
+        // Each character is 4 pixels wide (2bpp), 8 pixels tall
+        let charsPerRow = 80
+        let charRows = 32
+
+        for charRow in 0..<charRows {
+            for charCol in 0..<charsPerRow {
+                let baseOffset = (charRow * charsPerRow + charCol) * 8
+
+                for row in 0..<8 {
+                    let offset = baseOffset + row
                     guard offset < data.count else { continue }
 
                     let byte = data[offset]
-                    let y = charRow * 8 + pixelRow
+                    let y = charRow * 8 + row
+                    let baseX = charCol * 4
 
                     // MODE 1: 2 bits per pixel, interleaved bit pattern
                     // Bit layout: p0b1 p1b1 p2b1 p3b1 p0b0 p1b0 p2b0 p3b0
@@ -108,7 +125,8 @@ class BBCMicroDecoder {
                         let bit1 = (byte >> (7 - pixel)) & 1
                         let colorIndex = Int(bit0 | (bit1 << 1))
 
-                        let x = byteCol * 4 + pixel
+                        let x = baseX + pixel
+                        guard x < width && y < height else { continue }
                         let bufferIdx = (y * width + x) * 4
                         let rgb = bbcPalette[mode1Colors[colorIndex]]
                         rgbaBuffer[bufferIdx] = rgb.r
@@ -129,12 +147,12 @@ class BBCMicroDecoder {
 
     // MARK: - MODE 2 Decoder (160x256, 16 logical colors, 4bpp)
     // Screen memory: 20KB (0x5000 bytes)
+    // Character-cell layout: 8 bytes per character column
 
     static func decodeMode2(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         let width = 160
         let height = 256
-        let bytesPerLine = 80  // 160 pixels * 4 bits / 8 = 80 bytes (but interleaved)
-        let expectedSize = bytesPerLine * height  // 20480 bytes
+        let expectedSize = 20480
 
         guard data.count >= expectedSize else {
             return (nil, .Unknown)
@@ -142,14 +160,22 @@ class BBCMicroDecoder {
 
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
 
-        for charRow in 0..<32 {
-            for pixelRow in 0..<8 {
-                for byteCol in 0..<bytesPerLine {
-                    let offset = charRow * (bytesPerLine * 8) + pixelRow * bytesPerLine + byteCol
+        // MODE 2: 80 character columns, 32 character rows
+        // Each character is 2 pixels wide (4bpp), 8 pixels tall
+        let charsPerRow = 80
+        let charRows = 32
+
+        for charRow in 0..<charRows {
+            for charCol in 0..<charsPerRow {
+                let baseOffset = (charRow * charsPerRow + charCol) * 8
+
+                for row in 0..<8 {
+                    let offset = baseOffset + row
                     guard offset < data.count else { continue }
 
                     let byte = data[offset]
-                    let y = charRow * 8 + pixelRow
+                    let y = charRow * 8 + row
+                    let baseX = charCol * 2
 
                     // MODE 2: 4 bits per pixel, 2 pixels per byte
                     // Bit layout is interleaved: p0b3 p1b3 p0b2 p1b2 p0b1 p1b1 p0b0 p1b0
@@ -165,20 +191,20 @@ class BBCMicroDecoder {
                     let bit3_p1 = (byte >> 7) & 1
                     let pixel1 = Int(bit0_p1 | (bit1_p1 << 1) | (bit2_p1 << 2) | (bit3_p1 << 3))
 
-                    let x = byteCol * 2
-
                     // First pixel
-                    let bufferIdx0 = (y * width + x) * 4
-                    let color0 = mode2LogicalPalette[pixel0]
-                    let rgb0 = bbcPalette[color0]
-                    rgbaBuffer[bufferIdx0] = rgb0.r
-                    rgbaBuffer[bufferIdx0 + 1] = rgb0.g
-                    rgbaBuffer[bufferIdx0 + 2] = rgb0.b
-                    rgbaBuffer[bufferIdx0 + 3] = 255
+                    if baseX < width && y < height {
+                        let bufferIdx0 = (y * width + baseX) * 4
+                        let color0 = mode2LogicalPalette[pixel0]
+                        let rgb0 = bbcPalette[color0]
+                        rgbaBuffer[bufferIdx0] = rgb0.r
+                        rgbaBuffer[bufferIdx0 + 1] = rgb0.g
+                        rgbaBuffer[bufferIdx0 + 2] = rgb0.b
+                        rgbaBuffer[bufferIdx0 + 3] = 255
+                    }
 
                     // Second pixel
-                    if x + 1 < width {
-                        let bufferIdx1 = (y * width + x + 1) * 4
+                    if baseX + 1 < width && y < height {
+                        let bufferIdx1 = (y * width + baseX + 1) * 4
                         let color1 = mode2LogicalPalette[pixel1]
                         let rgb1 = bbcPalette[color1]
                         rgbaBuffer[bufferIdx1] = rgb1.r
@@ -199,12 +225,12 @@ class BBCMicroDecoder {
 
     // MARK: - MODE 4 Decoder (320x256, 2 colors, 1bpp)
     // Screen memory: 10KB (0x2800 bytes)
+    // Character-cell layout: 8 bytes per character column
 
     static func decodeMode4(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         let width = 320
         let height = 256
-        let bytesPerLine = 40  // 320 pixels / 8 bits per byte
-        let expectedSize = bytesPerLine * height  // 10240 bytes
+        let expectedSize = 10240
 
         guard data.count >= expectedSize else {
             return (nil, .Unknown)
@@ -212,19 +238,28 @@ class BBCMicroDecoder {
 
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
 
-        for charRow in 0..<32 {
-            for pixelRow in 0..<8 {
-                for byteCol in 0..<bytesPerLine {
-                    let offset = charRow * (bytesPerLine * 8) + pixelRow * bytesPerLine + byteCol
+        // MODE 4: 40 character columns, 32 character rows
+        // Each character is 8 pixels wide (1bpp), 8 pixels tall
+        let charsPerRow = 40
+        let charRows = 32
+
+        for charRow in 0..<charRows {
+            for charCol in 0..<charsPerRow {
+                let baseOffset = (charRow * charsPerRow + charCol) * 8
+
+                for row in 0..<8 {
+                    let offset = baseOffset + row
                     guard offset < data.count else { continue }
 
                     let byte = data[offset]
-                    let y = charRow * 8 + pixelRow
+                    let y = charRow * 8 + row
+                    let baseX = charCol * 8
 
                     for bit in 0..<8 {
                         let pixel = (byte >> (7 - bit)) & 1
-                        let x = byteCol * 8 + bit
+                        let x = baseX + bit
 
+                        guard x < width && y < height else { continue }
                         let bufferIdx = (y * width + x) * 4
                         let rgb = bbcPalette[pixel == 1 ? 7 : 0]
                         rgbaBuffer[bufferIdx] = rgb.r
@@ -245,12 +280,12 @@ class BBCMicroDecoder {
 
     // MARK: - MODE 5 Decoder (160x256, 4 colors, 2bpp)
     // Screen memory: 10KB (0x2800 bytes)
+    // Character-cell layout: 8 bytes per character column
 
     static func decodeMode5(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         let width = 160
         let height = 256
-        let bytesPerLine = 40  // 160 pixels * 2 bits / 8 = 40 bytes
-        let expectedSize = bytesPerLine * height  // 10240 bytes
+        let expectedSize = 10240
 
         guard data.count >= expectedSize else {
             return (nil, .Unknown)
@@ -261,14 +296,22 @@ class BBCMicroDecoder {
         // Default MODE 5 palette
         let mode5Colors = [0, 1, 3, 7]  // Black, Red, Yellow, White
 
-        for charRow in 0..<32 {
-            for pixelRow in 0..<8 {
-                for byteCol in 0..<bytesPerLine {
-                    let offset = charRow * (bytesPerLine * 8) + pixelRow * bytesPerLine + byteCol
+        // MODE 5: 40 character columns, 32 character rows
+        // Each character is 4 pixels wide (2bpp), 8 pixels tall
+        let charsPerRow = 40
+        let charRows = 32
+
+        for charRow in 0..<charRows {
+            for charCol in 0..<charsPerRow {
+                let baseOffset = (charRow * charsPerRow + charCol) * 8
+
+                for row in 0..<8 {
+                    let offset = baseOffset + row
                     guard offset < data.count else { continue }
 
                     let byte = data[offset]
-                    let y = charRow * 8 + pixelRow
+                    let y = charRow * 8 + row
+                    let baseX = charCol * 4
 
                     // 2 bits per pixel, 4 pixels per byte (interleaved)
                     for pixel in 0..<4 {
@@ -276,7 +319,8 @@ class BBCMicroDecoder {
                         let bit1 = (byte >> (7 - pixel)) & 1
                         let colorIndex = Int(bit0 | (bit1 << 1))
 
-                        let x = byteCol * 4 + pixel
+                        let x = baseX + pixel
+                        guard x < width && y < height else { continue }
                         let bufferIdx = (y * width + x) * 4
                         let rgb = bbcPalette[mode5Colors[colorIndex]]
                         rgbaBuffer[bufferIdx] = rgb.r
@@ -316,6 +360,26 @@ class BBCMicroDecoder {
             return decodeMode5(data: data)
         default:
             break
+        }
+
+        // Try to parse mode from filename (e.g., "bbc micro mode 0.bbc", "picture_mode2.bbc")
+        if let name = filename?.lowercased() {
+            // Look for "mode X" or "mode_X" or "modeX" patterns
+            if name.contains("mode 0") || name.contains("mode_0") || name.contains("mode0") {
+                return decodeMode0(data: data)
+            }
+            if name.contains("mode 1") || name.contains("mode_1") || name.contains("mode1") {
+                return decodeMode1(data: data)
+            }
+            if name.contains("mode 2") || name.contains("mode_2") || name.contains("mode2") {
+                return decodeMode2(data: data)
+            }
+            if name.contains("mode 4") || name.contains("mode_4") || name.contains("mode4") {
+                return decodeMode4(data: data)
+            }
+            if name.contains("mode 5") || name.contains("mode_5") || name.contains("mode5") {
+                return decodeMode5(data: data)
+            }
         }
 
         // Auto-detect by size

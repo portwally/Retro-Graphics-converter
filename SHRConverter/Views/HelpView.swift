@@ -481,10 +481,12 @@ struct HelpView: View {
 
             HelpSectionHeader(title: "BBC Micro", icon: "rectangle.on.rectangle")
 
-            FormatRow(format: "MODE 0", description: "High-res 2-color (640x256)")
-            FormatRow(format: "MODE 1", description: "4-color mode (320x256)")
-            FormatRow(format: "MODE 2", description: "16-color mode (160x256)")
-            FormatRow(format: "MODE 4/5", description: "Reduced memory modes (10KB)")
+            FormatRow(format: "MODE 0", description: "High-res 2-color (640x256, 20KB)")
+            FormatRow(format: "MODE 1", description: "4-color mode (320x256, 20KB)")
+            FormatRow(format: "MODE 2", description: "16-color mode (160x256, 20KB)")
+            FormatRow(format: "MODE 4", description: "2-color mode (320x256, 10KB)")
+            FormatRow(format: "MODE 5", description: "4-color mode (160x256, 10KB)")
+            FormatRow(format: "Extensions", description: ".bbc, .bbm0-5 (auto-detects mode from filename)")
 
             Divider()
 

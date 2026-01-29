@@ -23,6 +23,13 @@
 - **Standard EGA/VGA Palettes**: Added proper default EGA 16-color and EGA 64-color palettes when header palette is missing.
 - **PCX Palette Editing**: Added full palette editor support for all PCX formats (CGA 4-color, EGA 16-color, EGA 64-color, VGA 256-color, monochrome). Click any color to edit it and see the image update in real-time.
 
+### BBC Micro Improvements
+
+- **New .bbc Extension**: Added support for .bbc file extension commonly used for BBC Micro screen dumps.
+- **Smart Mode Detection**: Parser now auto-detects BBC Micro mode from filename (e.g., "picture mode 2.bbc" loads as MODE 2).
+- **Fixed Memory Layout**: Corrected decoder to use proper BBC Micro character-cell based screen memory organization (8 bytes per character column).
+- **All Modes Supported**: MODE 0 (640x256, 2 colors), MODE 1 (320x256, 4 colors), MODE 2 (160x256, 16 colors), MODE 4 (320x256, 2 colors), MODE 5 (160x256, 4 colors).
+
 ### Bug Fixes
 
 - **Paintworks Palette Display**: Fixed palette extraction for Paintworks format files (from previous session).
