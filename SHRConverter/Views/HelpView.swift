@@ -505,7 +505,7 @@ struct HelpView: View {
             HelpSectionHeader(title: "Other", icon: "square.grid.2x2")
 
             FormatRow(format: "ZX Spectrum", description: "Spectrum screen files (256x192)")
-            FormatRow(format: "Amstrad CPC", description: "Mode 0/1 graphics (16/4 colors)")
+            FormatRow(format: "Amstrad CPC", description: "Mode 0/1 graphics (16/4 colors), DSK disk images")
             FormatRow(format: "MacPaint", description: "Classic Mac 1-bit graphics")
 
             Divider()
@@ -520,6 +520,8 @@ struct HelpView: View {
             FormatRow(format: ".d64", description: "C64 1541 floppy disk image (170K)")
             FormatRow(format: ".d71", description: "C64 1571 dual-sided floppy (340K)")
             FormatRow(format: ".d81", description: "C64 1581 3.5\" floppy (800K)")
+            FormatRow(format: ".adf", description: "Amiga DD/HD floppy disk image")
+            FormatRow(format: ".dsk (CPC)", description: "Amstrad CPC disk image (CPCEMU format)")
         }
     }
 

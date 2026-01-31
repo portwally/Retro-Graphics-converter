@@ -39,10 +39,22 @@
 - **Auto-detect IFF Images**: Automatically identifies and displays IFF/ILBM images stored on Amiga disks.
 - **DD and HD Disks**: Supports both Double Density (880KB) and High Density (1.76MB) disk images.
 
+### Amstrad CPC Disk Image Support
+
+- **CPC DSK Disk Browser**: Added full support for reading Amstrad CPC disk images (.dsk files in CPCEMU format).
+- **Format Detection**: Automatically distinguishes CPC DSK from Apple II DSK by detecting the unique "MV - CPC" or "EXTENDED CPC DSK File" header signatures.
+- **Extended Format**: Supports both standard CPCEMU DSK and extended DSK formats with variable sector sizes.
+- **CP/M Filesystem**: Parses the CP/M-like directory structure used by AMSDOS.
+- **Multi-extent Files**: Correctly handles files spanning multiple directory extents.
+- **Auto-detect Images**: Identifies and displays Amstrad CPC graphics files (SCR, etc.) stored on disks.
+
 ### Bug Fixes
 
 - **Paintworks Palette Display**: Fixed palette extraction for Paintworks format files (from previous session).
 - **ADF OFS File Extraction**: Fixed extraction of larger files from OFS (Original File System) formatted ADF disks. The OFS data block chain could be broken on some disks; now uses the data block table with sequence number sorting for reliable extraction.
+- **CPC DSK Block Mapping**: Fixed file extraction from CPC DSK images with non-contiguous track numbering. Some CPC disk images only contain even-numbered tracks, which caused the previous block-to-sector mapping to fail. Now uses linear sector addressing to properly handle all track layouts.
+- **CPC Image Detection**: Files extracted from CPC DSK disks with .SCR extension are now forced to be identified as Amstrad CPC graphics instead of being misdetected as Apple II DHGR. The CPC decoder also now accepts files with slight size variations (16000-17000 bytes) instead of requiring exactly 16384 bytes.
+- **Amstrad CPC Color Compatibility**: Fixed color display for .scr files exported from BitPast. The 27-color hardware palette is now interpreted identically to BitPast, ensuring imported images display with correct colors. Also fixed Mode 0/Mode 1 bit encoding and mode detection from embedded AMSDOS header palettes.
 
 ---
 

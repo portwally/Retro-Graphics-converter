@@ -14,6 +14,9 @@ class DiskImageReader {
         else if let adfFiles = readADF(data: data) {
             files.append(contentsOf: adfFiles)
         }
+        else if let cpcFiles = readCPCDSK(data: data) {
+            files.append(contentsOf: cpcFiles)
+        }
         else if let d64Files = readD64(data: data) {
             files.append(contentsOf: d64Files)
         }
@@ -591,6 +594,261 @@ class DiskImageReader {
         return fileData.isEmpty ? nil : (fileName, fileData)
     }
 
+    // MARK: - Amstrad CPC DSK Format
+
+    static func readCPCDSK(data: Data) -> [DiskImageFile]? {
+        // Check for CPC DSK signature
+        guard data.count >= 256 else { return nil }
+
+        let header = String(data: data.subdata(in: 0..<34), encoding: .ascii) ?? ""
+        let isExtended = header.hasPrefix("EXTENDED CPC DSK File")
+        let isStandard = header.hasPrefix("MV - CPC")
+
+        guard isExtended || isStandard else { return nil }
+
+        // Parse disk information block
+        let numTracks = Int(data[48])
+        let numSides = Int(data[49])
+
+        guard numTracks > 0 && numSides > 0 else { return nil }
+
+        // Extract all files from the disk
+        var files: [DiskImageFile] = []
+
+        // Read directory from track 0 (typically sectors C1-C4 for DATA format)
+        // The CPC uses a CP/M-like filesystem
+        let directoryEntries = readCPCDirectory(data: data, isExtended: isExtended, numTracks: numTracks, numSides: numSides)
+
+        for entry in directoryEntries {
+            // Try to decode as image
+            let result = SHRDecoder.decode(data: entry.data, filename: entry.name)
+            if result.type != .Unknown, result.image != nil {
+                files.append(DiskImageFile(name: entry.name, data: entry.data, type: result.type))
+            }
+        }
+
+        return files.isEmpty ? nil : files
+    }
+
+    private static func readCPCDirectory(data: Data, isExtended: Bool, numTracks: Int, numSides: Int) -> [(name: String, data: Data)] {
+        var files: [(name: String, data: Data)] = []
+
+        // Build sector map from the disk image
+        var sectorMap: [Int: [Int: Data]] = [:] // track -> sector -> data
+
+        var offset = 256 // Start after disk info block
+
+        for track in 0..<numTracks {
+            for side in 0..<numSides {
+                let trackIndex = track * numSides + side
+
+                // Get track size
+                var trackSize: Int
+                if isExtended {
+                    // Extended format: track sizes in table at offset 52
+                    let sizeIndex = 52 + trackIndex
+                    if sizeIndex < data.count {
+                        trackSize = Int(data[sizeIndex]) * 256
+                    } else {
+                        continue
+                    }
+                } else {
+                    // Standard format: fixed track size at offset 50-51 (little-endian)
+                    trackSize = Int(data[50]) | (Int(data[51]) << 8)
+                }
+
+                if trackSize == 0 { continue }
+                guard offset + trackSize <= data.count else { break }
+
+                // Parse track information block
+                let trackData = data.subdata(in: offset..<(offset + trackSize))
+                if trackData.count >= 24 {
+                    let trackSig = String(data: trackData.subdata(in: 0..<12), encoding: .ascii) ?? ""
+                    if trackSig.hasPrefix("Track-Info") {
+                        // Use PHYSICAL track number from header for proper AMSDOS block mapping
+                        let physicalTrack = Int(trackData[16])
+                        let sectorCount = Int(trackData[21])
+                        let sectorSizeCode = Int(trackData[20])
+                        let defaultSectorSize = 128 << sectorSizeCode
+
+                        if sectorMap[physicalTrack] == nil {
+                            sectorMap[physicalTrack] = [:]
+                        }
+
+                        var sectorOffset = 256 // Sector data starts after track info block
+
+                        for sectorIndex in 0..<sectorCount {
+                            let infoOffset = 24 + (sectorIndex * 8)
+                            guard infoOffset + 8 <= trackData.count else { break }
+
+                            let sectorID = Int(trackData[infoOffset + 2])
+                            var sectorSize = defaultSectorSize
+
+                            if isExtended {
+                                // Extended format has actual sector size in info
+                                let actualSize = Int(trackData[infoOffset + 6]) | (Int(trackData[infoOffset + 7]) << 8)
+                                if actualSize > 0 {
+                                    sectorSize = actualSize
+                                }
+                            }
+
+                            if sectorOffset + sectorSize <= trackData.count {
+                                let sectorData = trackData.subdata(in: sectorOffset..<(sectorOffset + sectorSize))
+                                sectorMap[physicalTrack]?[sectorID] = sectorData
+                            }
+
+                            sectorOffset += sectorSize
+                        }
+                    }
+                }
+
+                offset += trackSize
+            }
+        }
+
+        // Read directory entries from track 0 (sectors 0xC1-0xC4 for DATA format, or 0x41-0x44 for SYSTEM)
+        var directoryData = Data()
+
+        // Try DATA format sectors first (C1-C4 = 193-196)
+        for sectorID in [0xC1, 0xC2, 0xC3, 0xC4] {
+            if let sectorData = sectorMap[0]?[sectorID] {
+                directoryData.append(sectorData)
+            }
+        }
+
+        // If no data, try SYSTEM format sectors (41-44)
+        if directoryData.isEmpty {
+            for sectorID in [0x41, 0x42, 0x43, 0x44] {
+                if let sectorData = sectorMap[0]?[sectorID] {
+                    directoryData.append(sectorData)
+                }
+            }
+        }
+
+        // If still no data, try sectors 1-4 (some formats)
+        if directoryData.isEmpty {
+            for sectorID in 1...4 {
+                if let sectorData = sectorMap[0]?[sectorID] {
+                    directoryData.append(sectorData)
+                }
+            }
+        }
+
+        guard !directoryData.isEmpty else { return files }
+
+        // Build linear sector list for block allocation
+        // In AMSDOS DATA format: Block 0 starts at track 0 sector C5 (after directory C1-C4)
+        // Use physical track numbers in order for proper block-to-sector mapping
+        var linearSectors: [(track: Int, sectorID: Int)] = []
+
+        // First: Track 0 data sectors (C5-C9, after directory)
+        for sectorOffset in 4..<9 {  // C5-C9 (skip C1-C4 directory)
+            let sectorID = 0xC1 + sectorOffset
+            if sectorMap[0]?[sectorID] != nil {
+                linearSectors.append((0, sectorID))
+            }
+        }
+
+        // Then: Physical tracks 1-39 in order (some may be missing in incomplete disk images)
+        for physTrack in 1..<40 {
+            if let trackSectors = sectorMap[physTrack] {
+                for sectorOffset in 0..<9 {  // C1-C9
+                    let sectorID = 0xC1 + sectorOffset
+                    if trackSectors[sectorID] != nil {
+                        linearSectors.append((physTrack, sectorID))
+                    }
+                }
+            }
+        }
+
+        // Parse CP/M directory entries (32 bytes each)
+        var fileEntries: [String: [(extent: Int, blocks: [Int])]] = [:]
+
+        for entryOffset in stride(from: 0, to: directoryData.count, by: 32) {
+            guard entryOffset + 32 <= directoryData.count else { break }
+
+            let userNumber = directoryData[entryOffset]
+            if userNumber == 0xE5 { continue } // Deleted entry
+            if userNumber > 15 { continue } // Invalid user number
+
+            // Extract filename (8 bytes) and extension (3 bytes)
+            var filename = ""
+            for i in 1...8 {
+                let char = directoryData[entryOffset + i] & 0x7F
+                if char > 32 && char < 127 {
+                    filename.append(Character(UnicodeScalar(char)))
+                }
+            }
+            filename = filename.trimmingCharacters(in: .whitespaces)
+
+            var ext = ""
+            for i in 9...11 {
+                let char = directoryData[entryOffset + i] & 0x7F
+                if char > 32 && char < 127 {
+                    ext.append(Character(UnicodeScalar(char)))
+                }
+            }
+            ext = ext.trimmingCharacters(in: .whitespaces)
+
+            if !ext.isEmpty {
+                filename += "." + ext
+            }
+
+            if filename.isEmpty { continue }
+
+            let extentLow = Int(directoryData[entryOffset + 12])
+            let extentHigh = Int(directoryData[entryOffset + 14])
+            let extent = extentLow + (extentHigh * 32)
+
+            // Block pointers (16 bytes, either 8x 16-bit or 16x 8-bit depending on disk size)
+            var blocks: [Int] = []
+            for i in 0..<16 {
+                let blockNum = Int(directoryData[entryOffset + 16 + i])
+                if blockNum != 0 {
+                    blocks.append(blockNum)
+                }
+            }
+
+            if fileEntries[filename] == nil {
+                fileEntries[filename] = []
+            }
+            fileEntries[filename]?.append((extent: extent, blocks: blocks))
+        }
+
+        // Extract file data for each file using linear sector mapping
+        let sectorsPerBlock = 2  // 1024 / 512
+        let reservedBlocks = 2   // Blocks 0-1 are reserved for directory in DATA format
+
+        for (filename, extents) in fileEntries {
+            let sortedExtents = extents.sorted { $0.extent < $1.extent }
+
+            var fileData = Data()
+            for extentInfo in sortedExtents {
+                for blockNum in extentInfo.blocks {
+                    // Block numbers in directory are absolute - subtract reserved blocks to get data index
+                    guard blockNum >= reservedBlocks else { continue }
+                    let firstSector = (blockNum - reservedBlocks) * sectorsPerBlock
+
+                    for i in 0..<sectorsPerBlock {
+                        let sectorIdx = firstSector + i
+                        if sectorIdx >= 0 && sectorIdx < linearSectors.count {
+                            let (track, sectorID) = linearSectors[sectorIdx]
+                            if let sectorData = sectorMap[track]?[sectorID] {
+                                fileData.append(sectorData)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !fileData.isEmpty {
+                files.append((name: filename, data: fileData))
+            }
+        }
+
+        return files
+    }
+
     // MARK: - C64 D64 Format
     
     static func readD64(data: Data) -> [DiskImageFile]? {
@@ -797,6 +1055,11 @@ extension DiskImageReader {
 
         // Amiga ADF Format
         if let catalog = readADFCatalogFull(data: data, filename: filename) {
+            return catalog
+        }
+
+        // Amstrad CPC DSK Format (check before ProDOS/DOS 3.3 DSK since it has unique header)
+        if let catalog = readCPCDSKCatalogFull(data: data, filename: filename) {
             return catalog
         }
 
@@ -1520,6 +1783,323 @@ extension DiskImageReader {
         case "exe", "": return "FILE"
         default: return ext.uppercased()
         }
+    }
+
+    // MARK: - Amstrad CPC DSK Catalog
+
+    static func readCPCDSKCatalogFull(data: Data, filename: String) -> DiskCatalog? {
+        // Check for CPC DSK signature
+        guard data.count >= 256 else { return nil }
+
+        let header = String(data: data.subdata(in: 0..<34), encoding: .ascii) ?? ""
+        let isExtended = header.hasPrefix("EXTENDED CPC DSK File")
+        let isStandard = header.hasPrefix("MV - CPC")
+
+        guard isExtended || isStandard else { return nil }
+
+        // Parse disk information block
+        let numTracks = Int(data[48])
+        let numSides = Int(data[49])
+
+        guard numTracks > 0 && numSides > 0 else { return nil }
+
+        // Get disk name from creator field (bytes 34-47)
+        var diskName = ""
+        for i in 34..<48 {
+            if i < data.count {
+                let char = data[i]
+                if char > 32 && char < 127 {
+                    diskName.append(Character(UnicodeScalar(char)))
+                }
+            }
+        }
+        diskName = diskName.trimmingCharacters(in: .whitespaces)
+        if diskName.isEmpty {
+            diskName = (filename as NSString).deletingPathExtension
+        }
+
+        var entries: [DiskCatalogEntry] = []
+
+        // Build sector map
+        var sectorMap: [Int: [Int: Data]] = [:]
+        var offset = 256
+
+        for track in 0..<numTracks {
+            for side in 0..<numSides {
+                let trackIndex = track * numSides + side
+
+                var trackSize: Int
+                if isExtended {
+                    let sizeIndex = 52 + trackIndex
+                    if sizeIndex < data.count {
+                        trackSize = Int(data[sizeIndex]) * 256
+                    } else {
+                        continue
+                    }
+                } else {
+                    trackSize = Int(data[50]) | (Int(data[51]) << 8)
+                }
+
+                if trackSize == 0 { continue }
+                guard offset + trackSize <= data.count else { break }
+
+                let trackData = data.subdata(in: offset..<(offset + trackSize))
+                if trackData.count >= 24 {
+                    let trackSig = String(data: trackData.subdata(in: 0..<12), encoding: .ascii) ?? ""
+                    if trackSig.hasPrefix("Track-Info") {
+                        // Use PHYSICAL track number from header for proper AMSDOS block mapping
+                        let physicalTrack = Int(trackData[16])
+                        let sectorCount = Int(trackData[21])
+                        let sectorSizeCode = Int(trackData[20])
+                        let defaultSectorSize = 128 << sectorSizeCode
+
+                        if sectorMap[physicalTrack] == nil {
+                            sectorMap[physicalTrack] = [:]
+                        }
+
+                        var sectorOffset = 256
+
+                        for sectorIndex in 0..<sectorCount {
+                            let infoOffset = 24 + (sectorIndex * 8)
+                            guard infoOffset + 8 <= trackData.count else { break }
+
+                            let sectorID = Int(trackData[infoOffset + 2])
+                            var sectorSize = defaultSectorSize
+
+                            if isExtended {
+                                let actualSize = Int(trackData[infoOffset + 6]) | (Int(trackData[infoOffset + 7]) << 8)
+                                if actualSize > 0 {
+                                    sectorSize = actualSize
+                                }
+                            }
+
+                            if sectorOffset + sectorSize <= trackData.count {
+                                let sectorData = trackData.subdata(in: sectorOffset..<(sectorOffset + sectorSize))
+                                sectorMap[physicalTrack]?[sectorID] = sectorData
+                            }
+
+                            sectorOffset += sectorSize
+                        }
+                    }
+                }
+
+                offset += trackSize
+            }
+        }
+
+        // Read directory
+        var directoryData = Data()
+
+        for sectorID in [0xC1, 0xC2, 0xC3, 0xC4] {
+            if let sectorData = sectorMap[0]?[sectorID] {
+                directoryData.append(sectorData)
+            }
+        }
+
+        if directoryData.isEmpty {
+            for sectorID in [0x41, 0x42, 0x43, 0x44] {
+                if let sectorData = sectorMap[0]?[sectorID] {
+                    directoryData.append(sectorData)
+                }
+            }
+        }
+
+        if directoryData.isEmpty {
+            for sectorID in 1...4 {
+                if let sectorData = sectorMap[0]?[sectorID] {
+                    directoryData.append(sectorData)
+                }
+            }
+        }
+
+        guard !directoryData.isEmpty else {
+            return DiskCatalog(
+                diskName: diskName,
+                diskFormat: isExtended ? "Amstrad CPC DSK (Extended)" : "Amstrad CPC DSK",
+                diskSize: data.count,
+                entries: entries
+            )
+        }
+
+        // Build linear sector list for block allocation
+        // In AMSDOS DATA format: Block 0 starts at track 0 sector C5 (after directory C1-C4)
+        // Use physical track numbers in order for proper block-to-sector mapping
+        var linearSectors: [(track: Int, sectorID: Int)] = []
+
+        // First: Track 0 data sectors (C5-C9, after directory)
+        for sectorOffset in 4..<9 {  // C5-C9 (skip C1-C4 directory)
+            let sectorID = 0xC1 + sectorOffset
+            if sectorMap[0]?[sectorID] != nil {
+                linearSectors.append((0, sectorID))
+            }
+        }
+
+        // Then: Physical tracks 1-39 in order (some may be missing in incomplete disk images)
+        for physTrack in 1..<40 {
+            if let trackSectors = sectorMap[physTrack] {
+                for sectorOffset in 0..<9 {  // C1-C9
+                    let sectorID = 0xC1 + sectorOffset
+                    if trackSectors[sectorID] != nil {
+                        linearSectors.append((physTrack, sectorID))
+                    }
+                }
+            }
+        }
+
+        // Parse directory entries
+        var fileEntries: [String: [(extent: Int, blocks: [Int], recordCount: Int)]] = [:]
+
+        for entryOffset in stride(from: 0, to: directoryData.count, by: 32) {
+            guard entryOffset + 32 <= directoryData.count else { break }
+
+            let userNumber = directoryData[entryOffset]
+            if userNumber == 0xE5 { continue }
+            if userNumber > 15 { continue }
+
+            var fname = ""
+            for i in 1...8 {
+                let char = directoryData[entryOffset + i] & 0x7F
+                if char > 32 && char < 127 {
+                    fname.append(Character(UnicodeScalar(char)))
+                }
+            }
+            fname = fname.trimmingCharacters(in: .whitespaces)
+
+            var ext = ""
+            for i in 9...11 {
+                let char = directoryData[entryOffset + i] & 0x7F
+                if char > 32 && char < 127 {
+                    ext.append(Character(UnicodeScalar(char)))
+                }
+            }
+            ext = ext.trimmingCharacters(in: .whitespaces)
+
+            if !ext.isEmpty {
+                fname += "." + ext
+            }
+
+            if fname.isEmpty { continue }
+
+            let extentLow = Int(directoryData[entryOffset + 12])
+            let extentHigh = Int(directoryData[entryOffset + 14])
+            let extent = extentLow + (extentHigh * 32)
+            let recordCount = Int(directoryData[entryOffset + 15])
+
+            var blocks: [Int] = []
+            for i in 0..<16 {
+                let blockNum = Int(directoryData[entryOffset + 16 + i])
+                if blockNum != 0 {
+                    blocks.append(blockNum)
+                }
+            }
+
+            if fileEntries[fname] == nil {
+                fileEntries[fname] = []
+            }
+            fileEntries[fname]?.append((extent: extent, blocks: blocks, recordCount: recordCount))
+        }
+
+        // Extract files and create catalog entries using linear sector mapping
+        let sectorsPerBlock = 2  // 1024 / 512
+        let reservedBlocks = 2   // Blocks 0-1 are reserved for directory in DATA format
+
+        for (filename, extents) in fileEntries {
+            let sortedExtents = extents.sorted { $0.extent < $1.extent }
+
+            var fileData = Data()
+            var totalRecords = 0
+
+            for extentInfo in sortedExtents {
+                totalRecords += extentInfo.recordCount
+                for blockNum in extentInfo.blocks {
+                    // Block numbers in directory are absolute - subtract reserved blocks to get data index
+                    guard blockNum >= reservedBlocks else { continue }
+                    let firstSector = (blockNum - reservedBlocks) * sectorsPerBlock
+
+                    for i in 0..<sectorsPerBlock {
+                        let sectorIdx = firstSector + i
+                        if sectorIdx >= 0 && sectorIdx < linearSectors.count {
+                            let (track, sectorID) = linearSectors[sectorIdx]
+                            if let sectorData = sectorMap[track]?[sectorID] {
+                                fileData.append(sectorData)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Trim to actual file size (records * 128)
+            let actualSize = totalRecords * 128
+            if fileData.count > actualSize && actualSize > 0 {
+                fileData = fileData.prefix(actualSize)
+            }
+
+            // Check if it's an image - for CPC disks, force CPC format for .SCR files
+            var isImage = false
+            var imageType: AppleIIImageType = .Unknown
+
+            if !fileData.isEmpty {
+                let fileExt = (filename as NSString).pathExtension.lowercased()
+
+                // For .SCR files from CPC disks, always treat as CPC graphics (don't fall back to other formats)
+                if fileExt == "scr" {
+                    let cpcResult = RetroDecoder.decodeAmstradCPC(data: fileData)
+                    if cpcResult.image != nil {
+                        isImage = true
+                        imageType = cpcResult.type
+                    } else {
+                        // Even if decoder fails, mark as CPC so it's recognized
+                        isImage = true
+                        imageType = .AmstradCPC(mode: 1, colors: 4)
+                    }
+                } else if fileData.count >= 16000 && fileData.count <= 17000 {
+                    // For 16KB files without .SCR extension, try CPC first
+                    let cpcResult = RetroDecoder.decodeAmstradCPC(data: fileData)
+                    if cpcResult.image != nil && cpcResult.type != .Unknown {
+                        isImage = true
+                        imageType = cpcResult.type
+                    }
+                }
+
+                // Fall back to general decoder only for non-.SCR files
+                if !isImage {
+                    let result = SHRDecoder.decode(data: fileData, filename: filename)
+                    if result.type != .Unknown && result.image != nil {
+                        isImage = true
+                        imageType = result.type
+                    }
+                }
+            }
+
+            let ext = (filename as NSString).pathExtension.uppercased()
+            let fileTypeString = ext.isEmpty ? "BIN" : ext
+
+            let entry = DiskCatalogEntry(
+                name: filename,
+                fileType: 0,
+                fileTypeString: fileTypeString,
+                size: fileData.count,
+                blocks: sortedExtents.flatMap { $0.blocks }.count,
+                loadAddress: nil,
+                length: nil,
+                data: fileData,
+                isImage: isImage,
+                imageType: imageType,
+                isDirectory: false,
+                children: nil
+            )
+            entries.append(entry)
+        }
+
+        // Sort entries by name
+        entries.sort { $0.name.lowercased() < $1.name.lowercased() }
+
+        return DiskCatalog(
+            diskName: diskName,
+            diskFormat: isExtended ? "Amstrad CPC DSK (Extended)" : "Amstrad CPC DSK",
+            diskSize: data.count,
+            entries: entries
+        )
     }
 }
 

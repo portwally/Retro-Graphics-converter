@@ -166,6 +166,9 @@ class SHRDecoder {
             return RetroDecoder.decodeZXSpectrum(data: data)
         case 16384:
             return handleSize16384(data: data, fileExtension: fileExtension)
+        case 16512:
+            // Amstrad CPC screen with 128-byte AMSDOS header
+            return RetroDecoder.decodeAmstradCPC(data: data)
         case 54272...54279:
             // MSX Screen 8 (256x212, 8bpp) - may have BSAVE header
             return MSXDecoder.decodeScreen8(data: data)

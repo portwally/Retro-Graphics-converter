@@ -18,7 +18,7 @@ Retro Platforms
 🕹️ Atari ST: Degas (PI1/PI2/PI3)<br>
 💾 Commodore 64: Koala Painter, HIRES, Art Studio, D64/D71/D81 disk images<br>
 🎮 ZX Spectrum: SCR (6912 bytes)<br>
-💻 Amstrad CPC: Mode 0 (16 colors), Mode 1 (4 colors)<br>
+💻 Amstrad CPC: Mode 0 (16 colors), Mode 1 (4 colors), DSK disk images<br>
 📺 MSX/MSX2: Screen 1, 2, 5, 8 (SC1/SC2/SC5/SC8 files, BSAVE format)<br>
 📻 BBC Micro: MODE 0-5 (2/4/16 colors, .bbc/.bbm0-5 files, auto-detects mode from filename)<br>
 🖳 TRS-80/CoCo: Model I/III block graphics, CoCo PMODE 3/4, CoCo 3 (16 colors)<br>

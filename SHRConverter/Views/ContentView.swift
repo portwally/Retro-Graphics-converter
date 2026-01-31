@@ -1048,15 +1048,30 @@ struct ContentView: View {
         DispatchQueue.global(qos: .userInitiated).async {
             var newItems: [ImageItem] = []
             for entry in entries {
-                // Use nameWithTypeInfo to pass ProDOS file type info for proper format detection
-                let decodeResult = SHRDecoder.decode(data: entry.data, filename: entry.nameWithTypeInfo)
-                if entry.isImage, let cgImage = decodeResult.image {
+                // Check if the entry already has a specific platform type (e.g., AmstradCPC from DSK reader)
+                var finalType: AppleIIImageType = entry.imageType
+                var cgImage: CGImage? = nil
+
+                // For AmstradCPC types, use the CPC decoder directly to preserve the type
+                if case .AmstradCPC = entry.imageType {
+                    let cpcResult = RetroDecoder.decodeAmstradCPC(data: entry.data)
+                    cgImage = cpcResult.image
+                    if cpcResult.image != nil {
+                        finalType = cpcResult.type  // Use detailed CPC type from decoder
+                    }
+                } else {
+                    // Use nameWithTypeInfo to pass ProDOS file type info for proper format detection
+                    let decodeResult = SHRDecoder.decode(data: entry.data, filename: entry.nameWithTypeInfo)
+                    cgImage = decodeResult.image
+                    finalType = decodeResult.type
+                }
+
+                if entry.isImage, let image = cgImage {
                     let url = URL(fileURLWithPath: "/catalog/\(entry.name)")
-                    let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                    let nsImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
                     // Extract palette info
-                    let paletteInfo = PaletteExtractor.extractPalette(from: entry.data, type: decodeResult.type, filename: entry.name)
-                    // Use the type from decode result to get accurate format detection (e.g., 816/Paint)
-                    newItems.append(ImageItem(url: url, image: nsImage, type: decodeResult.type, originalData: entry.data, paletteInfo: paletteInfo))
+                    let paletteInfo = PaletteExtractor.extractPalette(from: entry.data, type: finalType, filename: entry.name)
+                    newItems.append(ImageItem(url: url, image: nsImage, type: finalType, originalData: entry.data, paletteInfo: paletteInfo))
                 }
             }
             DispatchQueue.main.async {
@@ -1127,7 +1142,7 @@ struct ContentView: View {
         let openPanel = NSOpenPanel()
         openPanel.allowsOtherFileTypes = true; openPanel.allowsMultipleSelection = true; openPanel.canChooseDirectories = true; openPanel.canChooseFiles = true
         openPanel.prompt = "Open Files or Folders"
-        openPanel.allowedContentTypes = [.png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .data]
+        openPanel.allowedContentTypes = [.png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .scr, .twoimg, .dsk, .hdv, .do_disk, .po, .data]
         if openPanel.runModal() == .OK {
             // Add folders to recent folders
             for url in openPanel.urls {

@@ -46,4 +46,8 @@ extension UTType {
     static var adf: UTType {
         UTType(filenameExtension: "adf") ?? .data
     }
+
+    static var scr: UTType {
+        UTType(filenameExtension: "scr") ?? .data
+    }
 }
