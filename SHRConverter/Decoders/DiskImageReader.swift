@@ -17,6 +17,9 @@ class DiskImageReader {
         else if let cpcFiles = readCPCDSK(data: data) {
             files.append(contentsOf: cpcFiles)
         }
+        else if let stFiles = readAtariST(data: data) {
+            files.append(contentsOf: stFiles)
+        }
         else if let d64Files = readD64(data: data) {
             files.append(contentsOf: d64Files)
         }
@@ -31,6 +34,56 @@ class DiskImageReader {
         }
 
         return files
+    }
+
+    // MARK: - Atari ST Disk Image
+
+    static func readAtariST(data: Data) -> [DiskImageFile]? {
+        let reader = AtariSTDiskReader()
+        guard reader.canRead(data: data) else { return nil }
+
+        guard let entries = reader.readDisk(data: data) else { return nil }
+
+        var files: [DiskImageFile] = []
+
+        for entry in entries {
+            // Try to decode as image
+            var imageData: Data? = nil
+            var imageType: AppleIIImageType = .Unknown
+
+            let ext = (entry.name as NSString).pathExtension.lowercased()
+
+            // Atari ST image types
+            if ["pi1", "pi2", "pi3", "pc1", "pc2", "pc3"].contains(ext) {
+                let (cgImage, type) = AtariSTDecoder.decode(data: entry.data)
+                if cgImage != nil {
+                    imageData = entry.data
+                    imageType = type
+                }
+            } else if ["neo"].contains(ext) {
+                let (cgImage, type) = AtariSTDecoder.decodeNEOchrome(data: entry.data)
+                if cgImage != nil {
+                    imageData = entry.data
+                    imageType = type
+                }
+            } else if ["iff", "lbm"].contains(ext) {
+                let (cgImage, type) = AmigaIFFDecoder.decode(data: entry.data)
+                if cgImage != nil {
+                    imageData = entry.data
+                    imageType = type
+                }
+            }
+
+            if imageData != nil {
+                files.append(DiskImageFile(
+                    name: entry.name,
+                    data: entry.data,
+                    type: imageType
+                ))
+            }
+        }
+
+        return files.isEmpty ? nil : files
     }
     
     // MARK: - 2IMG Format
@@ -1060,6 +1113,11 @@ extension DiskImageReader {
 
         // Amstrad CPC DSK Format (check before ProDOS/DOS 3.3 DSK since it has unique header)
         if let catalog = readCPCDSKCatalogFull(data: data, filename: filename) {
+            return catalog
+        }
+
+        // Atari ST Disk Image
+        if let catalog = readAtariSTCatalogFull(data: data, filename: filename) {
             return catalog
         }
 
@@ -2097,6 +2155,97 @@ extension DiskImageReader {
         return DiskCatalog(
             diskName: diskName,
             diskFormat: isExtended ? "Amstrad CPC DSK (Extended)" : "Amstrad CPC DSK",
+            diskSize: data.count,
+            entries: entries
+        )
+    }
+
+    static func readAtariSTCatalogFull(data: Data, filename: String) -> DiskCatalog? {
+        let reader = AtariSTDiskReader()
+        guard reader.canRead(data: data) else { return nil }
+
+        guard let diskEntries = reader.readDisk(data: data) else { return nil }
+
+        // Determine disk format string based on size
+        let diskFormat: String
+        switch data.count {
+        case 360 * 1024:
+            diskFormat = "Atari ST (360KB SS/DD)"
+        case 400 * 1024:
+            diskFormat = "Atari ST (400KB SS/DD)"
+        case 720 * 1024:
+            diskFormat = "Atari ST (720KB DS/DD)"
+        case 800 * 1024:
+            diskFormat = "Atari ST (800KB DS/DD)"
+        case 1440 * 1024:
+            diskFormat = "Atari ST (1.44MB DS/HD)"
+        default:
+            diskFormat = "Atari ST"
+        }
+
+        let diskName = (filename as NSString).deletingPathExtension
+
+        var entries: [DiskCatalogEntry] = []
+
+        for diskEntry in diskEntries {
+            var isImage = false
+            var imageType: AppleIIImageType = .Unknown
+
+            let ext = (diskEntry.name as NSString).pathExtension.lowercased()
+
+            // Try to decode as Atari ST image format
+            if ["pi1", "pi2", "pi3", "pc1", "pc2", "pc3"].contains(ext) {
+                let result = AtariSTDecoder.decode(data: diskEntry.data)
+                if result.image != nil {
+                    isImage = true
+                    imageType = result.type
+                }
+            } else if ext == "neo" {
+                let result = AtariSTDecoder.decodeNEOchrome(data: diskEntry.data)
+                if result.image != nil {
+                    isImage = true
+                    imageType = result.type
+                }
+            } else if ["iff", "lbm"].contains(ext) {
+                let result = AmigaIFFDecoder.decode(data: diskEntry.data)
+                if result.image != nil {
+                    isImage = true
+                    imageType = result.type
+                }
+            } else {
+                // Try general decode for unknown extensions
+                let result = SHRDecoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                if result.type != AppleIIImageType.Unknown && result.image != nil {
+                    isImage = true
+                    imageType = result.type
+                }
+            }
+
+            let fileTypeString = ext.isEmpty ? "BIN" : ext.uppercased()
+
+            let entry = DiskCatalogEntry(
+                name: diskEntry.name,
+                fileType: 0,
+                fileTypeString: fileTypeString,
+                size: diskEntry.size,
+                blocks: (diskEntry.size + 1023) / 1024,
+                loadAddress: nil,
+                length: nil,
+                data: diskEntry.data,
+                isImage: isImage,
+                imageType: imageType,
+                isDirectory: false,
+                children: nil
+            )
+            entries.append(entry)
+        }
+
+        // Sort entries by name
+        entries.sort { $0.name.lowercased() < $1.name.lowercased() }
+
+        return DiskCatalog(
+            diskName: diskName,
+            diskFormat: diskFormat,
             diskSize: data.count,
             entries: entries
         )

@@ -30,6 +30,7 @@ enum AppleIIImageType: Equatable {
     case HGR
     case IFF(width: Int, height: Int, colors: String)
     case DEGAS(resolution: String, colors: Int)
+    case NEOchrome(colors: Int)
     case C64(format: String)
     case ZXSpectrum
     case AmstradCPC(mode: Int, colors: Int)
@@ -55,6 +56,13 @@ enum AppleIIImageType: Equatable {
             case "Medium": return (640, 200)
             case "High": return (640, 400)
             default: return (0, 0)
+            }
+        case .NEOchrome(let colors):
+            switch colors {
+            case 16: return (320, 200)
+            case 4: return (640, 200)
+            case 2: return (640, 400)
+            default: return (320, 200)
             }
         case .C64: return (320, 200)
         case .ZXSpectrum: return (256, 192)
@@ -117,6 +125,7 @@ enum AppleIIImageType: Equatable {
         case .HGR: return "HGR"
         case .IFF(_, _, let colors): return "IFF (\(colors))"
         case .DEGAS(let res, let colors): return "Degas (\(res), \(colors) colors)"
+        case .NEOchrome(let colors): return "NEOchrome (\(colors) colors)"
         case .C64(let format): return "C64 (\(format))"
         case .ZXSpectrum: return "ZX Spectrum"
         case .AmstradCPC(let mode, let colors): return "Amstrad CPC (Mode \(mode), \(colors) colors)"
@@ -147,6 +156,7 @@ enum AppleIIImageType: Equatable {
         case .HGR: return "1-bit (6 colors)"
         case .IFF(_, _, let colors): return colors
         case .DEGAS(_, let colors): return "\(colors) colors"
+        case .NEOchrome(let colors): return "\(colors) colors"
         case .C64(let format):
             if format.contains("FLI") || format.contains("Multicolor") {
                 return "4-bit (16 colors)"

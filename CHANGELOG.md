@@ -48,6 +48,14 @@
 - **Multi-extent Files**: Correctly handles files spanning multiple directory extents.
 - **Auto-detect Images**: Identifies and displays Amstrad CPC graphics files (SCR, etc.) stored on disks.
 
+### Atari ST Disk Image Support
+
+- **ST Disk Browser**: Added full support for reading Atari ST disk images (.st files - raw sector dumps).
+- **FAT12 Filesystem**: Parses the FAT12 filesystem structure used by Atari ST floppies, including boot sector BPB, allocation table, and directory entries.
+- **Multiple Disk Sizes**: Supports 360KB (SS/DD), 720KB (DS/DD), and 1.44MB (DS/HD) disk images.
+- **Directory Support**: Browse nested directories within ST disk images.
+- **Auto-detect Images**: Automatically identifies and displays Degas (.PI1/.PI2/.PI3), NEOchrome (.NEO), and IFF/ILBM images stored on disks.
+
 ### Bug Fixes
 
 - **Paintworks Palette Display**: Fixed palette extraction for Paintworks format files (from previous session).

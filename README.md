@@ -15,7 +15,7 @@ Retro Platforms
 
 🍎 Apple II/IIGS: SHR (Standard/3200/3200 Packed/816Paint/DreamGrafix), HGR, DHGR, PNT, PIC<br>
 🖥️ Amiga: IFF/ILBM (8-bit indexed, 24-bit RGB, HAM6 4096 colors, HAM8 262144 colors), ADF disk images<br>
-🕹️ Atari ST: Degas (PI1/PI2/PI3)<br>
+🕹️ Atari ST: Degas (PI1/PI2/PI3), NEOchrome (.NEO), ST disk images (.st)<br>
 💾 Commodore 64: Koala Painter, HIRES, Art Studio, D64/D71/D81 disk images<br>
 🎮 ZX Spectrum: SCR (6912 bytes)<br>
 💻 Amstrad CPC: Mode 0 (16 colors), Mode 1 (4 colors), DSK disk images<br>

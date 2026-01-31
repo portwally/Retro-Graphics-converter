@@ -50,4 +50,8 @@ extension UTType {
     static var scr: UTType {
         UTType(filenameExtension: "scr") ?? .data
     }
+
+    static var st: UTType {
+        UTType(filenameExtension: "st") ?? .data
+    }
 }

@@ -170,6 +170,7 @@ struct ImageItem: Identifiable {
         case .DHGR: return "dhgr"
         case .IFF: return "iff"
         case .DEGAS: return "pi1"
+        case .NEOchrome: return "neo"
         case .C64: return "c64"
         case .ZXSpectrum: return "scr"
         case .AmstradCPC: return "cpc"

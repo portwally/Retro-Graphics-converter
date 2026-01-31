@@ -45,6 +45,7 @@
 		3E75F26D2F1B000000C49434 /* AdjustmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F26C2F1B000000C49434 /* AdjustmentsView.swift */; };
 		3E75F26F2F1B000000C49434 /* HistogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F26E2F1B000000C49434 /* HistogramView.swift */; };
 		3E9F97B22F156505009196E9 /* ImageCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9F97B12F156505009196E9 /* ImageCropView.swift */; };
+		3E75F2712F1C000000C49434 /* AtariSTDiskReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2702F1C000000C49434 /* AtariSTDiskReader.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -87,6 +88,7 @@
 		3E75F26E2F1B000000C49434 /* HistogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramView.swift; sourceTree = "<group>"; };
 		3E9C9E9A2EE37BDF00DEE453 /* Retro-Graphics-Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Retro-Graphics-Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E9F97B12F156505009196E9 /* ImageCropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropView.swift; sourceTree = "<group>"; };
+		3E75F2702F1C000000C49434 /* AtariSTDiskReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtariSTDiskReader.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -114,6 +116,7 @@
 				3E75F21D2F11204400C49434 /* AmigaIFFDecoder.swift */,
 				3E75F21E2F11204400C49434 /* AppleIIDecoder.swift */,
 				3E75F21F2F11204400C49434 /* AtariSTDecoder.swift */,
+				3E75F2702F1C000000C49434 /* AtariSTDiskReader.swift */,
 				3E75F2682F1A000000C49434 /* BBCMicroDecoder.swift */,
 				3E75F2202F11204400C49434 /* C64Decoder.swift */,
 				3E75F2212F11204400C49434 /* DiskImageReader.swift */,
@@ -314,6 +317,7 @@
 				3E75F26B2F1A000000C49434 /* TRS80Decoder.swift in Sources */,
 				3E75F26D2F1B000000C49434 /* AdjustmentsView.swift in Sources */,
 				3E75F26F2F1B000000C49434 /* HistogramView.swift in Sources */,
+				3E75F2712F1C000000C49434 /* AtariSTDiskReader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -123,6 +123,7 @@ struct HelpView: View {
             BulletPoint(text: "**Apple II disk images** - .dsk, .do, .po, .2mg, .hdv containing multiple images")
             BulletPoint(text: "**C64 disk images** - .d64, .d71, .d81 (1541/1571/1581 floppy disks)")
             BulletPoint(text: "**Amiga disk images** - .adf (AmigaDOS DD/HD floppy disks)")
+            BulletPoint(text: "**Atari ST disk images** - .st (360KB/720KB/1.44MB FAT12 floppy disks)")
             BulletPoint(text: "**ProDOS volumes** - PNT and PIC files are automatically detected")
             BulletPoint(text: "**DOS 3.3 disks** - Binary graphics files")
 
@@ -464,6 +465,8 @@ struct HelpView: View {
             HelpSectionHeader(title: "Atari ST", icon: "rectangle.split.3x1")
 
             FormatRow(format: "Degas", description: "PI1/PI2/PI3 (16/4/2 colors)")
+            FormatRow(format: "NEOchrome", description: "NEO files (16/4/2 colors)")
+            FormatRow(format: "ST Disks", description: "Raw sector disk images (360KB/720KB/1.44MB)")
 
             Divider()
 

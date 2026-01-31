@@ -64,6 +64,9 @@ struct PaletteExtractor {
         case .DEGAS(let resolution, _):
             return extractDegasPalette(from: data, resolution: resolution)
 
+        case .NEOchrome:
+            return extractNEOchromePalette(from: data)
+
         case .ZXSpectrum:
             return createZXSpectrumPalette()
 
@@ -864,6 +867,45 @@ struct PaletteExtractor {
 
         for i in 0..<numColors {
             let colorWord = ImageHelpers.readBigEndianUInt16(data: data, offset: 2 + (i * 2))
+
+            // Atari ST 3-bit RGB
+            let r3 = (colorWord >> 8) & 0x07
+            let g3 = (colorWord >> 4) & 0x07
+            let b3 = colorWord & 0x07
+
+            colors.append(PaletteColor(
+                r: UInt8((Int(r3) * 255) / 7),
+                g: UInt8((Int(g3) * 255) / 7),
+                b: UInt8((Int(b3) * 255) / 7)
+            ))
+        }
+
+        return PaletteInfo(
+            singlePalette: colors,
+            platformName: "Atari ST"
+        )
+    }
+
+    // MARK: - NEOchrome Palette
+
+    private static func extractNEOchromePalette(from data: Data) -> PaletteInfo? {
+        // NEOchrome: palette at offset 4 (16 colors, 2 bytes each)
+        guard data.count >= 36 else { return nil }
+
+        // Get resolution to determine number of colors
+        let resolution = Int(ImageHelpers.readBigEndianUInt16(data: data, offset: 2))
+        let numColors: Int
+        switch resolution {
+        case 0: numColors = 16
+        case 1: numColors = 4
+        case 2: numColors = 2
+        default: numColors = 16
+        }
+
+        var colors: [PaletteColor] = []
+
+        for i in 0..<numColors {
+            let colorWord = ImageHelpers.readBigEndianUInt16(data: data, offset: 4 + (i * 2))
 
             // Atari ST 3-bit RGB
             let r3 = (colorWord >> 8) & 0x07
