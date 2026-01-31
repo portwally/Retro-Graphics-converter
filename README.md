@@ -14,7 +14,7 @@ Just drag and drop your disk images in the app and extract your pics from there.
 Retro Platforms
 
 🍎 Apple II/IIGS: SHR (Standard/3200/3200 Packed/816Paint/DreamGrafix), HGR, DHGR, PNT, PIC<br>
-🖥️ Amiga: IFF/ILBM (8-bit indexed, 24-bit RGB, HAM6 4096 colors, HAM8 262144 colors)<br>
+🖥️ Amiga: IFF/ILBM (8-bit indexed, 24-bit RGB, HAM6 4096 colors, HAM8 262144 colors), ADF disk images<br>
 🕹️ Atari ST: Degas (PI1/PI2/PI3)<br>
 💾 Commodore 64: Koala Painter, HIRES, Art Studio, D64/D71/D81 disk images<br>
 🎮 ZX Spectrum: SCR (6912 bytes)<br>
@@ -114,7 +114,7 @@ Technical Highlights
 🔄 Format Migration: Batch convert old formats to modern standards<br>
 📚 Collection Management: Browse and organize retro graphics libraries<br>
 🖼️ Comparison: View retro and modern images side-by-side<br>
-💿 Archive Processing: Extract and convert graphics from disk images (.2mg, .po, .do, .dsk, .hdv, .d64, .d71, .d81)<br>
+💿 Archive Processing: Extract and convert graphics from disk images (.2mg, .po, .do, .dsk, .hdv, .d64, .d71, .d81, .adf)<br>
 📺 Screensavers: Turn your retro art collection into a beautiful macOS screensaver<br>
 🎬 Video Slideshows: Create movies from your graphics with transitions for sharing or presentations<br>
 

@@ -231,7 +231,7 @@ struct ContentView: View {
                     }
                 }.padding(.horizontal, 5)
             }
-            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
+            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc, .adf], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
 
             Divider()
 
@@ -369,7 +369,7 @@ struct ContentView: View {
                 }
             }
             .frame(maxHeight: .infinity)
-            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
+            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc, .adf], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
 
             // Bottom quick actions bar (only show when processing)
             if isProcessing {
@@ -1185,7 +1185,8 @@ struct ContentView: View {
                         fileName.lowercased().hasSuffix(".img") ||
                         fileName.lowercased().hasSuffix(".d64") ||
                         fileName.lowercased().hasSuffix(".d71") ||
-                        fileName.lowercased().hasSuffix(".d81")
+                        fileName.lowercased().hasSuffix(".d81") ||
+                        fileName.lowercased().hasSuffix(".adf")
                     )
                     var processedAsDiskImage = false
                     
@@ -1257,7 +1258,7 @@ struct ContentView: View {
                 DispatchQueue.main.async { self.progressString = "Processing \(index + 1) of \(urls.count): \(url.lastPathComponent)" }
                 guard let data = try? Data(contentsOf: url) else { continue }
                 let fileExtension = url.pathExtension.lowercased()
-                if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" || fileExtension == "do" || fileExtension == "img" || fileExtension == "d64" || fileExtension == "d71" || fileExtension == "d81" {
+                if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" || fileExtension == "do" || fileExtension == "img" || fileExtension == "d64" || fileExtension == "d71" || fileExtension == "d81" || fileExtension == "adf" {
                     if let catalog = DiskImageReader.readDiskCatalog(data: data, filename: url.lastPathComponent) {
                         DispatchQueue.main.async { self.currentCatalog = catalog; self.showCatalogBrowser = true; self.isProcessing = false }
                         continue

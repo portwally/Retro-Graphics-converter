@@ -30,9 +30,19 @@
 - **Fixed Memory Layout**: Corrected decoder to use proper BBC Micro character-cell based screen memory organization (8 bytes per character column).
 - **All Modes Supported**: MODE 0 (640x256, 2 colors), MODE 1 (320x256, 4 colors), MODE 2 (160x256, 16 colors), MODE 4 (320x256, 2 colors), MODE 5 (160x256, 4 colors).
 
+### Amiga ADF Disk Image Support
+
+- **ADF Disk Browser**: Added full support for reading Amiga ADF disk images (.adf files).
+- **AmigaDOS Filesystem**: Parses AmigaDOS/FFS filesystem structure including root block, directories, and file headers.
+- **File Extraction**: Extracts files from ADF disks with support for both OFS (Original File System) and FFS (Fast File System).
+- **Directory Support**: Browse nested directories within ADF disk images.
+- **Auto-detect IFF Images**: Automatically identifies and displays IFF/ILBM images stored on Amiga disks.
+- **DD and HD Disks**: Supports both Double Density (880KB) and High Density (1.76MB) disk images.
+
 ### Bug Fixes
 
 - **Paintworks Palette Display**: Fixed palette extraction for Paintworks format files (from previous session).
+- **ADF OFS File Extraction**: Fixed extraction of larger files from OFS (Original File System) formatted ADF disks. The OFS data block chain could be broken on some disks; now uses the data block table with sequence number sorting for reliable extraction.
 
 ---
 

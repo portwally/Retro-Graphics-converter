@@ -122,6 +122,7 @@ struct HelpView: View {
             BulletPoint(text: "**Individual image files** - SHR, HGR, DHGR, IFF, Degas, PCX, BMP, etc.")
             BulletPoint(text: "**Apple II disk images** - .dsk, .do, .po, .2mg, .hdv containing multiple images")
             BulletPoint(text: "**C64 disk images** - .d64, .d71, .d81 (1541/1571/1581 floppy disks)")
+            BulletPoint(text: "**Amiga disk images** - .adf (AmigaDOS DD/HD floppy disks)")
             BulletPoint(text: "**ProDOS volumes** - PNT and PIC files are automatically detected")
             BulletPoint(text: "**DOS 3.3 disks** - Binary graphics files")
 
@@ -454,6 +455,9 @@ struct HelpView: View {
             HelpSectionHeader(title: "Amiga", icon: "memorychip")
 
             FormatRow(format: "IFF/ILBM", description: "Interchange File Format (up to 256 colors)")
+            FormatRow(format: "HAM6", description: "Hold-And-Modify 6-bit (4,096 colors)")
+            FormatRow(format: "HAM8", description: "Hold-And-Modify 8-bit (262,144 colors)")
+            FormatRow(format: "ADF Disks", description: "AmigaDOS disk images (DD 880KB, HD 1.76MB)")
 
             Divider()
 

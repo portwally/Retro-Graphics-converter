@@ -42,4 +42,8 @@ extension UTType {
     static var bbc: UTType {
         UTType(filenameExtension: "bbc") ?? .data
     }
+
+    static var adf: UTType {
+        UTType(filenameExtension: "adf") ?? .data
+    }
 }

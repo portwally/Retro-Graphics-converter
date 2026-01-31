@@ -7,9 +7,12 @@ class DiskImageReader {
     
     static func readDiskImage(data: Data) -> [DiskImageFile] {
         var files: [DiskImageFile] = []
-        
+
         if let twoImgFiles = read2IMG(data: data) {
             files.append(contentsOf: twoImgFiles)
+        }
+        else if let adfFiles = readADF(data: data) {
+            files.append(contentsOf: adfFiles)
         }
         else if let d64Files = readD64(data: data) {
             files.append(contentsOf: d64Files)
@@ -23,7 +26,7 @@ class DiskImageReader {
         else if let hdvFiles = readHDV(data: data) {
             files.append(contentsOf: hdvFiles)
         }
-        
+
         return files
     }
     
@@ -350,11 +353,244 @@ class DiskImageReader {
     }
     
     // MARK: - HDV Format
-    
+
     static func readHDV(data: Data) -> [DiskImageFile]? {
         return readProDOSDSK(data: data)
     }
-    
+
+    // MARK: - Amiga ADF Format
+
+    static func readADF(data: Data) -> [DiskImageFile]? {
+        // ADF sizes: 901120 (DD), 1802240 (HD)
+        let validSizes = [901120, 1802240]
+        guard validSizes.contains(data.count) else { return nil }
+
+        // Check root block for AmigaDOS signature
+        let isDD = data.count == 901120
+        let rootBlock = isDD ? 880 : 1760
+        guard let rootData = readADFBlock(data: data, block: rootBlock) else { return nil }
+
+        // Validate root block type (T_HEADER = 2) and secondary type (ST_ROOT = 1)
+        let blockType = readADFLong(data: rootData, offset: 0)
+        let secType = readADFLong(data: rootData, offset: 508)
+        guard blockType == 2 && secType == 1 else { return nil }
+
+        var files: [DiskImageFile] = []
+
+        // Read hash table (72 entries starting at offset 24)
+        for i in 0..<72 {
+            let hashEntry = readADFLong(data: rootData, offset: 24 + (i * 4))
+            if hashEntry == 0 { continue }
+
+            // Follow hash chain
+            var currentBlock = Int(hashEntry)
+            var visited = Set<Int>()
+
+            while currentBlock != 0 && !visited.contains(currentBlock) {
+                visited.insert(currentBlock)
+
+                guard let headerData = readADFBlock(data: data, block: currentBlock) else { break }
+
+                let headerType = readADFLong(data: headerData, offset: 0)
+                let headerSecType = readADFLong(data: headerData, offset: 508)
+
+                // ST_FILE = -3 (0xFFFFFFFD)
+                if headerType == 2 && headerSecType == 0xFFFFFFFD {
+                    // It's a file
+                    if let fileInfo = extractADFFile(data: data, headerBlock: currentBlock, headerData: headerData) {
+                        // Check if it's an image file
+                        let result = SHRDecoder.decode(data: fileInfo.data, filename: fileInfo.name)
+                        if result.type != .Unknown, result.image != nil {
+                            files.append(DiskImageFile(name: fileInfo.name, data: fileInfo.data, type: result.type))
+                        }
+                    }
+                }
+
+                // Follow hash chain (next entry with same hash)
+                currentBlock = Int(readADFLong(data: headerData, offset: 504))
+            }
+        }
+
+        return files.isEmpty ? nil : files
+    }
+
+    private static func readADFBlock(data: Data, block: Int) -> Data? {
+        let blockSize = 512
+        let offset = block * blockSize
+        guard offset + blockSize <= data.count else { return nil }
+        return data.subdata(in: offset..<(offset + blockSize))
+    }
+
+    private static func readADFLong(data: Data, offset: Int) -> UInt32 {
+        guard offset + 4 <= data.count else { return 0 }
+        // AmigaDOS uses big-endian
+        return UInt32(data[offset]) << 24 | UInt32(data[offset + 1]) << 16 |
+               UInt32(data[offset + 2]) << 8 | UInt32(data[offset + 3])
+    }
+
+    private static func readADFString(data: Data, offset: Int, maxLength: Int) -> String {
+        guard offset < data.count else { return "" }
+        let length = min(Int(data[offset]), maxLength)
+        guard offset + 1 + length <= data.count else { return "" }
+        var name = ""
+        for i in 0..<length {
+            let char = data[offset + 1 + i]
+            if char == 0 { break }
+            name.append(Character(UnicodeScalar(char)))
+        }
+        return name
+    }
+
+    private static func extractADFFile(data: Data, headerBlock: Int, headerData: Data) -> (name: String, data: Data)? {
+        // Read filename from header (offset 432, BCPL string: length byte + chars)
+        let fileName = readADFString(data: headerData, offset: 432, maxLength: 30)
+        guard !fileName.isEmpty else { return nil }
+
+        // Get file size (offset 324, 4 bytes)
+        let fileSize = Int(readADFLong(data: headerData, offset: 324))
+        guard fileSize > 0 else { return nil }
+
+        // Determine if OFS or FFS by checking data block structure
+        // First data block is at offset 16 in header
+        let firstDataBlock = Int(readADFLong(data: headerData, offset: 16))
+        guard firstDataBlock > 0 else { return nil }
+
+        guard let firstBlockData = readADFBlock(data: data, block: firstDataBlock) else { return nil }
+
+        // Check if OFS (has header) or FFS (pure data)
+        let dataBlockType = readADFLong(data: firstBlockData, offset: 0)
+        let isOFS = (dataBlockType == 8) // T_DATA = 8
+
+        var fileData = Data()
+
+        if isOFS {
+            // OFS: Data blocks have headers
+            // Header: type(4), headerKey(4), seqNum(4), dataSize(4), nextData(4), checksum(4), data(488)
+            // Use the data block table from header (more reliable than following chain)
+            var dataBlocksWithSeq: [(seq: Int, block: Int)] = []
+
+            // Collect data block pointers from header (offsets 308 down to 24, 72 entries max)
+            for i in 0..<72 {
+                let offset = 308 - (i * 4)
+                if offset < 24 { break }
+                let blockPtr = Int(readADFLong(data: headerData, offset: offset))
+                if blockPtr == 0 { break }
+                // Read sequence number from the data block
+                if let blockData = readADFBlock(data: data, block: blockPtr) {
+                    let blockType = readADFLong(data: blockData, offset: 0)
+                    if blockType == 8 { // T_DATA
+                        let seqNum = Int(readADFLong(data: blockData, offset: 8))
+                        dataBlocksWithSeq.append((seqNum, blockPtr))
+                    }
+                }
+            }
+
+            // Check for extension blocks (at offset 496)
+            var extensionBlock = Int(readADFLong(data: headerData, offset: 496))
+            var visitedExt = Set<Int>()
+
+            while extensionBlock != 0 && !visitedExt.contains(extensionBlock) {
+                visitedExt.insert(extensionBlock)
+                guard let extData = readADFBlock(data: data, block: extensionBlock) else { break }
+
+                // Read more data block pointers from extension
+                for i in 0..<72 {
+                    let offset = 308 - (i * 4)
+                    if offset < 24 { break }
+                    let blockPtr = Int(readADFLong(data: extData, offset: offset))
+                    if blockPtr == 0 { break }
+                    if let blockData = readADFBlock(data: data, block: blockPtr) {
+                        let blockType = readADFLong(data: blockData, offset: 0)
+                        if blockType == 8 {
+                            let seqNum = Int(readADFLong(data: blockData, offset: 8))
+                            dataBlocksWithSeq.append((seqNum, blockPtr))
+                        }
+                    }
+                }
+                extensionBlock = Int(readADFLong(data: extData, offset: 496))
+            }
+
+            // If block table didn't have enough blocks, scan for remaining by headerKey
+            let neededBlocks = (fileSize + 487) / 488
+            if dataBlocksWithSeq.count < neededBlocks {
+                let maxBlocks = data.count / 512
+                for blkNum in 1..<maxBlocks {
+                    if let blockData = readADFBlock(data: data, block: blkNum) {
+                        let blockType = readADFLong(data: blockData, offset: 0)
+                        let hdrKey = Int(readADFLong(data: blockData, offset: 4))
+                        if blockType == 8 && hdrKey == headerBlock {
+                            let seqNum = Int(readADFLong(data: blockData, offset: 8))
+                            if !dataBlocksWithSeq.contains(where: { $0.seq == seqNum }) {
+                                dataBlocksWithSeq.append((seqNum, blkNum))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Sort by sequence number and extract data
+            dataBlocksWithSeq.sort { $0.seq < $1.seq }
+
+            for (_, blockNum) in dataBlocksWithSeq {
+                guard let blockData = readADFBlock(data: data, block: blockNum) else { continue }
+                let dataSize = Int(readADFLong(data: blockData, offset: 12))
+                let bytesToRead = min(dataSize, 488, fileSize - fileData.count)
+                if bytesToRead > 0 && 24 + bytesToRead <= blockData.count {
+                    fileData.append(blockData.subdata(in: 24..<(24 + bytesToRead)))
+                }
+                if fileData.count >= fileSize { break }
+            }
+        } else {
+            // FFS: Pure data blocks, use extension blocks for block list
+            // Read data block pointers from header extension area
+            // Data blocks listed at offsets 308-51 (going backwards from 308)
+            var dataBlocks: [Int] = []
+
+            // First, collect data block pointers from header (offsets 308 down to 52, 72 entries max)
+            for i in 0..<72 {
+                let blockPtr = Int(readADFLong(data: headerData, offset: 308 - (i * 4)))
+                if blockPtr == 0 { break }
+                dataBlocks.append(blockPtr)
+            }
+
+            // Check for extension block (at offset 496)
+            var extensionBlock = Int(readADFLong(data: headerData, offset: 496))
+            var visited = Set<Int>()
+
+            while extensionBlock != 0 && !visited.contains(extensionBlock) {
+                visited.insert(extensionBlock)
+
+                guard let extData = readADFBlock(data: data, block: extensionBlock) else { break }
+
+                // Read more data block pointers from extension
+                for i in 0..<72 {
+                    let blockPtr = Int(readADFLong(data: extData, offset: 308 - (i * 4)))
+                    if blockPtr == 0 { break }
+                    dataBlocks.append(blockPtr)
+                }
+
+                extensionBlock = Int(readADFLong(data: extData, offset: 496))
+            }
+
+            // Read data from all data blocks
+            for blockNum in dataBlocks {
+                guard let blockData = readADFBlock(data: data, block: blockNum) else { continue }
+                let bytesToRead = min(512, fileSize - fileData.count)
+                if bytesToRead > 0 {
+                    fileData.append(blockData.prefix(bytesToRead))
+                }
+                if fileData.count >= fileSize { break }
+            }
+        }
+
+        // Trim to exact file size
+        if fileData.count > fileSize {
+            fileData = fileData.prefix(fileSize)
+        }
+
+        return fileData.isEmpty ? nil : (fileName, fileData)
+    }
+
     // MARK: - C64 D64 Format
     
     static func readD64(data: Data) -> [DiskImageFile]? {
@@ -558,15 +794,20 @@ extension DiskImageReader {
         if let catalog = read2IMGCatalogFull(data: data, filename: filename) {
             return catalog
         }
-        
+
+        // Amiga ADF Format
+        if let catalog = readADFCatalogFull(data: data, filename: filename) {
+            return catalog
+        }
+
         // C64 D64 Format
         if let catalog = readD64CatalogFull(data: data, filename: filename) {
             return catalog
         }
-        
+
         // Direct Disk Images with Order Detection
         let result = readDiskCatalogWithOrderDetection(data: data, filename: filename)
-        
+
         return result
     }
     
@@ -1076,6 +1317,209 @@ extension DiskImageReader {
             diskSize: data.count,
             entries: entries
         )
+    }
+
+    static func readADFCatalogFull(data: Data, filename: String) -> DiskCatalog? {
+        // ADF sizes: 901120 (DD), 1802240 (HD)
+        let validSizes = [901120, 1802240]
+        guard validSizes.contains(data.count) else { return nil }
+
+        let isDD = data.count == 901120
+        let rootBlock = isDD ? 880 : 1760
+        guard let rootData = readADFBlock(data: data, block: rootBlock) else { return nil }
+
+        // Validate root block type (T_HEADER = 2) and secondary type (ST_ROOT = 1)
+        let blockType = readADFLong(data: rootData, offset: 0)
+        let secType = readADFLong(data: rootData, offset: 508)
+        guard blockType == 2 && secType == 1 else { return nil }
+
+        // Read disk name (offset 432, BCPL string)
+        let diskName = readADFString(data: rootData, offset: 432, maxLength: 30)
+
+        var entries: [DiskCatalogEntry] = []
+
+        // Read hash table (72 entries starting at offset 24)
+        for i in 0..<72 {
+            let hashEntry = readADFLong(data: rootData, offset: 24 + (i * 4))
+            if hashEntry == 0 { continue }
+
+            // Follow hash chain and collect entries
+            var currentBlock = Int(hashEntry)
+            var visited = Set<Int>()
+
+            while currentBlock != 0 && !visited.contains(currentBlock) {
+                visited.insert(currentBlock)
+
+                guard let headerData = readADFBlock(data: data, block: currentBlock) else { break }
+
+                let headerType = readADFLong(data: headerData, offset: 0)
+                let headerSecType = readADFLong(data: headerData, offset: 508)
+
+                if headerType == 2 {
+                    let entryName = readADFString(data: headerData, offset: 432, maxLength: 30)
+
+                    if headerSecType == 0xFFFFFFFD {
+                        // ST_FILE = -3 (0xFFFFFFFD)
+                        let fileSize = Int(readADFLong(data: headerData, offset: 324))
+
+                        // Extract file data
+                        var fileData = Data()
+                        var isImage = false
+                        var imageType: AppleIIImageType = .Unknown
+
+                        if let extracted = extractADFFile(data: data, headerBlock: currentBlock, headerData: headerData) {
+                            fileData = extracted.data
+                            let result = SHRDecoder.decode(data: fileData, filename: entryName)
+                            if result.type != .Unknown && result.image != nil {
+                                isImage = true
+                                imageType = result.type
+                            }
+                        }
+
+                        let entry = DiskCatalogEntry(
+                            name: entryName,
+                            fileType: 0,
+                            fileTypeString: getADFFileExtension(name: entryName),
+                            size: fileSize,
+                            blocks: (fileSize + 511) / 512,
+                            loadAddress: nil,
+                            length: nil,
+                            data: fileData,
+                            isImage: isImage,
+                            imageType: imageType,
+                            isDirectory: false,
+                            children: nil
+                        )
+                        entries.append(entry)
+
+                    } else if headerSecType == 2 {
+                        // ST_DIR = 2 (directory)
+                        let subEntries = readADFDirectoryEntries(data: data, dirHeaderBlock: currentBlock, dirHeaderData: headerData)
+
+                        let entry = DiskCatalogEntry(
+                            name: entryName,
+                            fileType: 0x0F,
+                            fileTypeString: "DIR",
+                            size: subEntries.reduce(0) { $0 + $1.size },
+                            blocks: 1,
+                            loadAddress: nil,
+                            length: nil,
+                            data: Data(),
+                            isImage: false,
+                            imageType: .Unknown,
+                            isDirectory: true,
+                            children: subEntries
+                        )
+                        entries.append(entry)
+                    }
+                }
+
+                // Follow hash chain
+                currentBlock = Int(readADFLong(data: headerData, offset: 504))
+            }
+        }
+
+        return DiskCatalog(
+            diskName: diskName.isEmpty ? filename : diskName,
+            diskFormat: isDD ? "Amiga ADF (DD)" : "Amiga ADF (HD)",
+            diskSize: data.count,
+            entries: entries
+        )
+    }
+
+    private static func readADFDirectoryEntries(data: Data, dirHeaderBlock: Int, dirHeaderData: Data) -> [DiskCatalogEntry] {
+        var entries: [DiskCatalogEntry] = []
+
+        // Read hash table from directory header
+        for i in 0..<72 {
+            let hashEntry = readADFLong(data: dirHeaderData, offset: 24 + (i * 4))
+            if hashEntry == 0 { continue }
+
+            var currentBlock = Int(hashEntry)
+            var visited = Set<Int>()
+
+            while currentBlock != 0 && !visited.contains(currentBlock) {
+                visited.insert(currentBlock)
+
+                guard let headerData = readADFBlock(data: data, block: currentBlock) else { break }
+
+                let headerType = readADFLong(data: headerData, offset: 0)
+                let headerSecType = readADFLong(data: headerData, offset: 508)
+
+                if headerType == 2 {
+                    let entryName = readADFString(data: headerData, offset: 432, maxLength: 30)
+
+                    if headerSecType == 0xFFFFFFFD {
+                        // File
+                        let fileSize = Int(readADFLong(data: headerData, offset: 324))
+
+                        var fileData = Data()
+                        var isImage = false
+                        var imageType: AppleIIImageType = .Unknown
+
+                        if let extracted = extractADFFile(data: data, headerBlock: currentBlock, headerData: headerData) {
+                            fileData = extracted.data
+                            let result = SHRDecoder.decode(data: fileData, filename: entryName)
+                            if result.type != .Unknown && result.image != nil {
+                                isImage = true
+                                imageType = result.type
+                            }
+                        }
+
+                        let entry = DiskCatalogEntry(
+                            name: entryName,
+                            fileType: 0,
+                            fileTypeString: getADFFileExtension(name: entryName),
+                            size: fileSize,
+                            blocks: (fileSize + 511) / 512,
+                            loadAddress: nil,
+                            length: nil,
+                            data: fileData,
+                            isImage: isImage,
+                            imageType: imageType,
+                            isDirectory: false,
+                            children: nil
+                        )
+                        entries.append(entry)
+
+                    } else if headerSecType == 2 {
+                        // Subdirectory - recursive call
+                        let subEntries = readADFDirectoryEntries(data: data, dirHeaderBlock: currentBlock, dirHeaderData: headerData)
+
+                        let entry = DiskCatalogEntry(
+                            name: entryName,
+                            fileType: 0x0F,
+                            fileTypeString: "DIR",
+                            size: subEntries.reduce(0) { $0 + $1.size },
+                            blocks: 1,
+                            loadAddress: nil,
+                            length: nil,
+                            data: Data(),
+                            isImage: false,
+                            imageType: .Unknown,
+                            isDirectory: true,
+                            children: subEntries
+                        )
+                        entries.append(entry)
+                    }
+                }
+
+                currentBlock = Int(readADFLong(data: headerData, offset: 504))
+            }
+        }
+
+        return entries
+    }
+
+    private static func getADFFileExtension(name: String) -> String {
+        let ext = (name as NSString).pathExtension.lowercased()
+        switch ext {
+        case "iff", "ilbm", "lbm": return "IFF"
+        case "info": return "INFO"
+        case "txt", "doc": return "TXT"
+        case "exe", "": return "FILE"
+        default: return ext.uppercased()
+        }
     }
 }
 
