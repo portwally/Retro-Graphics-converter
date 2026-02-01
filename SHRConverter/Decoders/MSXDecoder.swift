@@ -31,18 +31,20 @@ class MSXDecoder {
     // Common file sizes: 14343 (with BSAVE header), 14336 (raw), 16384
 
     static func decodeScreen2(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
-        // MSX Screen 2 layout:
-        // Pattern Name Table: 768 bytes (32x24 tile references)
-        // Pattern Generator Table: 6144 bytes (256 patterns x 8 bytes per pattern x 3 banks)
-        // Color Table: 6144 bytes (colors for each pattern line)
+        // MSX Screen 2 layout (VRAM):
+        // Pattern Generator Table: 0x0000-0x17FF (6144 bytes - 256 patterns x 8 bytes x 3 banks)
+        // Pattern Name Table: 0x1800-0x1AFF (768 bytes - 32x24 tile references)
+        // Color Table: 0x2000-0x37FF (6144 bytes - colors for each pattern line)
 
         let width = 256
         let height = 192
 
         var offset = 0
+        var startAddress: UInt16 = 0
 
         // Check for BSAVE header (7 bytes: 0xFE + start addr + end addr + exec addr)
         if data.count >= 7 && data[0] == 0xFE {
+            startAddress = UInt16(data[1]) | (UInt16(data[2]) << 8)
             offset = 7
         }
 
@@ -53,26 +55,42 @@ class MSXDecoder {
             return (nil, .Unknown)
         }
 
-        // Determine layout based on file size
+        // Determine layout based on file size and start address
         let patternNameTableOffset: Int
         let patternGeneratorOffset: Int
         let colorTableOffset: Int
 
+        // Screen 2 data can be stored in different formats:
+        // 1. Full VRAM dump (16384 bytes): PGT at 0x0000, PNT at 0x1800, CT at 0x2000
+        // 2. Packed format (~13056 bytes): PGT + CT + PNT (BitPast/common format)
+        // 3. Minimal (~12288 bytes): PGT + CT only, sequential names
+
         if dataSize >= 16384 {
-            // Full VRAM dump (16KB) - standard MSX VRAM layout
-            patternNameTableOffset = offset + 0x1800  // 6144
+            // Full VRAM dump - use VRAM addresses
             patternGeneratorOffset = offset + 0x0000  // 0
+            patternNameTableOffset = offset + 0x1800  // 6144
             colorTableOffset = offset + 0x2000        // 8192
         } else if dataSize >= 14336 {
-            // Typical SC2 file layout
-            patternNameTableOffset = offset
-            patternGeneratorOffset = offset + 768
-            colorTableOffset = offset + 768 + 6144
-        } else {
-            // Minimal dump - just pattern and color tables
-            patternNameTableOffset = offset
+            // VRAM dump with gaps - use VRAM addresses
+            patternGeneratorOffset = offset + 0x0000
+            patternNameTableOffset = offset + 0x1800
+            colorTableOffset = offset + 0x2000
+        } else if dataSize >= 13056 {
+            // Packed SC2 file: PGT (6144) + CT (6144) + PNT (768) = 13056
+            // This is the BitPast/common format - PGT then CT then PNT
             patternGeneratorOffset = offset
             colorTableOffset = offset + 6144
+            patternNameTableOffset = offset + 6144 + 6144  // 12288
+        } else if dataSize >= 12288 {
+            // Minimal: PGT + CT only, use sequential pattern names
+            patternGeneratorOffset = offset
+            colorTableOffset = offset + 6144
+            patternNameTableOffset = -1  // Use sequential
+        } else {
+            // Very small - just pattern generator and color tables
+            patternGeneratorOffset = offset
+            colorTableOffset = offset + 6144
+            patternNameTableOffset = -1
         }
 
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
@@ -84,9 +102,10 @@ class MSXDecoder {
 
                 // Get pattern number from name table (or use sequential in minimal format)
                 let patternNum: Int
-                if patternNameTableOffset + tileIndex < data.count {
+                if patternNameTableOffset >= 0 && patternNameTableOffset + tileIndex < data.count {
                     patternNum = Int(data[patternNameTableOffset + tileIndex])
                 } else {
+                    // Use sequential pattern numbers when no name table available
                     patternNum = tileIndex % 256
                 }
 
@@ -236,39 +255,54 @@ class MSXDecoder {
     static func decodeScreen5(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         let width = 256
         let height = 212
+        let imageDataSize = 27136  // 256x212 at 4bpp
 
-        var offset = 0
+        var imageOffset = 0
+        var palette = msxPalette
 
         // Check for BSAVE header
         if data.count >= 7 && data[0] == 0xFE {
-            offset = 7
-        }
+            // BSAVE format - check if palette follows header (before image data)
+            // Format: BSAVE header (7) + palette (32) + image (27136) = 27175
+            // Or: BSAVE header (7) + image (27136) + palette (32) = 27175
+            // Or: BSAVE header (7) + image (27136) = 27143
 
-        let dataSize = data.count - offset
-
-        // Screen 5: 256x212, 4bpp = 27136 bytes minimum
-        guard dataSize >= 27136 else {
-            return (nil, .Unknown)
-        }
-
-        // Check for palette at end (32 bytes for 16 RGB values)
-        var palette = msxPalette
-        if dataSize >= 27136 + 32 {
-            // Extract palette (MSX2 format: 2 bytes per color, GRB format)
-            palette = []
-            let paletteOffset = offset + 27136
-            for i in 0..<16 {
-                if paletteOffset + i * 2 + 1 < data.count {
-                    let byte1 = data[paletteOffset + i * 2]
-                    let byte2 = data[paletteOffset + i * 2 + 1]
-                    // MSX2 palette: xRRR xBBB xGGG (spread across bytes)
-                    let r = UInt8((Int(byte1 & 0x07) * 255) / 7)
-                    let b = UInt8((Int((byte1 >> 4) & 0x07) * 255) / 7)
-                    let g = UInt8((Int(byte2 & 0x07) * 255) / 7)
-                    palette.append((r: r, g: g, b: b))
+            if data.count >= 7 + 32 + imageDataSize {
+                // Try palette at beginning (after header)
+                let testPalette = extractMSX2Palette(data: data, offset: 7)
+                if isValidMSX2Palette(testPalette) {
+                    palette = testPalette
+                    imageOffset = 7 + 32
                 } else {
-                    palette.append(msxPalette[i])
+                    // Try palette at end
+                    imageOffset = 7
+                    let endPalette = extractMSX2Palette(data: data, offset: 7 + imageDataSize)
+                    if isValidMSX2Palette(endPalette) {
+                        palette = endPalette
+                    }
                 }
+            } else if data.count >= 7 + imageDataSize {
+                imageOffset = 7
+            } else {
+                return (nil, .Unknown)
+            }
+        } else {
+            // Raw format without BSAVE header
+            if data.count >= 32 + imageDataSize {
+                // Try palette at beginning
+                let testPalette = extractMSX2Palette(data: data, offset: 0)
+                if isValidMSX2Palette(testPalette) {
+                    palette = testPalette
+                    imageOffset = 32
+                } else if data.count >= imageDataSize + 32 {
+                    // Try palette at end
+                    let endPalette = extractMSX2Palette(data: data, offset: imageDataSize)
+                    if isValidMSX2Palette(endPalette) {
+                        palette = endPalette
+                    }
+                }
+            } else if data.count < imageDataSize {
+                return (nil, .Unknown)
             }
         }
 
@@ -276,7 +310,7 @@ class MSXDecoder {
 
         for y in 0..<height {
             for x in 0..<(width / 2) {
-                let byteOffset = offset + y * 128 + x
+                let byteOffset = imageOffset + y * 128 + x
                 guard byteOffset < data.count else { continue }
 
                 let byte = data[byteOffset]
@@ -308,6 +342,41 @@ class MSXDecoder {
         return (cgImage, .MSX(mode: 5, colors: 16))
     }
 
+    // Helper to extract MSX2 palette from data
+    private static func extractMSX2Palette(data: Data, offset: Int) -> [(r: UInt8, g: UInt8, b: UInt8)] {
+        var palette: [(r: UInt8, g: UInt8, b: UInt8)] = []
+        for i in 0..<16 {
+            let byteOffset = offset + i * 2
+            guard byteOffset + 1 < data.count else {
+                palette.append(msxPalette[i])
+                continue
+            }
+            let byte1 = data[byteOffset]
+            let byte2 = data[byteOffset + 1]
+            // MSX2 VDP palette format: 0RRR 0BBB (byte1), 0000 0GGG (byte2)
+            let r = UInt8((Int((byte1 >> 4) & 0x07) * 255) / 7)
+            let b = UInt8((Int(byte1 & 0x07) * 255) / 7)
+            let g = UInt8((Int(byte2 & 0x07) * 255) / 7)
+            palette.append((r: r, g: g, b: b))
+        }
+        return palette
+    }
+
+    // Check if palette looks valid (not all zeros, has some variation)
+    private static func isValidMSX2Palette(_ palette: [(r: UInt8, g: UInt8, b: UInt8)]) -> Bool {
+        guard palette.count == 16 else { return false }
+        var nonBlack = 0
+        var total: Int = 0
+        for color in palette {
+            total += Int(color.r) + Int(color.g) + Int(color.b)
+            if color.r > 0 || color.g > 0 || color.b > 0 {
+                nonBlack += 1
+            }
+        }
+        // Valid palette should have at least a few non-black colors and reasonable total
+        return nonBlack >= 3 && total > 100
+    }
+
     // MARK: - Screen 8 Decoder (MSX2 Graphics Mode 7)
     // Resolution: 256x212, 256 colors (8 bits per pixel)
 
@@ -337,9 +406,9 @@ class MSXDecoder {
                 guard byteOffset < data.count else { continue }
 
                 let colorByte = data[byteOffset]
-                // MSX2 Screen 8: GGGRRRBB format
-                let g = UInt8((Int((colorByte >> 5) & 0x07) * 255) / 7)
-                let r = UInt8((Int((colorByte >> 2) & 0x07) * 255) / 7)
+                // MSX2 Screen 8: RRRGGGBB format (3 bits R, 3 bits G, 2 bits B)
+                let r = UInt8((Int((colorByte >> 5) & 0x07) * 255) / 7)
+                let g = UInt8((Int((colorByte >> 2) & 0x07) * 255) / 7)
                 let b = UInt8((Int(colorByte & 0x03) * 255) / 3)
 
                 let bufferIdx = (y * width + x) * 4
@@ -380,10 +449,10 @@ class MSXDecoder {
             return decodeScreen2(data: data)
         case "sc5", "sr5", "ge5", "gr5":
             return decodeScreen5(data: data)
-        case "sc7", "ge7", "gr7":
+        case "sc7", "ge7":
             // Screen 7 is 512x212 at 16 colors - use Screen 5 decoder as fallback
             return decodeScreen5(data: data)
-        case "sc8", "sr8", "ge8", "gr8", "pic":
+        case "sc8", "sr8", "ge8", "pic":
             if dataSize >= 54272 {
                 return decodeScreen8(data: data)
             }

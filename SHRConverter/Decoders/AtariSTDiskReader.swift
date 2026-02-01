@@ -88,6 +88,14 @@ class AtariSTDiskReader {
         // Check boot sector for valid BPB
         guard data.count >= 512 else { return false }
 
+        // Reject MSX disks - they have "MSX" at offset 3 in boot sector OEM name
+        if data.count >= 6 {
+            let oemName = String(data: data[3..<6], encoding: .ascii) ?? ""
+            if oemName == "MSX" {
+                return false
+            }
+        }
+
         // Check for valid bytes per sector (should be 512)
         let bytesPerSector = UInt16(data[11]) | (UInt16(data[12]) << 8)
         if bytesPerSector != 512 {

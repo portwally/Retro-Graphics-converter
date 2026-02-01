@@ -231,7 +231,7 @@ struct ContentView: View {
                     }
                 }.padding(.horizontal, 5)
             }
-            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc, .adf, .st], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
+            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc, .adf, .st, .atr], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
 
             Divider()
 
@@ -369,7 +369,7 @@ struct ContentView: View {
                 }
             }
             .frame(maxHeight: .infinity)
-            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc, .adf, .st], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
+            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc, .adf, .st, .atr], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
 
             // Bottom quick actions bar (only show when processing)
             if isProcessing {
@@ -1059,9 +1059,18 @@ struct ContentView: View {
                     if cpcResult.image != nil {
                         finalType = cpcResult.type  // Use detailed CPC type from decoder
                     }
+                } else if case .MSX = entry.imageType {
+                    // For MSX types, use MSXDecoder directly with original filename
+                    let msxResult = MSXDecoder.decode(data: entry.data, filename: entry.name)
+                    cgImage = msxResult.image
+                    if msxResult.image != nil {
+                        finalType = msxResult.type
+                    }
                 } else {
-                    // Use nameWithTypeInfo to pass ProDOS file type info for proper format detection
-                    let decodeResult = SHRDecoder.decode(data: entry.data, filename: entry.nameWithTypeInfo)
+                    // Use original name for non-Apple II formats (fileType 0) to preserve extension,
+                    // but nameWithTypeInfo for ProDOS files to pass file type info
+                    let filename = entry.fileType == 0 ? entry.name : entry.nameWithTypeInfo
+                    let decodeResult = SHRDecoder.decode(data: entry.data, filename: filename)
                     cgImage = decodeResult.image
                     finalType = decodeResult.type
                 }
@@ -1202,7 +1211,8 @@ struct ContentView: View {
                         fileName.lowercased().hasSuffix(".d71") ||
                         fileName.lowercased().hasSuffix(".d81") ||
                         fileName.lowercased().hasSuffix(".adf") ||
-                        fileName.lowercased().hasSuffix(".st")
+                        fileName.lowercased().hasSuffix(".st") ||
+                        fileName.lowercased().hasSuffix(".atr")
                     )
                     var processedAsDiskImage = false
                     
@@ -1274,7 +1284,7 @@ struct ContentView: View {
                 DispatchQueue.main.async { self.progressString = "Processing \(index + 1) of \(urls.count): \(url.lastPathComponent)" }
                 guard let data = try? Data(contentsOf: url) else { continue }
                 let fileExtension = url.pathExtension.lowercased()
-                if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" || fileExtension == "do" || fileExtension == "img" || fileExtension == "d64" || fileExtension == "d71" || fileExtension == "d81" || fileExtension == "adf" || fileExtension == "st" {
+                if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" || fileExtension == "do" || fileExtension == "img" || fileExtension == "d64" || fileExtension == "d71" || fileExtension == "d81" || fileExtension == "adf" || fileExtension == "st" || fileExtension == "atr" {
                     if let catalog = DiskImageReader.readDiskCatalog(data: data, filename: url.lastPathComponent) {
                         DispatchQueue.main.async { self.currentCatalog = catalog; self.showCatalogBrowser = true; self.isProcessing = false }
                         continue

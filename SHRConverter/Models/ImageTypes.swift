@@ -40,6 +40,7 @@ enum AppleIIImageType: Equatable {
     case MSX(mode: Int, colors: Int)
     case BBCMicro(mode: Int, colors: Int)
     case TRS80(model: String, resolution: String)
+    case Atari8bit(mode: String, colors: Int)
     case ModernImage(format: String, width: Int, height: Int)
     case Unknown
     
@@ -103,6 +104,16 @@ enum AppleIIImageType: Equatable {
             else if resolution.contains("320x200") { return (320, 200) }  // CoCo
             else if resolution.contains("640x200") { return (640, 200) }  // CoCo 3
             else { return (128, 48) }
+        case .Atari8bit(let mode, _):
+            switch mode {
+            case "GR.8": return (320, 192)   // Hi-res 1-bit
+            case "GR.9": return (160, 192)   // GTIA 16 shades (80 native, 2x display)
+            case "GR.10": return (160, 192)  // GTIA 9 colors (80 native, 2x display)
+            case "GR.11": return (160, 192)  // GTIA 16 colors (80 native, 2x display)
+            case "GR.15", "GR.7": return (160, 192)  // 4-color
+            case "MIC": return (160, 192)    // MicroIllustrator
+            default: return (160, 192)
+            }
         case .ModernImage(_, let width, let height): return (width, height)
         case .Unknown: return (0, 0)
         }
@@ -135,6 +146,7 @@ enum AppleIIImageType: Equatable {
         case .MSX(let mode, let colors): return "MSX Screen \(mode) (\(colors) colors)"
         case .BBCMicro(let mode, let colors): return "BBC Micro MODE \(mode) (\(colors) colors)"
         case .TRS80(let model, let resolution): return "TRS-80 \(model) (\(resolution))"
+        case .Atari8bit(let mode, let colors): return "Atari 8-bit \(mode) (\(colors) colors)"
         case .ModernImage(let format, let width, let height): return "\(format) (\(width)x\(height))"
         case .Unknown: return "Unknown"
         }
@@ -171,6 +183,7 @@ enum AppleIIImageType: Equatable {
         case .MSX(_, let colors): return "\(colors) colors"
         case .BBCMicro(_, let colors): return "\(colors) colors"
         case .TRS80: return "1-bit (2 colors)"
+        case .Atari8bit(_, let colors): return "\(colors) colors"
         case .ModernImage(let format, _, _):
             switch format.uppercased() {
             case "PNG", "TIFF": return "24-bit/32-bit"

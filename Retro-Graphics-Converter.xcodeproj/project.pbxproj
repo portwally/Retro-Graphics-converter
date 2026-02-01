@@ -44,8 +44,11 @@
 		3E75F26B2F1A000000C49434 /* TRS80Decoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F26A2F1A000000C49434 /* TRS80Decoder.swift */; };
 		3E75F26D2F1B000000C49434 /* AdjustmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F26C2F1B000000C49434 /* AdjustmentsView.swift */; };
 		3E75F26F2F1B000000C49434 /* HistogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F26E2F1B000000C49434 /* HistogramView.swift */; };
-		3E9F97B22F156505009196E9 /* ImageCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9F97B12F156505009196E9 /* ImageCropView.swift */; };
 		3E75F2712F1C000000C49434 /* AtariSTDiskReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2702F1C000000C49434 /* AtariSTDiskReader.swift */; };
+		3E75F2732F1D000000C49434 /* MSXDiskReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2722F1D000000C49434 /* MSXDiskReader.swift */; };
+		3E75F2742F1E000000C49434 /* Atari8bitDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2752F1E000000C49434 /* Atari8bitDecoder.swift */; };
+		3E75F2762F1E000000C49434 /* Atari8bitDiskReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2772F1E000000C49434 /* Atari8bitDiskReader.swift */; };
+		3E9F97B22F156505009196E9 /* ImageCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9F97B12F156505009196E9 /* ImageCropView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -86,9 +89,12 @@
 		3E75F26A2F1A000000C49434 /* TRS80Decoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TRS80Decoder.swift; sourceTree = "<group>"; };
 		3E75F26C2F1B000000C49434 /* AdjustmentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjustmentsView.swift; sourceTree = "<group>"; };
 		3E75F26E2F1B000000C49434 /* HistogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramView.swift; sourceTree = "<group>"; };
+		3E75F2702F1C000000C49434 /* AtariSTDiskReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtariSTDiskReader.swift; sourceTree = "<group>"; };
+		3E75F2722F1D000000C49434 /* MSXDiskReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MSXDiskReader.swift; sourceTree = "<group>"; };
+		3E75F2752F1E000000C49434 /* Atari8bitDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atari8bitDecoder.swift; sourceTree = "<group>"; };
+		3E75F2772F1E000000C49434 /* Atari8bitDiskReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atari8bitDiskReader.swift; sourceTree = "<group>"; };
 		3E9C9E9A2EE37BDF00DEE453 /* Retro-Graphics-Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Retro-Graphics-Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E9F97B12F156505009196E9 /* ImageCropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropView.swift; sourceTree = "<group>"; };
-		3E75F2702F1C000000C49434 /* AtariSTDiskReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtariSTDiskReader.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -115,6 +121,8 @@
 			children = (
 				3E75F21D2F11204400C49434 /* AmigaIFFDecoder.swift */,
 				3E75F21E2F11204400C49434 /* AppleIIDecoder.swift */,
+				3E75F2752F1E000000C49434 /* Atari8bitDecoder.swift */,
+				3E75F2772F1E000000C49434 /* Atari8bitDiskReader.swift */,
 				3E75F21F2F11204400C49434 /* AtariSTDecoder.swift */,
 				3E75F2702F1C000000C49434 /* AtariSTDiskReader.swift */,
 				3E75F2682F1A000000C49434 /* BBCMicroDecoder.swift */,
@@ -123,6 +131,7 @@
 				3E75F24B2F16300000C49434 /* DreamGrafixDecoder.swift */,
 				3E75F2222F11204400C49434 /* ModernImageDecoder.swift */,
 				3E75F2662F1A000000C49434 /* MSXDecoder.swift */,
+				3E75F2722F1D000000C49434 /* MSXDiskReader.swift */,
 				3E75F2232F11204400C49434 /* PackedSHRDecoder.swift */,
 				3E75F2522F17000000C49434 /* PaletteExtractor.swift */,
 				3E75F25E2F17100000C49434 /* PaletteRenderer.swift */,
@@ -318,6 +327,9 @@
 				3E75F26D2F1B000000C49434 /* AdjustmentsView.swift in Sources */,
 				3E75F26F2F1B000000C49434 /* HistogramView.swift in Sources */,
 				3E75F2712F1C000000C49434 /* AtariSTDiskReader.swift in Sources */,
+				3E75F2732F1D000000C49434 /* MSXDiskReader.swift in Sources */,
+				3E75F2742F1E000000C49434 /* Atari8bitDecoder.swift in Sources */,
+				3E75F2762F1E000000C49434 /* Atari8bitDiskReader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -454,7 +466,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 535;
+				CURRENT_PROJECT_VERSION = 540;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = ZFE2VJD462;
 				ENABLE_APP_SANDBOX = NO;
@@ -469,7 +481,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 4.2;
+				MARKETING_VERSION = 4.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.portwally.retroGFX;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -491,7 +503,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 535;
+				CURRENT_PROJECT_VERSION = 540;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=macosx*]" = ZFE2VJD462;
@@ -518,7 +530,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 4.2;
+				MARKETING_VERSION = 4.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.portwally.retroGFX;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

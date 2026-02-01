@@ -180,6 +180,7 @@ struct ImageItem: Identifiable {
         case .MSX(let mode, _): return "sc\(mode)"
         case .BBCMicro(let mode, _): return "bbm\(mode)"
         case .TRS80: return "bin"
+        case .Atari8bit(let mode, _): return mode.lowercased().replacingOccurrences(of: ".", with: "")
         case .ModernImage(let format, _, _):
             return format.lowercased()
         case .Unknown: return "bin"

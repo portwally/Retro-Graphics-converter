@@ -69,7 +69,7 @@ struct HelpView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
 
-            Text("Retro Graphics Converter is a powerful tool for viewing, editing, and converting vintage computer graphics from platforms like the Apple II, Apple IIgs, Commodore 64, Amiga, Atari ST, MSX, BBC Micro, TRS-80/CoCo, and more.")
+            Text("Retro Graphics Converter is a powerful tool for viewing, editing, and converting vintage computer graphics from platforms like the Apple II, Apple IIgs, Commodore 64, Amiga, Atari ST, Atari 8-bit, MSX, BBC Micro, TRS-80/CoCo, and more.")
                 .font(.body)
 
             Divider()
@@ -124,6 +124,8 @@ struct HelpView: View {
             BulletPoint(text: "**C64 disk images** - .d64, .d71, .d81 (1541/1571/1581 floppy disks)")
             BulletPoint(text: "**Amiga disk images** - .adf (AmigaDOS DD/HD floppy disks)")
             BulletPoint(text: "**Atari ST disk images** - .st (360KB/720KB/1.44MB FAT12 floppy disks)")
+            BulletPoint(text: "**Atari 8-bit disk images** - .atr (Atari DOS 2.0/2.5 format, 90KB/130KB/180KB)")
+            BulletPoint(text: "**MSX disk images** - .dsk (360KB/720KB FAT12 floppy disks)")
             BulletPoint(text: "**ProDOS volumes** - PNT and PIC files are automatically detected")
             BulletPoint(text: "**DOS 3.3 disks** - Binary graphics files")
 
@@ -470,6 +472,18 @@ struct HelpView: View {
 
             Divider()
 
+            HelpSectionHeader(title: "Atari 8-bit (400/800/XL/XE)", icon: "gamecontroller")
+
+            FormatRow(format: "GR.8", description: "Hi-res mode (320x192, 2 colors)")
+            FormatRow(format: "GR.9", description: "GTIA 16-shade mode (160x192, 8 luminances)")
+            FormatRow(format: "GR.10", description: "GTIA 9-color mode (160x192, 9 colors)")
+            FormatRow(format: "GR.11", description: "GTIA 16-hue mode (160x192, 16 colors)")
+            FormatRow(format: "GR.15/GR.7", description: "4-color mode (160x192)")
+            FormatRow(format: "MicroIllustrator", description: "MIC files with embedded palette")
+            FormatRow(format: "ATR Disks", description: "Atari DOS disk images (90KB/130KB/180KB)")
+
+            Divider()
+
             HelpSectionHeader(title: "PC Formats", icon: "pc")
 
             FormatRow(format: "PCX", description: "PC Paintbrush (1-24 bit)")
@@ -479,10 +493,11 @@ struct HelpView: View {
 
             HelpSectionHeader(title: "MSX", icon: "tv")
 
-            FormatRow(format: "Screen 1", description: "Text/tile mode (256x192, 16 colors)")
             FormatRow(format: "Screen 2", description: "Graphics II mode (256x192, 16 colors)")
             FormatRow(format: "Screen 5", description: "MSX2 bitmap (256x212, 16 colors)")
+            FormatRow(format: "Screen 7", description: "MSX2 bitmap (512x212, 16 colors)")
             FormatRow(format: "Screen 8", description: "MSX2 256-color mode (256x212)")
+            FormatRow(format: "DSK Disks", description: "FAT12 disk images (360KB/720KB)")
 
             Divider()
 
@@ -524,7 +539,10 @@ struct HelpView: View {
             FormatRow(format: ".d71", description: "C64 1571 dual-sided floppy (340K)")
             FormatRow(format: ".d81", description: "C64 1581 3.5\" floppy (800K)")
             FormatRow(format: ".adf", description: "Amiga DD/HD floppy disk image")
+            FormatRow(format: ".st", description: "Atari ST disk image (360KB/720KB/1.44MB)")
+            FormatRow(format: ".atr", description: "Atari 8-bit disk image (90KB/130KB/180KB)")
             FormatRow(format: ".dsk (CPC)", description: "Amstrad CPC disk image (CPCEMU format)")
+            FormatRow(format: ".dsk (MSX)", description: "MSX disk image (360KB/720KB)")
         }
     }
 

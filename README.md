@@ -10,16 +10,17 @@ Just drag and drop your disk images in the app and extract your pics from there.
 
 <img width="1608" height="1004" alt="Screenshot 2026-01-23 at 21 27 44" src="https://github.com/user-attachments/assets/f9526914-2f72-41f8-bd90-cebcfd1576f4" />
 
-📂 Supported Formats (13 Platforms)
+📂 Supported Formats (14 Platforms)
 Retro Platforms
 
 🍎 Apple II/IIGS: SHR (Standard/3200/3200 Packed/816Paint/DreamGrafix), HGR, DHGR, PNT, PIC<br>
 🖥️ Amiga: IFF/ILBM (8-bit indexed, 24-bit RGB, HAM6 4096 colors, HAM8 262144 colors), ADF disk images<br>
 🕹️ Atari ST: Degas (PI1/PI2/PI3), NEOchrome (.NEO), ST disk images (.st)<br>
+🎰 Atari 8-bit (400/800/XL/XE): GR.8, GR.9, GR.10, GR.11, GR.15/GR.7, MicroIllustrator (.MIC), ATR disk images<br>
 💾 Commodore 64: Koala Painter, HIRES, Art Studio, D64/D71/D81 disk images<br>
 🎮 ZX Spectrum: SCR (6912 bytes)<br>
 💻 Amstrad CPC: Mode 0 (16 colors), Mode 1 (4 colors), DSK disk images<br>
-📺 MSX/MSX2: Screen 1, 2, 5, 8 (SC1/SC2/SC5/SC8 files, BSAVE format)<br>
+📺 MSX/MSX2: Screen 1, 2, 5, 7, 8 (SC2/SC5/SC7/SC8/GRP files, BSAVE format), DSK disk images<br>
 📻 BBC Micro: MODE 0-5 (2/4/16 colors, .bbc/.bbm0-5 files, auto-detects mode from filename)<br>
 🖳 TRS-80/CoCo: Model I/III block graphics, CoCo PMODE 3/4, CoCo 3 (16 colors)<br>
 🖨️ PC/DOS: PCX (CGA 4-color, EGA 16-color, EGA 64-color, VGA 256-color, 24-bit RGB with RLE compression)<br>
@@ -114,7 +115,7 @@ Technical Highlights
 🔄 Format Migration: Batch convert old formats to modern standards<br>
 📚 Collection Management: Browse and organize retro graphics libraries<br>
 🖼️ Comparison: View retro and modern images side-by-side<br>
-💿 Archive Processing: Extract and convert graphics from disk images (.2mg, .po, .do, .dsk, .hdv, .d64, .d71, .d81, .adf)<br>
+💿 Archive Processing: Extract and convert graphics from disk images (.2mg, .po, .do, .dsk, .hdv, .d64, .d71, .d81, .adf, .st, .atr)<br>
 📺 Screensavers: Turn your retro art collection into a beautiful macOS screensaver<br>
 🎬 Video Slideshows: Create movies from your graphics with transitions for sharing or presentations<br>
 

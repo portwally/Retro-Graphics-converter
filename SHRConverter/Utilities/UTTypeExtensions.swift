@@ -54,4 +54,8 @@ extension UTType {
     static var st: UTType {
         UTType(filenameExtension: "st") ?? .data
     }
+
+    static var atr: UTType {
+        UTType(filenameExtension: "atr") ?? .data
+    }
 }

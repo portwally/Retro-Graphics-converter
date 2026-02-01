@@ -19,8 +19,9 @@ class SHRDecoder {
 
         // MSX formats by extension
         // SC* = Screen, SR* = Screen Raw, GE* = Graphics Editor, GR* = Graphics
-        let msxExtensions = ["sc1", "sc2", "sr2", "sc5", "sr5", "sc8", "sr8",
-                             "ge1", "ge2", "ge5", "ge7", "ge8", "gr5", "gr7", "gr8"]
+        // Note: gr7 and gr8 are Atari 8-bit modes, not MSX - handled by Atari8bitDecoder
+        let msxExtensions = ["sc1", "sc2", "sr2", "sc5", "sr5", "sc7", "sc8", "sr8",
+                             "ge1", "ge2", "ge5", "ge7", "ge8", "gr5"]
         if msxExtensions.contains(fileExtension) {
             return MSXDecoder.decode(data: data, filename: filename)
         }
@@ -42,7 +43,13 @@ class SHRDecoder {
         if degasExtensions.contains(fileExtension) {
             return AtariSTDecoder.decodeDegas(data: data)
         }
-        
+
+        // Atari 8-bit (400/800/XL/XE) formats by extension
+        let atari8bitExtensions = ["gr8", "gr9", "gr15", "gr7", "gr11", "gr1", "gr2", "gr3", "gr4", "gr5", "gr6", "mic", "pic"]
+        if atari8bitExtensions.contains(fileExtension) {
+            return Atari8bitDecoder.decode(data: data, filename: filename)
+        }
+
         // Magic byte detection
         if size >= 8 {
             if data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
@@ -184,6 +191,10 @@ class SHRDecoder {
         case 10240, 10496:
             // BBC Micro MODE 4/5 (10KB)
             return BBCMicroDecoder.decode(data: data, filename: filename)
+        case 7680:
+            // Atari 8-bit graphics (40 bytes × 192 lines)
+            // GR.8 (320x192 2-color), GR.9 (80x192 16-shade), GR.15 (160x192 4-color)
+            return Atari8bitDecoder.decode(data: data, filename: filename)
         case 1024:
             // TRS-80 Model I/III block graphics
             return TRS80Decoder.decodeBlockGraphics(data: data)

@@ -91,6 +91,9 @@ struct PaletteExtractor {
         case .TRS80(let model, _):
             return createTRS80Palette(model: model)
 
+        case .Atari8bit(let mode, _):
+            return createAtari8bitPalette(mode: mode, data: data)
+
         case .ModernImage:
             return nil  // Modern images don't have indexed palettes
 
@@ -1277,5 +1280,136 @@ struct PaletteExtractor {
             ]
             return PaletteInfo(singlePalette: colors, platformName: "TRS-80 \(model)")
         }
+    }
+
+    // MARK: - Atari 8-bit Palette
+
+    private static func createAtari8bitPalette(mode: String, data: Data) -> PaletteInfo {
+        var colors: [PaletteColor] = []
+        let bitmapSize = 7680
+
+        switch mode {
+        case "GR.8":
+            // 2-color hi-res mode
+            // Check for embedded palette from BitPast (2 colors after bitmap)
+            if let embedded = extractAtariEmbeddedPalette(data: data, bitmapSize: bitmapSize, numColors: 2) {
+                for palIdx in embedded {
+                    let rgb = Atari8bitDecoder.atariPalette[palIdx % 128]
+                    colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+                }
+            } else {
+                // Default: black and light gray
+                let bg = Atari8bitDecoder.atariPalette[0]
+                let fg = Atari8bitDecoder.atariPalette[7]
+                colors.append(PaletteColor(r: bg.r, g: bg.g, b: bg.b))
+                colors.append(PaletteColor(r: fg.r, g: fg.g, b: fg.b))
+            }
+
+        case "GR.9":
+            // 16 shades - check for embedded hue
+            if let embedded = extractAtariEmbeddedPalette(data: data, bitmapSize: bitmapSize, numColors: 1) {
+                let hue = embedded[0] / 8
+                for lum in 0..<8 {
+                    let rgb = Atari8bitDecoder.atariPalette[hue * 8 + lum]
+                    colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+                }
+            } else {
+                // Default: 16 shades of gray (hue 0)
+                for lum in 0..<8 {
+                    let rgb = Atari8bitDecoder.atariPalette[lum]
+                    colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+                }
+            }
+
+        case "GR.11":
+            // 16 hues - check for embedded luminance
+            if let embedded = extractAtariEmbeddedPalette(data: data, bitmapSize: bitmapSize, numColors: 1) {
+                let lumIndex = embedded[0] % 8
+                for hue in 0..<16 {
+                    let rgb = Atari8bitDecoder.atariPalette[hue * 8 + lumIndex]
+                    colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+                }
+            } else {
+                // Default: 16 hues at luminance 6
+                for hue in 0..<16 {
+                    let rgb = Atari8bitDecoder.atariPalette[hue * 8 + 6]
+                    colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+                }
+            }
+
+        case "GR.10":
+            // 9-color GTIA mode - check for embedded palette
+            if let embedded = extractAtariEmbeddedPalette(data: data, bitmapSize: bitmapSize, numColors: 9) {
+                for palIdx in embedded {
+                    let rgb = Atari8bitDecoder.atariPalette[palIdx % 128]
+                    colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+                }
+            } else {
+                // Default 9-color palette (grayscale progression)
+                for lum in 0..<8 {
+                    let rgb = Atari8bitDecoder.atariPalette[lum]
+                    colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+                }
+                // 9th color
+                let rgb = Atari8bitDecoder.atariPalette[7]
+                colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+            }
+
+        case "GR.15", "GR.7", "MIC":
+            // 4-color mode - check for embedded palette
+            if let embedded = extractAtariEmbeddedPalette(data: data, bitmapSize: bitmapSize, numColors: 4) {
+                for palIdx in embedded {
+                    let rgb = Atari8bitDecoder.atariPalette[palIdx % 128]
+                    colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+                }
+            } else {
+                // Default 4-color palette
+                let defaultPalette = Atari8bitDecoder.defaultGR15Palette
+                for colorIdx in defaultPalette {
+                    let rgb = Atari8bitDecoder.atariPalette[colorIdx % 128]
+                    colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+                }
+            }
+
+        default:
+            // For unknown modes, check for 4-color embedded palette
+            if let embedded = extractAtariEmbeddedPalette(data: data, bitmapSize: bitmapSize, numColors: 4) {
+                for palIdx in embedded {
+                    let rgb = Atari8bitDecoder.atariPalette[palIdx % 128]
+                    colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+                }
+            } else {
+                let defaultPalette = Atari8bitDecoder.defaultGR15Palette
+                for colorIdx in defaultPalette {
+                    let rgb = Atari8bitDecoder.atariPalette[colorIdx % 128]
+                    colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+                }
+            }
+        }
+
+        return PaletteInfo(singlePalette: colors, platformName: "Atari 8-bit \(mode)")
+    }
+
+    /// Extract embedded Atari palette from BitPast files
+    /// BitPast appends Atari color registers after the 7680-byte bitmap
+    /// Register format: HHHHLLLL where H=hue(4 bits), L=luminance*2(4 bits)
+    private static func extractAtariEmbeddedPalette(data: Data, bitmapSize: Int, numColors: Int) -> [Int]? {
+        let paletteOffset = bitmapSize
+        guard data.count >= paletteOffset + numColors else {
+            return nil
+        }
+
+        var palette: [Int] = []
+        for i in 0..<numColors {
+            let register = data[paletteOffset + i]
+            // Convert Atari register to palette index
+            // Register: HHHHLLLL (hue in high nibble, lum*2 in low nibble)
+            let hue = Int(register >> 4) & 0x0F
+            let lum = Int(register >> 1) & 0x07
+            let paletteIndex = hue * 8 + lum
+            palette.append(paletteIndex)
+        }
+
+        return palette
     }
 }

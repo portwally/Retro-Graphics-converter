@@ -20,6 +20,12 @@ class DiskImageReader {
         else if let stFiles = readAtariST(data: data) {
             files.append(contentsOf: stFiles)
         }
+        else if let msxFiles = readMSX(data: data) {
+            files.append(contentsOf: msxFiles)
+        }
+        else if let atari8bitFiles = readAtari8bit(data: data) {
+            files.append(contentsOf: atari8bitFiles)
+        }
         else if let d64Files = readD64(data: data) {
             files.append(contentsOf: d64Files)
         }
@@ -85,9 +91,85 @@ class DiskImageReader {
 
         return files.isEmpty ? nil : files
     }
-    
+
+    // MARK: - MSX Disk Image
+
+    static func readMSX(data: Data) -> [DiskImageFile]? {
+        let reader = MSXDiskReader()
+        guard reader.canRead(data: data) else { return nil }
+
+        guard let entries = reader.readDisk(data: data) else { return nil }
+
+        var files: [DiskImageFile] = []
+
+        for entry in entries {
+            // Try to decode as image
+            var imageData: Data? = nil
+            var imageType: AppleIIImageType = .Unknown
+
+            let ext = (entry.name as NSString).pathExtension.lowercased()
+
+            // MSX image types
+            if ["sc2", "grp", "sc5", "sc7", "sc8", "sr5", "sr7", "sr8", "ge5", "ge7", "ge8"].contains(ext) {
+                let result = MSXDecoder.decode(data: entry.data, filename: entry.name)
+                if result.image != nil {
+                    imageData = entry.data
+                    imageType = result.type
+                }
+            }
+
+            if imageData != nil {
+                files.append(DiskImageFile(
+                    name: entry.name,
+                    data: entry.data,
+                    type: imageType
+                ))
+            }
+        }
+
+        return files.isEmpty ? nil : files
+    }
+
+    // MARK: - Atari 8-bit ATR Disk Image
+
+    static func readAtari8bit(data: Data) -> [DiskImageFile]? {
+        let reader = Atari8bitDiskReader()
+        guard reader.canRead(data: data) else { return nil }
+
+        guard let entries = reader.readDisk(data: data) else { return nil }
+
+        var files: [DiskImageFile] = []
+
+        for entry in entries {
+            // Try to decode as image
+            var imageData: Data? = nil
+            var imageType: AppleIIImageType = .Unknown
+
+            let ext = (entry.name as NSString).pathExtension.lowercased()
+
+            // Atari 8-bit image types
+            if ["gr8", "gr9", "gr15", "gr7", "gr11", "gr1", "gr2", "gr3", "gr4", "gr5", "gr6", "mic", "pic"].contains(ext) {
+                let result = Atari8bitDecoder.decode(data: entry.data, filename: entry.name)
+                if result.image != nil {
+                    imageData = entry.data
+                    imageType = result.type
+                }
+            }
+
+            if imageData != nil {
+                files.append(DiskImageFile(
+                    name: entry.name,
+                    data: entry.data,
+                    type: imageType
+                ))
+            }
+        }
+
+        return files.isEmpty ? nil : files
+    }
+
     // MARK: - 2IMG Format
-    
+
     static func read2IMG(data: Data) -> [DiskImageFile]? {
         guard data.count >= 64 else {
             return nil
@@ -1118,6 +1200,16 @@ extension DiskImageReader {
 
         // Atari ST Disk Image
         if let catalog = readAtariSTCatalogFull(data: data, filename: filename) {
+            return catalog
+        }
+
+        // MSX Disk Image
+        if let catalog = readMSXCatalogFull(data: data, filename: filename) {
+            return catalog
+        }
+
+        // Atari 8-bit ATR Disk Image
+        if let catalog = readAtari8bitCatalogFull(data: data, filename: filename) {
             return catalog
         }
 
@@ -2229,6 +2321,163 @@ extension DiskImageReader {
                 fileTypeString: fileTypeString,
                 size: diskEntry.size,
                 blocks: (diskEntry.size + 1023) / 1024,
+                loadAddress: nil,
+                length: nil,
+                data: diskEntry.data,
+                isImage: isImage,
+                imageType: imageType,
+                isDirectory: false,
+                children: nil
+            )
+            entries.append(entry)
+        }
+
+        // Sort entries by name
+        entries.sort { $0.name.lowercased() < $1.name.lowercased() }
+
+        return DiskCatalog(
+            diskName: diskName,
+            diskFormat: diskFormat,
+            diskSize: data.count,
+            entries: entries
+        )
+    }
+
+    static func readMSXCatalogFull(data: Data, filename: String) -> DiskCatalog? {
+        let reader = MSXDiskReader()
+        guard reader.canRead(data: data) else { return nil }
+
+        guard let diskEntries = reader.readDisk(data: data) else { return nil }
+
+        // Determine disk format string based on size
+        let diskFormat: String
+        switch data.count {
+        case 360 * 1024:
+            diskFormat = "MSX (360KB SS/DD)"
+        case 720 * 1024:
+            diskFormat = "MSX (720KB DS/DD)"
+        default:
+            diskFormat = "MSX FAT12"
+        }
+
+        // Extract disk name from filename
+        let diskName = (filename as NSString).deletingPathExtension
+
+        var entries: [DiskCatalogEntry] = []
+
+        for diskEntry in diskEntries {
+            var isImage = diskEntry.isImage
+            var imageType = diskEntry.imageType
+
+            let ext = (diskEntry.name as NSString).pathExtension.lowercased()
+
+            // Try to decode as MSX image format
+            if ["sc2", "grp", "sc5", "sc7", "sc8", "sr5", "sr7", "sr8", "ge5", "ge7", "ge8", "pic"].contains(ext) {
+                let result = MSXDecoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                if result.image != nil {
+                    isImage = true
+                    imageType = result.type
+                }
+            } else {
+                // Try general decode for unknown extensions
+                let result = SHRDecoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                if result.type != AppleIIImageType.Unknown && result.image != nil {
+                    isImage = true
+                    imageType = result.type
+                }
+            }
+
+            let fileTypeString = ext.isEmpty ? "BIN" : ext.uppercased()
+
+            let entry = DiskCatalogEntry(
+                name: diskEntry.name,
+                fileType: 0,
+                fileTypeString: fileTypeString,
+                size: diskEntry.size,
+                blocks: (diskEntry.size + 1023) / 1024,
+                loadAddress: nil,
+                length: nil,
+                data: diskEntry.data,
+                isImage: isImage,
+                imageType: imageType,
+                isDirectory: false,
+                children: nil
+            )
+            entries.append(entry)
+        }
+
+        // Sort entries by name
+        entries.sort { $0.name.lowercased() < $1.name.lowercased() }
+
+        return DiskCatalog(
+            diskName: diskName,
+            diskFormat: diskFormat,
+            diskSize: data.count,
+            entries: entries
+        )
+    }
+
+    static func readAtari8bitCatalogFull(data: Data, filename: String) -> DiskCatalog? {
+        let reader = Atari8bitDiskReader()
+        guard reader.canRead(data: data) else { return nil }
+
+        guard let diskEntries = reader.readDisk(data: data) else { return nil }
+
+        // Parse ATR header to get geometry info
+        let sectorSize = Int(data[4]) | (Int(data[5]) << 8)
+        let paragraphsLow = Int(data[2]) | (Int(data[3]) << 8)
+        let paragraphsHigh = Int(data[6]) | (Int(data[7]) << 8)
+        let totalBytes = (paragraphsLow | (paragraphsHigh << 16)) * 16
+
+        // Determine disk format string based on size and sector size
+        let diskFormat: String
+        if sectorSize == 128 {
+            if totalBytes <= 92160 {
+                diskFormat = "Atari 8-bit ATR (90KB SD)"
+            } else {
+                diskFormat = "Atari 8-bit ATR (130KB ED)"
+            }
+        } else if sectorSize == 256 {
+            diskFormat = "Atari 8-bit ATR (180KB DD)"
+        } else {
+            diskFormat = "Atari 8-bit ATR"
+        }
+
+        // Extract disk name from filename
+        let diskName = (filename as NSString).deletingPathExtension
+
+        var entries: [DiskCatalogEntry] = []
+
+        for diskEntry in diskEntries {
+            var isImage = diskEntry.isImage
+            var imageType = diskEntry.imageType
+
+            let ext = (diskEntry.name as NSString).pathExtension.lowercased()
+
+            // Try to decode as Atari 8-bit image format
+            if ["gr8", "gr9", "gr15", "gr7", "gr11", "gr1", "gr2", "gr3", "gr4", "gr5", "gr6", "mic", "pic"].contains(ext) {
+                let result = Atari8bitDecoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                if result.image != nil {
+                    isImage = true
+                    imageType = result.type
+                }
+            } else {
+                // Try general decode for unknown extensions
+                let result = SHRDecoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                if result.type != AppleIIImageType.Unknown && result.image != nil {
+                    isImage = true
+                    imageType = result.type
+                }
+            }
+
+            let fileTypeString = diskEntry.fileTypeString
+
+            let entry = DiskCatalogEntry(
+                name: diskEntry.name,
+                fileType: 0,
+                fileTypeString: fileTypeString,
+                size: diskEntry.size,
+                blocks: diskEntry.blocks,
                 loadAddress: nil,
                 length: nil,
                 data: diskEntry.data,

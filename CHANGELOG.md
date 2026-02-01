@@ -1,5 +1,27 @@
 # Changelog
 
+## Version 4.3 - 2026-02-01
+
+### Atari 8-bit (400/800/XL/XE) Support
+
+- **Atari 8-bit Graphics Formats**: Added full support for Atari 8-bit computer graphics formats:
+  - **GR.8** (320×192, 2 colors): Hi-res monochrome mode
+  - **GR.9** (160×192, 8 luminances): GTIA mode with 16 shade values mapped to 8 distinct luminance levels
+  - **GR.10** (160×192, 9 colors): GTIA mode with 9 programmable colors
+  - **GR.11** (160×192, 16 colors): GTIA mode with 16 hue colors at one luminance
+  - **GR.15/GR.7** (160×192, 4 colors): Standard 4-color graphics mode
+  - **MIC** (MicroIllustrator): Popular paint program format with embedded palette
+- **ATR Disk Image Browser**: Added full support for reading Atari 8-bit ATR disk images (.atr files)
+- **Atari DOS 2.0/2.5 Filesystem**: Parses Atari DOS directory structure (sectors 361-368) and extracts files following sector chains
+- **Multiple Disk Densities**: Supports single density (90KB), enhanced density (130KB), and double density (180KB) disk images
+- **CTIA/GTIA Palette**: Uses authentic 128-color Atari palette (16 hues × 8 luminance levels)
+- **Auto-detect Images**: Automatically identifies and displays Atari 8-bit graphics files extracted from ATR disks
+- **BitPast Palette Integration**: Reads embedded color register data from BitPast-exported files for accurate color reproduction
+- **Correct Aspect Ratio**: GTIA modes (GR.9, GR.10, GR.11) display at 160×192 with 2x horizontal pixel stretching for correct aspect ratio
+- **Truncated Extension Detection**: Automatically detects GR.10 files when Atari DOS truncates extension to "GR1"
+
+---
+
 ## Version 4.2 - 2026-01-29
 
 ### Amiga HAM Mode Support
@@ -56,8 +78,20 @@
 - **Directory Support**: Browse nested directories within ST disk images.
 - **Auto-detect Images**: Automatically identifies and displays Degas (.PI1/.PI2/.PI3), NEOchrome (.NEO), and IFF/ILBM images stored on disks.
 
+### MSX Disk Image Support
+
+- **MSX Disk Browser**: Added full support for reading MSX disk images (.dsk files with FAT12 filesystem).
+- **FAT12 Filesystem**: Parses the FAT12 filesystem structure used by MSX computers, including boot sector BPB, allocation table, and directory entries.
+- **Multiple Disk Sizes**: Supports 360KB (SS/DD) and 720KB (DS/DD) disk images.
+- **Directory Support**: Browse nested directories within MSX disk images.
+- **Auto-detect Images**: Automatically identifies MSX graphics files (SC2, SC5, SC7, SC8, GRP, SR5, SR7, SR8, GE5, GE7, GE8) including BSAVE format.
+- **Smart Detection**: Distinguishes MSX disks from Apple II and CPC disks by validating FAT12 structure and media descriptor.
+
 ### Bug Fixes
 
+- **MSX Screen 2 Decoding**: Fixed SC2 file decoding which was showing garbled/corrupted images. The issue had two parts:
+  1. MSX .dsk disk images were incorrectly identified as Atari ST disks (both use FAT12 with similar parameters). Added detection for "MSX" OEM signature in boot sector to correctly route to MSX disk reader.
+  2. The SC2 decoder used wrong table order. BitPast and common MSX tools save SC2 files as PGT+CT+PNT (Pattern Generator + Color Table + Pattern Name Table), but the decoder expected PGT+PNT+CT. Fixed to use correct order for packed format files.
 - **Paintworks Palette Display**: Fixed palette extraction for Paintworks format files (from previous session).
 - **ADF OFS File Extraction**: Fixed extraction of larger files from OFS (Original File System) formatted ADF disks. The OFS data block chain could be broken on some disks; now uses the data block table with sequence number sorting for reliable extraction.
 - **CPC DSK Block Mapping**: Fixed file extraction from CPC DSK images with non-contiguous track numbering. Some CPC disk images only contain even-numbered tracks, which caused the previous block-to-sector mapping to fail. Now uses linear sector addressing to properly handle all track layouts.
