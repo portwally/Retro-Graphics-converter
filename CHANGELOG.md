@@ -20,6 +20,17 @@
 - **Correct Aspect Ratio**: GTIA modes (GR.9, GR.10, GR.11) display at 160×192 with 2x horizontal pixel stretching for correct aspect ratio
 - **Truncated Extension Detection**: Automatically detects GR.10 files when Atari DOS truncates extension to "GR1"
 
+### BBC Micro Improvements
+
+- **DFS Disk Browser**: Added full support for reading BBC Micro DFS disk images (.ssd and .dsd files)
+- **DFS Filesystem**: Parses Acorn DFS directory structure (sectors 0-1) and extracts files
+- **Multiple Disk Sizes**: Supports 100KB (40 track SS), 200KB (40 track DS), and 400KB (80 track DS) disk images
+- **Load Address Detection**: Displays BBC Micro load addresses for identifying screen memory files
+- **Auto-detect Screens**: Automatically identifies MODE 0-5 screen files by size (10KB/20KB) and load address
+- **BitPast Palette Integration**: Reads embedded palette data from BitPast-exported files for accurate color reproduction
+- **Correct Aspect Ratio**: MODE 2 and MODE 5 now display at 320×256 with proper 2x horizontal pixel stretching
+- **Fixed MODE 2 Decoding**: Corrected pixel order (left pixel from odd bits, right pixel from even bits)
+
 ---
 
 ## Version 4.2 - 2026-01-29

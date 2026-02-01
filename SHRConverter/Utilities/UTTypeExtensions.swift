@@ -58,4 +58,12 @@ extension UTType {
     static var atr: UTType {
         UTType(filenameExtension: "atr") ?? .data
     }
+
+    static var ssd: UTType {
+        UTType(filenameExtension: "ssd") ?? .data
+    }
+
+    static var dsd: UTType {
+        UTType(filenameExtension: "dsd") ?? .data
+    }
 }

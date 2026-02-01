@@ -505,10 +505,11 @@ struct HelpView: View {
 
             FormatRow(format: "MODE 0", description: "High-res 2-color (640x256, 20KB)")
             FormatRow(format: "MODE 1", description: "4-color mode (320x256, 20KB)")
-            FormatRow(format: "MODE 2", description: "16-color mode (160x256, 20KB)")
+            FormatRow(format: "MODE 2", description: "16-color mode (160x256→320x256, 20KB)")
             FormatRow(format: "MODE 4", description: "2-color mode (320x256, 10KB)")
-            FormatRow(format: "MODE 5", description: "4-color mode (160x256, 10KB)")
+            FormatRow(format: "MODE 5", description: "4-color mode (160x256→320x256, 10KB)")
             FormatRow(format: "Extensions", description: ".bbc, .bbm0-5 (auto-detects mode from filename)")
+            FormatRow(format: "BitPast Palettes", description: "Reads embedded palette data for accurate colors")
 
             Divider()
 
@@ -543,6 +544,8 @@ struct HelpView: View {
             FormatRow(format: ".atr", description: "Atari 8-bit disk image (90KB/130KB/180KB)")
             FormatRow(format: ".dsk (CPC)", description: "Amstrad CPC disk image (CPCEMU format)")
             FormatRow(format: ".dsk (MSX)", description: "MSX disk image (360KB/720KB)")
+            FormatRow(format: ".ssd", description: "BBC Micro single-sided DFS disk (100KB/200KB)")
+            FormatRow(format: ".dsd", description: "BBC Micro double-sided DFS disk (200KB/400KB)")
         }
     }
 

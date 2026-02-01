@@ -29,7 +29,7 @@ class BBCMicroDecoder {
     // Screen memory: 20KB (0x5000 bytes)
     // BBC Micro uses character-cell organization: 8 consecutive bytes form a vertical column of 8 pixels
 
-    static func decodeMode0(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+    static func decodeMode0(data: Data, palette: [Int]? = nil) -> (image: CGImage?, type: AppleIIImageType) {
         let width = 640
         let height = 256
         let expectedSize = 20480
@@ -39,6 +39,9 @@ class BBCMicroDecoder {
         }
 
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        // Use custom palette if provided, otherwise default (black/white)
+        let mode0Colors = palette ?? [0, 7]
 
         // BBC Micro MODE 0: character-cell based layout
         // Each character cell is 8x8 pixels
@@ -66,7 +69,8 @@ class BBCMicroDecoder {
 
                         guard x < width && y < height else { continue }
                         let bufferIdx = (y * width + x) * 4
-                        let rgb = bbcPalette[pixel == 1 ? 7 : 0]
+                        let colorIndex = mode0Colors[Int(pixel)]
+                        let rgb = bbcPalette[colorIndex]
                         rgbaBuffer[bufferIdx] = rgb.r
                         rgbaBuffer[bufferIdx + 1] = rgb.g
                         rgbaBuffer[bufferIdx + 2] = rgb.b
@@ -87,7 +91,7 @@ class BBCMicroDecoder {
     // Screen memory: 20KB (0x5000 bytes)
     // Character-cell layout: 8 bytes per character column
 
-    static func decodeMode1(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+    static func decodeMode1(data: Data, palette: [Int]? = nil) -> (image: CGImage?, type: AppleIIImageType) {
         let width = 320
         let height = 256
         let expectedSize = 20480
@@ -98,8 +102,8 @@ class BBCMicroDecoder {
 
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
 
-        // Default MODE 1 palette: Black, Red, Yellow, White
-        let mode1Colors = [0, 1, 3, 7]
+        // Use custom palette if provided, otherwise default: Black, Red, Yellow, White
+        let mode1Colors = palette ?? [0, 1, 3, 7]
 
         // MODE 1: 80 character columns, 32 character rows
         // Each character is 4 pixels wide (2bpp), 8 pixels tall
@@ -148,9 +152,11 @@ class BBCMicroDecoder {
     // MARK: - MODE 2 Decoder (160x256, 16 logical colors, 4bpp)
     // Screen memory: 20KB (0x5000 bytes)
     // Character-cell layout: 8 bytes per character column
+    // Output at 320x256 with 2x horizontal stretch for correct aspect ratio
 
     static func decodeMode2(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
-        let width = 160
+        let nativeWidth = 160
+        let outputWidth = 320  // 2x horizontal stretch for correct aspect ratio
         let height = 256
         let expectedSize = 20480
 
@@ -158,7 +164,7 @@ class BBCMicroDecoder {
             return (nil, .Unknown)
         }
 
-        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+        var rgbaBuffer = [UInt8](repeating: 0, count: outputWidth * height * 4)
 
         // MODE 2: 80 character columns, 32 character rows
         // Each character is 2 pixels wide (4bpp), 8 pixels tall
@@ -178,45 +184,53 @@ class BBCMicroDecoder {
                     let baseX = charCol * 2
 
                     // MODE 2: 4 bits per pixel, 2 pixels per byte
-                    // Bit layout is interleaved: p0b3 p1b3 p0b2 p1b2 p0b1 p1b1 p0b0 p1b0
-                    let bit0_p0 = (byte >> 0) & 1
-                    let bit1_p0 = (byte >> 2) & 1
-                    let bit2_p0 = (byte >> 4) & 1
-                    let bit3_p0 = (byte >> 6) & 1
-                    let pixel0 = Int(bit0_p0 | (bit1_p0 << 1) | (bit2_p0 << 2) | (bit3_p0 << 3))
+                    // Bit layout: bits 7,5,3,1 = LEFT pixel, bits 6,4,2,0 = RIGHT pixel
+                    // Left pixel (from odd bits)
+                    let leftBit0 = (byte >> 1) & 1
+                    let leftBit1 = (byte >> 3) & 1
+                    let leftBit2 = (byte >> 5) & 1
+                    let leftBit3 = (byte >> 7) & 1
+                    let leftPixel = Int(leftBit0 | (leftBit1 << 1) | (leftBit2 << 2) | (leftBit3 << 3))
 
-                    let bit0_p1 = (byte >> 1) & 1
-                    let bit1_p1 = (byte >> 3) & 1
-                    let bit2_p1 = (byte >> 5) & 1
-                    let bit3_p1 = (byte >> 7) & 1
-                    let pixel1 = Int(bit0_p1 | (bit1_p1 << 1) | (bit2_p1 << 2) | (bit3_p1 << 3))
+                    // Right pixel (from even bits)
+                    let rightBit0 = (byte >> 0) & 1
+                    let rightBit1 = (byte >> 2) & 1
+                    let rightBit2 = (byte >> 4) & 1
+                    let rightBit3 = (byte >> 6) & 1
+                    let rightPixel = Int(rightBit0 | (rightBit1 << 1) | (rightBit2 << 2) | (rightBit3 << 3))
 
-                    // First pixel
-                    if baseX < width && y < height {
-                        let bufferIdx0 = (y * width + baseX) * 4
-                        let color0 = mode2LogicalPalette[pixel0]
-                        let rgb0 = bbcPalette[color0]
-                        rgbaBuffer[bufferIdx0] = rgb0.r
-                        rgbaBuffer[bufferIdx0 + 1] = rgb0.g
-                        rgbaBuffer[bufferIdx0 + 2] = rgb0.b
-                        rgbaBuffer[bufferIdx0 + 3] = 255
+                    // Left pixel (doubled horizontally)
+                    if baseX < nativeWidth && y < height {
+                        let colorLeft = mode2LogicalPalette[leftPixel]
+                        let rgbLeft = bbcPalette[colorLeft]
+                        // Write two pixels for 2x horizontal stretch
+                        for dx in 0..<2 {
+                            let bufferIdx = (y * outputWidth + baseX * 2 + dx) * 4
+                            rgbaBuffer[bufferIdx] = rgbLeft.r
+                            rgbaBuffer[bufferIdx + 1] = rgbLeft.g
+                            rgbaBuffer[bufferIdx + 2] = rgbLeft.b
+                            rgbaBuffer[bufferIdx + 3] = 255
+                        }
                     }
 
-                    // Second pixel
-                    if baseX + 1 < width && y < height {
-                        let bufferIdx1 = (y * width + baseX + 1) * 4
-                        let color1 = mode2LogicalPalette[pixel1]
-                        let rgb1 = bbcPalette[color1]
-                        rgbaBuffer[bufferIdx1] = rgb1.r
-                        rgbaBuffer[bufferIdx1 + 1] = rgb1.g
-                        rgbaBuffer[bufferIdx1 + 2] = rgb1.b
-                        rgbaBuffer[bufferIdx1 + 3] = 255
+                    // Right pixel (doubled horizontally)
+                    if baseX + 1 < nativeWidth && y < height {
+                        let colorRight = mode2LogicalPalette[rightPixel]
+                        let rgbRight = bbcPalette[colorRight]
+                        // Write two pixels for 2x horizontal stretch
+                        for dx in 0..<2 {
+                            let bufferIdx = (y * outputWidth + (baseX + 1) * 2 + dx) * 4
+                            rgbaBuffer[bufferIdx] = rgbRight.r
+                            rgbaBuffer[bufferIdx + 1] = rgbRight.g
+                            rgbaBuffer[bufferIdx + 2] = rgbRight.b
+                            rgbaBuffer[bufferIdx + 3] = 255
+                        }
                     }
                 }
             }
         }
 
-        guard let cgImage = ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height) else {
+        guard let cgImage = ImageHelpers.createCGImage(from: rgbaBuffer, width: outputWidth, height: height) else {
             return (nil, .Unknown)
         }
 
@@ -227,7 +241,7 @@ class BBCMicroDecoder {
     // Screen memory: 10KB (0x2800 bytes)
     // Character-cell layout: 8 bytes per character column
 
-    static func decodeMode4(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+    static func decodeMode4(data: Data, palette: [Int]? = nil) -> (image: CGImage?, type: AppleIIImageType) {
         let width = 320
         let height = 256
         let expectedSize = 10240
@@ -237,6 +251,9 @@ class BBCMicroDecoder {
         }
 
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        // Use custom palette if provided, otherwise default (black/white)
+        let mode4Colors = palette ?? [0, 7]
 
         // MODE 4: 40 character columns, 32 character rows
         // Each character is 8 pixels wide (1bpp), 8 pixels tall
@@ -261,7 +278,8 @@ class BBCMicroDecoder {
 
                         guard x < width && y < height else { continue }
                         let bufferIdx = (y * width + x) * 4
-                        let rgb = bbcPalette[pixel == 1 ? 7 : 0]
+                        let colorIndex = mode4Colors[Int(pixel)]
+                        let rgb = bbcPalette[colorIndex]
                         rgbaBuffer[bufferIdx] = rgb.r
                         rgbaBuffer[bufferIdx + 1] = rgb.g
                         rgbaBuffer[bufferIdx + 2] = rgb.b
@@ -278,12 +296,14 @@ class BBCMicroDecoder {
         return (cgImage, .BBCMicro(mode: 4, colors: 2))
     }
 
-    // MARK: - MODE 5 Decoder (160x256, 4 colors, 2bpp)
+    // MARK: - MODE 5 Decoder (160x256 native, 4 colors, 2bpp)
     // Screen memory: 10KB (0x2800 bytes)
     // Character-cell layout: 8 bytes per character column
+    // Output at 320x256 with 2x horizontal stretch for correct aspect ratio
 
-    static func decodeMode5(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
-        let width = 160
+    static func decodeMode5(data: Data, palette: [Int]? = nil) -> (image: CGImage?, type: AppleIIImageType) {
+        let nativeWidth = 160
+        let outputWidth = 320  // 2x horizontal stretch for correct aspect ratio
         let height = 256
         let expectedSize = 10240
 
@@ -291,10 +311,10 @@ class BBCMicroDecoder {
             return (nil, .Unknown)
         }
 
-        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+        var rgbaBuffer = [UInt8](repeating: 0, count: outputWidth * height * 4)
 
-        // Default MODE 5 palette
-        let mode5Colors = [0, 1, 3, 7]  // Black, Red, Yellow, White
+        // Use custom palette if provided, otherwise default: Black, Red, Yellow, White
+        let mode5Colors = palette ?? [0, 1, 3, 7]
 
         // MODE 5: 40 character columns, 32 character rows
         // Each character is 4 pixels wide (2bpp), 8 pixels tall
@@ -320,29 +340,100 @@ class BBCMicroDecoder {
                         let colorIndex = Int(bit0 | (bit1 << 1))
 
                         let x = baseX + pixel
-                        guard x < width && y < height else { continue }
-                        let bufferIdx = (y * width + x) * 4
+                        guard x < nativeWidth && y < height else { continue }
+
+                        // Write two pixels for 2x horizontal stretch
                         let rgb = bbcPalette[mode5Colors[colorIndex]]
-                        rgbaBuffer[bufferIdx] = rgb.r
-                        rgbaBuffer[bufferIdx + 1] = rgb.g
-                        rgbaBuffer[bufferIdx + 2] = rgb.b
-                        rgbaBuffer[bufferIdx + 3] = 255
+                        for dx in 0..<2 {
+                            let bufferIdx = (y * outputWidth + x * 2 + dx) * 4
+                            rgbaBuffer[bufferIdx] = rgb.r
+                            rgbaBuffer[bufferIdx + 1] = rgb.g
+                            rgbaBuffer[bufferIdx + 2] = rgb.b
+                            rgbaBuffer[bufferIdx + 3] = 255
+                        }
                     }
                 }
             }
         }
 
-        guard let cgImage = ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height) else {
+        guard let cgImage = ImageHelpers.createCGImage(from: rgbaBuffer, width: outputWidth, height: height) else {
             return (nil, .Unknown)
         }
 
         return (cgImage, .BBCMicro(mode: 5, colors: 4))
     }
 
+    // MARK: - Embedded Palette Detection and Extraction
+    // BitPast embeds palette info after screen data: mode byte + palette indices
+    // Format: screen data (20480 or 10240) + mode (1 byte) + palette indices (2-8 bytes)
+
+    private static func extractEmbeddedPalette(from data: Data) -> (mode: Int, palette: [Int], screenData: Data)? {
+        let size = data.count
+
+        // Expected sizes with embedded palette:
+        // Mode 0: 20480 + 1 + 2 = 20483
+        // Mode 1: 20480 + 1 + 4 = 20485
+        // Mode 2: 20480 + 1 + 8 = 20489
+        // Mode 4: 10240 + 1 + 2 = 10243
+        // Mode 5: 10240 + 1 + 4 = 10245
+
+        let possibleSizes: [(screenSize: Int, paletteCount: Int, mode: Int)] = [
+            (20480, 2, 0),   // Mode 0
+            (20480, 4, 1),   // Mode 1
+            (20480, 8, 2),   // Mode 2
+            (10240, 2, 4),   // Mode 4
+            (10240, 4, 5),   // Mode 5
+        ]
+
+        for (screenSize, paletteCount, expectedMode) in possibleSizes {
+            let expectedTotalSize = screenSize + 1 + paletteCount
+            if size == expectedTotalSize {
+                let modeByte = Int(data[screenSize])
+
+                // Verify mode byte matches expected mode
+                if modeByte == expectedMode {
+                    var palette: [Int] = []
+                    for i in 0..<paletteCount {
+                        let paletteIndex = Int(data[screenSize + 1 + i])
+                        // Validate palette index is in range (0-7)
+                        if paletteIndex >= 0 && paletteIndex < 8 {
+                            palette.append(paletteIndex)
+                        } else {
+                            return nil  // Invalid palette index
+                        }
+                    }
+
+                    let screenData = data.prefix(screenSize)
+                    return (modeByte, palette, Data(screenData))
+                }
+            }
+        }
+
+        return nil
+    }
+
     // MARK: - Auto-detect BBC Micro format by size
 
     static func decode(data: Data, filename: String? = nil) -> (image: CGImage?, type: AppleIIImageType) {
         let dataSize = data.count
+
+        // First, check for embedded palette data from BitPast
+        if let embedded = extractEmbeddedPalette(from: data) {
+            switch embedded.mode {
+            case 0:
+                return decodeMode0(data: embedded.screenData, palette: embedded.palette)
+            case 1:
+                return decodeMode1(data: embedded.screenData, palette: embedded.palette)
+            case 2:
+                return decodeMode2(data: embedded.screenData)  // Mode 2 uses all 8 colors, no custom palette needed
+            case 4:
+                return decodeMode4(data: embedded.screenData, palette: embedded.palette)
+            case 5:
+                return decodeMode5(data: embedded.screenData, palette: embedded.palette)
+            default:
+                break
+            }
+        }
 
         // Try to determine mode by file extension
         let ext = filename?.split(separator: ".").last?.lowercased() ?? ""

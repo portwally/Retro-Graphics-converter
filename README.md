@@ -21,7 +21,7 @@ Retro Platforms
 🎮 ZX Spectrum: SCR (6912 bytes)<br>
 💻 Amstrad CPC: Mode 0 (16 colors), Mode 1 (4 colors), DSK disk images<br>
 📺 MSX/MSX2: Screen 1, 2, 5, 7, 8 (SC2/SC5/SC7/SC8/GRP files, BSAVE format), DSK disk images<br>
-📻 BBC Micro: MODE 0-5 (2/4/16 colors, .bbc/.bbm0-5 files, auto-detects mode from filename)<br>
+📻 BBC Micro: MODE 0-5 (2/4/16 colors, .bbc/.bbm0-5 files, BitPast palette support), SSD/DSD disk images<br>
 🖳 TRS-80/CoCo: Model I/III block graphics, CoCo PMODE 3/4, CoCo 3 (16 colors)<br>
 🖨️ PC/DOS: PCX (CGA 4-color, EGA 16-color, EGA 64-color, VGA 256-color, 24-bit RGB with RLE compression)<br>
 🪟 Windows: BMP (1/4/8/24-bit)<br>

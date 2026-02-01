@@ -26,6 +26,9 @@ class DiskImageReader {
         else if let atari8bitFiles = readAtari8bit(data: data) {
             files.append(contentsOf: atari8bitFiles)
         }
+        else if let bbcFiles = readBBCMicro(data: data) {
+            files.append(contentsOf: bbcFiles)
+        }
         else if let d64Files = readD64(data: data) {
             files.append(contentsOf: d64Files)
         }
@@ -150,6 +153,46 @@ class DiskImageReader {
             // Atari 8-bit image types
             if ["gr8", "gr9", "gr15", "gr7", "gr11", "gr1", "gr2", "gr3", "gr4", "gr5", "gr6", "mic", "pic"].contains(ext) {
                 let result = Atari8bitDecoder.decode(data: entry.data, filename: entry.name)
+                if result.image != nil {
+                    imageData = entry.data
+                    imageType = result.type
+                }
+            }
+
+            if imageData != nil {
+                files.append(DiskImageFile(
+                    name: entry.name,
+                    data: entry.data,
+                    type: imageType
+                ))
+            }
+        }
+
+        return files.isEmpty ? nil : files
+    }
+
+    // MARK: - BBC Micro DFS Disk Image
+
+    static func readBBCMicro(data: Data) -> [DiskImageFile]? {
+        let reader = BBCMicroDiskReader()
+        guard reader.canRead(data: data) else { return nil }
+
+        guard let entries = reader.readDisk(data: data) else { return nil }
+
+        var files: [DiskImageFile] = []
+
+        for entry in entries {
+            // Try to decode as image
+            var imageData: Data? = nil
+            var imageType: AppleIIImageType = .Unknown
+
+            // Check if file is a screen file by size (with optional embedded palette)
+            // 20KB modes: 20480-20489 bytes, 10KB modes: 10240-10245 bytes
+            let is20KBScreen = entry.size >= 20480 && entry.size <= 20489
+            let is10KBScreen = entry.size >= 10240 && entry.size <= 10245
+
+            if is20KBScreen || is10KBScreen {
+                let result = BBCMicroDecoder.decode(data: entry.data, filename: entry.name)
                 if result.image != nil {
                     imageData = entry.data
                     imageType = result.type
@@ -1210,6 +1253,11 @@ extension DiskImageReader {
 
         // Atari 8-bit ATR Disk Image
         if let catalog = readAtari8bitCatalogFull(data: data, filename: filename) {
+            return catalog
+        }
+
+        // BBC Micro DFS Disk Image
+        if let catalog = readBBCMicroCatalogFull(data: data, filename: filename) {
             return catalog
         }
 
@@ -2494,6 +2542,89 @@ extension DiskImageReader {
 
         return DiskCatalog(
             diskName: diskName,
+            diskFormat: diskFormat,
+            diskSize: data.count,
+            entries: entries
+        )
+    }
+
+    static func readBBCMicroCatalogFull(data: Data, filename: String) -> DiskCatalog? {
+        let reader = BBCMicroDiskReader()
+        guard reader.canRead(data: data) else { return nil }
+
+        // Pass disk filename to detect mode hints (e.g., "mode0" in filename)
+        guard let diskEntries = reader.readDisk(data: data, diskFilename: filename) else { return nil }
+
+        // Get disk info
+        let diskInfo = reader.getDiskInfo(data: data)
+        let diskTitle = diskInfo.title.isEmpty ? (filename as NSString).deletingPathExtension : diskInfo.title
+
+        // Determine disk format string based on size
+        let diskFormat: String
+        switch data.count {
+        case 100 * 1024:
+            diskFormat = "BBC Micro DFS (100KB SS)"
+        case 200 * 1024:
+            diskFormat = "BBC Micro DFS (200KB DS)"
+        case 400 * 1024:
+            diskFormat = "BBC Micro DFS (400KB DS)"
+        default:
+            diskFormat = "BBC Micro DFS"
+        }
+
+        var entries: [DiskCatalogEntry] = []
+
+        for diskEntry in diskEntries {
+            var isImage = diskEntry.isImage
+            var imageType = diskEntry.imageType
+
+            // Only re-decode if BBCMicroDiskReader didn't already identify the image type
+            // (BBCMicroDiskReader has access to the disk filename for mode hints)
+            if imageType == .Unknown {
+                // Check if file is a screen file by size (with optional embedded palette)
+                // 20KB modes: 20480-20489 bytes, 10KB modes: 10240-10245 bytes
+                let is20KBScreen = diskEntry.size >= 20480 && diskEntry.size <= 20489
+                let is10KBScreen = diskEntry.size >= 10240 && diskEntry.size <= 10245
+
+                // Try to decode as BBC Micro screen image
+                if is20KBScreen || is10KBScreen {
+                    let result = BBCMicroDecoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                    if result.image != nil {
+                        isImage = true
+                        imageType = result.type
+                    }
+                } else {
+                    // Try general decode for unknown files
+                    let result = SHRDecoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                    if result.type != AppleIIImageType.Unknown && result.image != nil {
+                        isImage = true
+                        imageType = result.type
+                    }
+                }
+            }
+
+            let entry = DiskCatalogEntry(
+                name: diskEntry.name,
+                fileType: 0,
+                fileTypeString: diskEntry.fileTypeString,
+                size: diskEntry.size,
+                blocks: diskEntry.blocks,
+                loadAddress: diskEntry.loadAddress,
+                length: diskEntry.length,
+                data: diskEntry.data,
+                isImage: isImage,
+                imageType: imageType,
+                isDirectory: false,
+                children: nil
+            )
+            entries.append(entry)
+        }
+
+        // Sort entries by name
+        entries.sort { $0.name.lowercased() < $1.name.lowercased() }
+
+        return DiskCatalog(
+            diskName: diskTitle,
             diskFormat: diskFormat,
             diskSize: data.count,
             entries: entries

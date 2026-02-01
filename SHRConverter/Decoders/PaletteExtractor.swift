@@ -86,7 +86,7 @@ struct PaletteExtractor {
             return createMSXPalette(mode: mode)
 
         case .BBCMicro(let mode, _):
-            return createBBCMicroPalette(mode: mode)
+            return createBBCMicroPalette(mode: mode, data: data)
 
         case .TRS80(let model, _):
             return createTRS80Palette(model: model)
@@ -1221,7 +1221,7 @@ struct PaletteExtractor {
 
     // MARK: - BBC Micro Palette
 
-    private static func createBBCMicroPalette(mode: Int) -> PaletteInfo {
+    private static func createBBCMicroPalette(mode: Int, data: Data) -> PaletteInfo {
         let fullPalette: [PaletteColor] = [
             PaletteColor(r: 0x00, g: 0x00, b: 0x00),  // 0: Black
             PaletteColor(r: 0xFF, g: 0x00, b: 0x00),  // 1: Red
@@ -1233,6 +1233,14 @@ struct PaletteExtractor {
             PaletteColor(r: 0xFF, g: 0xFF, b: 0xFF)   // 7: White
         ]
 
+        // Check for embedded palette from BitPast
+        // Format: screen data (20480 or 10240) + mode byte + palette indices
+        let embeddedPalette = extractBBCMicroEmbeddedPalette(from: data, mode: mode, fullPalette: fullPalette)
+        if let embedded = embeddedPalette {
+            return PaletteInfo(singlePalette: embedded, platformName: "BBC Micro MODE \(mode)")
+        }
+
+        // Default palettes for each mode
         let colors: [PaletteColor]
         switch mode {
         case 0, 4:  // 2 colors
@@ -1246,6 +1254,49 @@ struct PaletteExtractor {
         }
 
         return PaletteInfo(singlePalette: colors, platformName: "BBC Micro MODE \(mode)")
+    }
+
+    private static func extractBBCMicroEmbeddedPalette(from data: Data, mode: Int, fullPalette: [PaletteColor]) -> [PaletteColor]? {
+        let size = data.count
+
+        // Expected sizes with embedded palette:
+        // Mode 0: 20480 + 1 + 2 = 20483
+        // Mode 1: 20480 + 1 + 4 = 20485
+        // Mode 2: 20480 + 1 + 8 = 20489
+        // Mode 4: 10240 + 1 + 2 = 10243
+        // Mode 5: 10240 + 1 + 4 = 10245
+
+        let possibleSizes: [(screenSize: Int, paletteCount: Int, expectedMode: Int)] = [
+            (20480, 2, 0),   // Mode 0
+            (20480, 4, 1),   // Mode 1
+            (20480, 8, 2),   // Mode 2
+            (10240, 2, 4),   // Mode 4
+            (10240, 4, 5),   // Mode 5
+        ]
+
+        for (screenSize, paletteCount, expectedMode) in possibleSizes {
+            let expectedTotalSize = screenSize + 1 + paletteCount
+            if size == expectedTotalSize {
+                let modeByte = Int(data[screenSize])
+
+                // Verify mode byte matches expected mode
+                if modeByte == expectedMode {
+                    var colors: [PaletteColor] = []
+                    for i in 0..<paletteCount {
+                        let paletteIndex = Int(data[screenSize + 1 + i])
+                        // Validate palette index is in range (0-7)
+                        if paletteIndex >= 0 && paletteIndex < 8 {
+                            colors.append(fullPalette[paletteIndex])
+                        } else {
+                            return nil  // Invalid palette index
+                        }
+                    }
+                    return colors
+                }
+            }
+        }
+
+        return nil
     }
 
     // MARK: - TRS-80 / CoCo Palette

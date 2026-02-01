@@ -231,7 +231,7 @@ struct ContentView: View {
                     }
                 }.padding(.horizontal, 5)
             }
-            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc, .adf, .st, .atr], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
+            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc, .adf, .st, .atr, .ssd, .dsd], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
 
             Divider()
 
@@ -369,7 +369,7 @@ struct ContentView: View {
                 }
             }
             .frame(maxHeight: .infinity)
-            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc, .adf, .st, .atr], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
+            .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc, .adf, .st, .atr, .ssd, .dsd], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
 
             // Bottom quick actions bar (only show when processing)
             if isProcessing {
@@ -1066,6 +1066,12 @@ struct ContentView: View {
                     if msxResult.image != nil {
                         finalType = msxResult.type
                     }
+                } else if case .BBCMicro = entry.imageType {
+                    // Use decode() which handles embedded palettes from BitPast
+                    // It checks for embedded palette first, then falls back to filename/size detection
+                    let bbcResult = BBCMicroDecoder.decode(data: entry.data, filename: entry.name)
+                    cgImage = bbcResult.image
+                    finalType = bbcResult.type
                 } else {
                     // Use original name for non-Apple II formats (fileType 0) to preserve extension,
                     // but nameWithTypeInfo for ProDOS files to pass file type info
@@ -1212,7 +1218,9 @@ struct ContentView: View {
                         fileName.lowercased().hasSuffix(".d81") ||
                         fileName.lowercased().hasSuffix(".adf") ||
                         fileName.lowercased().hasSuffix(".st") ||
-                        fileName.lowercased().hasSuffix(".atr")
+                        fileName.lowercased().hasSuffix(".atr") ||
+                        fileName.lowercased().hasSuffix(".ssd") ||
+                        fileName.lowercased().hasSuffix(".dsd")
                     )
                     var processedAsDiskImage = false
                     
@@ -1284,7 +1292,7 @@ struct ContentView: View {
                 DispatchQueue.main.async { self.progressString = "Processing \(index + 1) of \(urls.count): \(url.lastPathComponent)" }
                 guard let data = try? Data(contentsOf: url) else { continue }
                 let fileExtension = url.pathExtension.lowercased()
-                if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" || fileExtension == "do" || fileExtension == "img" || fileExtension == "d64" || fileExtension == "d71" || fileExtension == "d81" || fileExtension == "adf" || fileExtension == "st" || fileExtension == "atr" {
+                if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" || fileExtension == "do" || fileExtension == "img" || fileExtension == "d64" || fileExtension == "d71" || fileExtension == "d81" || fileExtension == "adf" || fileExtension == "st" || fileExtension == "atr" || fileExtension == "ssd" || fileExtension == "dsd" {
                     if let catalog = DiskImageReader.readDiskCatalog(data: data, filename: url.lastPathComponent) {
                         DispatchQueue.main.async { self.currentCatalog = catalog; self.showCatalogBrowser = true; self.isProcessing = false }
                         continue
