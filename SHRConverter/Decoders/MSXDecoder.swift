@@ -256,49 +256,80 @@ class MSXDecoder {
         let width = 256
         let height = 212
         let imageDataSize = 27136  // 256x212 at 4bpp
+        let vramPaletteOffset = 0x7680  // MSX2 VRAM palette location for Screen 5
 
         var imageOffset = 0
         var palette = msxPalette
+        var paletteFound = false
 
         // Check for BSAVE header
         if data.count >= 7 && data[0] == 0xFE {
-            // BSAVE format - check if palette follows header (before image data)
-            // Format: BSAVE header (7) + palette (32) + image (27136) = 27175
-            // Or: BSAVE header (7) + image (27136) + palette (32) = 27175
-            // Or: BSAVE header (7) + image (27136) = 27143
+            // BSAVE format - check multiple palette locations
+            // Format variations:
+            // - BSAVE header (7) + palette (32) + image (27136) = 27175
+            // - BSAVE header (7) + image (27136) + palette (32) = 27175
+            // - BSAVE header (7) + full VRAM dump with palette at 0x7680
+            // - BSAVE header (7) + image (27136) = 27143
 
-            if data.count >= 7 + 32 + imageDataSize {
+            imageOffset = 7
+
+            // First, check for palette at VRAM address 0x7680 (full VRAM dump)
+            // This is the standard MSX2 palette location
+            let vramPaletteFileOffset = 7 + vramPaletteOffset
+            if data.count >= vramPaletteFileOffset + 32 {
+                let vramPalette = extractMSX2Palette(data: data, offset: vramPaletteFileOffset)
+                if isValidMSX2Palette(vramPalette) {
+                    palette = vramPalette
+                    paletteFound = true
+                }
+            }
+
+            // If no valid palette found at VRAM location, try other locations
+            if !paletteFound && data.count >= 7 + 32 + imageDataSize {
                 // Try palette at beginning (after header)
                 let testPalette = extractMSX2Palette(data: data, offset: 7)
                 if isValidMSX2Palette(testPalette) {
                     palette = testPalette
                     imageOffset = 7 + 32
+                    paletteFound = true
                 } else {
-                    // Try palette at end
-                    imageOffset = 7
+                    // Try palette immediately after image data
                     let endPalette = extractMSX2Palette(data: data, offset: 7 + imageDataSize)
                     if isValidMSX2Palette(endPalette) {
                         palette = endPalette
+                        paletteFound = true
                     }
                 }
-            } else if data.count >= 7 + imageDataSize {
-                imageOffset = 7
-            } else {
+            }
+
+            if data.count < 7 + imageDataSize {
                 return (nil, .Unknown)
             }
         } else {
             // Raw format without BSAVE header
-            if data.count >= 32 + imageDataSize {
+            // Check for palette at VRAM 0x7680 first
+            if data.count >= vramPaletteOffset + 32 {
+                let vramPalette = extractMSX2Palette(data: data, offset: vramPaletteOffset)
+                if isValidMSX2Palette(vramPalette) {
+                    palette = vramPalette
+                    paletteFound = true
+                }
+            }
+
+            // If no valid palette at VRAM location, try other locations
+            if !paletteFound && data.count >= 32 + imageDataSize {
                 // Try palette at beginning
                 let testPalette = extractMSX2Palette(data: data, offset: 0)
                 if isValidMSX2Palette(testPalette) {
                     palette = testPalette
                     imageOffset = 32
+                    paletteFound = true
                 } else if data.count >= imageDataSize + 32 {
                     // Try palette at end
                     let endPalette = extractMSX2Palette(data: data, offset: imageDataSize)
                     if isValidMSX2Palette(endPalette) {
                         palette = endPalette
+                        paletteFound = true
                     }
                 }
             } else if data.count < imageDataSize {

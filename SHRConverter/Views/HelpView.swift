@@ -69,7 +69,7 @@ struct HelpView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
 
-            Text("Retro Graphics Converter is a powerful tool for viewing, editing, and converting vintage computer graphics from platforms like the Apple II, Apple IIgs, Commodore 64, Amiga, Atari ST, Atari 8-bit, MSX, BBC Micro, TRS-80/CoCo, and more.")
+            Text("Retro Graphics Converter is a powerful tool for viewing, editing, and converting vintage computer graphics from platforms like the Apple II, Apple IIgs, Commodore 64, Commodore Plus/4, Amiga, Atari ST, Atari 8-bit, MSX, BBC Micro, TRS-80/CoCo, and more.")
                 .font(.body)
 
             Divider()
@@ -452,6 +452,8 @@ struct HelpView: View {
 
             FormatRow(format: "Koala", description: "C64 multicolor bitmap (320x200)")
             FormatRow(format: "Art Studio", description: "C64 high-res art format")
+            FormatRow(format: "Plus/4 HiRes", description: "Plus/4 320x200, 2 colors per 8x8 cell")
+            FormatRow(format: "Plus/4 Multi", description: "Plus/4 160x200, 4 colors per 4x8 cell")
 
             Divider()
 

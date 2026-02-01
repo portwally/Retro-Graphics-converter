@@ -157,11 +157,62 @@ class SHRDecoder {
             }
         }
         
-        // C64 formats
-        if size >= 10003 && size <= 10010 {
-            return C64Decoder.decodeKoala(data: data)
+        // Plus/4 HiRes: 10000-10001 bytes (raw, with slight D64 variation)
+        if size == 10000 || size == 10001 {
+            return Plus4Decoder.decode(data: data, filename: filename)
         }
-        
+
+        // C64 Koala formats: 10003-10010 bytes
+        // Plus/4 Multicolor: 10002 (raw), 10003 (D64 padded), 10004 (with load addr)
+        // Size 10002 could be either, but we already handled it above for Plus/4
+        // Sizes 10003-10004 need heuristic to distinguish from Koala
+        if size >= 10002 && size <= 10010 {
+            // Heuristic: Check first two bytes to distinguish formats
+            // C64 Koala: First 2 bytes are load address (e.g., 0x00 0x60 for $6000)
+            // Plus/4 MC: First 2 bytes are background colors (0-127 each)
+            let byte0 = data[0]
+            let byte1 = data[1]
+
+            // C64 Koala files typically load at $6000 (0x00 0x60), $5800 (0x00 0x58),
+            // or $4000 (0x00 0x40). Check for these specific patterns.
+            let looksLikeC64LoadAddr = (byte0 == 0x00 &&
+                                        (byte1 == 0x60 || byte1 == 0x58 || byte1 == 0x40))
+
+            // Plus/4 colors must both be 0-127 (valid TED palette indices)
+            let looksLikePlus4Colors = (byte0 < 128 && byte1 < 128)
+
+            // For sizes that overlap (10002-10004), prefer Plus/4 if colors valid and not C64 addr
+            if size >= 10002 && size <= 10004 && looksLikePlus4Colors && !looksLikeC64LoadAddr {
+                // Try Plus/4 first
+                let plus4Result = Plus4Decoder.decode(data: data, filename: filename)
+                if plus4Result.image != nil {
+                    return plus4Result
+                }
+            }
+
+            // Sizes 10005-10010 are definitely Koala
+            if size >= 10005 {
+                return C64Decoder.decodeKoala(data: data)
+            }
+
+            // Try Koala
+            let koalaResult = C64Decoder.decodeKoala(data: data)
+            if koalaResult.image != nil {
+                return koalaResult
+            }
+
+            // If Koala failed and size is 10002-10004, try Plus/4 as fallback
+            if size >= 10002 && size <= 10004 {
+                let plus4Result = Plus4Decoder.decode(data: data, filename: filename)
+                if plus4Result.image != nil {
+                    return plus4Result
+                }
+            }
+
+            // Return Koala result even if nil to preserve type info
+            return koalaResult
+        }
+
         switch size {
         case 10018:
             return C64Decoder.decodeArtStudio(data: data)

@@ -172,6 +172,7 @@ struct ImageItem: Identifiable {
         case .DEGAS: return "pi1"
         case .NEOchrome: return "neo"
         case .C64: return "c64"
+        case .Plus4(let mode, _): return mode == "Multicolor" ? "ocp" : "art"
         case .ZXSpectrum: return "scr"
         case .AmstradCPC: return "cpc"
         case .PCX: return "pcx"

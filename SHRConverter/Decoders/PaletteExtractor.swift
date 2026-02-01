@@ -58,6 +58,9 @@ struct PaletteExtractor {
         case .C64:
             return createC64Palette()
 
+        case .Plus4(let mode, _):
+            return createPlus4Palette(mode: mode, data: data)
+
         case .IFF(_, _, _):
             return extractIFFPalette(from: data)
 
@@ -83,7 +86,7 @@ struct PaletteExtractor {
             return createMacPaintPalette()
 
         case .MSX(let mode, _):
-            return createMSXPalette(mode: mode)
+            return createMSXPalette(mode: mode, data: data)
 
         case .BBCMicro(let mode, _):
             return createBBCMicroPalette(mode: mode, data: data)
@@ -716,6 +719,79 @@ struct PaletteExtractor {
         return PaletteInfo(singlePalette: colors, platformName: "Commodore 64")
     }
 
+    // MARK: - Commodore Plus/4 Palette
+
+    private static func createPlus4Palette(mode: String, data: Data) -> PaletteInfo {
+        // Plus/4 has 128 colors (16 hues × 8 luminance levels)
+        // For display, we show a representative subset or the colors used in the image
+        var usedColors: Set<Int> = []
+
+        // Try to extract colors actually used in the image
+        let isMulticolor = mode == "Multicolor"
+        var offset = 0
+        if data.count == 10002 || data.count == 10004 {
+            offset = isMulticolor ? 0 : (data.count == 10002 ? 2 : 0)
+        }
+        if data.count == 10004 {
+            offset = 2
+        }
+
+        if isMulticolor && data.count >= 2 + offset {
+            // Get global background colors
+            let bg1 = Int(data[offset])
+            let bg2 = Int(data[offset + 1])
+            usedColors.insert(bg1 % 128)
+            usedColors.insert(bg2 % 128)
+        }
+
+        let nibbleOffset = isMulticolor ? offset + 2 : offset
+        let screenOffset = nibbleOffset + 1000
+
+        // Extract colors from nibble/screen RAM
+        if data.count >= screenOffset + 1000 {
+            for i in 0..<1000 {
+                let nibbleByte = data[nibbleOffset + i]
+                let screenByte = data[screenOffset + i]
+
+                if isMulticolor {
+                    let c1Luma = Int(nibbleByte & 0x0F)
+                    let c2Luma = Int((nibbleByte >> 4) & 0x0F)
+                    let c1Hue = Int((screenByte >> 4) & 0x0F)
+                    let c2Hue = Int(screenByte & 0x0F)
+                    usedColors.insert((c1Luma * 16 + c1Hue) % 128)
+                    usedColors.insert((c2Luma * 16 + c2Hue) % 128)
+                } else {
+                    let fgLuma = Int(nibbleByte & 0x0F)
+                    let bgLuma = Int((nibbleByte >> 4) & 0x0F)
+                    let fgHue = Int((screenByte >> 4) & 0x0F)
+                    let bgHue = Int(screenByte & 0x0F)
+                    usedColors.insert((fgLuma * 16 + fgHue) % 128)
+                    usedColors.insert((bgLuma * 16 + bgHue) % 128)
+                }
+            }
+        }
+
+        // Create palette from used colors
+        var colors: [PaletteColor] = []
+        let sortedColors = usedColors.sorted()
+
+        for colorIndex in sortedColors {
+            let rgb = Plus4Decoder.plus4Palette[colorIndex]
+            colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+        }
+
+        // If no colors found or too few, show luminance 4 row (medium brightness)
+        if colors.count < 4 {
+            colors = []
+            for hue in 0..<16 {
+                let rgb = Plus4Decoder.plus4Palette[4 * 16 + hue]  // Luminance 4
+                colors.append(PaletteColor(r: rgb.r, g: rgb.g, b: rgb.b))
+            }
+        }
+
+        return PaletteInfo(singlePalette: colors, platformName: "Commodore Plus/4")
+    }
+
     // MARK: - Amiga IFF Palette
 
     private static func extractIFFPalette(from data: Data) -> PaletteInfo? {
@@ -1195,9 +1271,23 @@ struct PaletteExtractor {
         return PaletteInfo(singlePalette: colors, platformName: "MacPaint")
     }
 
-    // MARK: - MSX Palette (TMS9918)
+    // MARK: - MSX Palette (TMS9918 for MSX1, V9938 for MSX2)
 
-    private static func createMSXPalette(mode: Int) -> PaletteInfo {
+    private static func createMSXPalette(mode: Int, data: Data) -> PaletteInfo {
+        // For MSX2 modes (Screen 5, 7, 8), try to extract embedded palette
+        if mode >= 5 {
+            // Try multiple palette locations (same logic as MSXDecoder)
+            if let extractedPalette = extractMSX2EmbeddedPalette(from: data) {
+                return PaletteInfo(singlePalette: extractedPalette, platformName: "MSX2 Screen \(mode)")
+            }
+
+            // Try alternative locations (after header, after image data)
+            if let altPalette = extractMSX2AlternativePalette(from: data) {
+                return PaletteInfo(singlePalette: altPalette, platformName: "MSX2 Screen \(mode)")
+            }
+        }
+
+        // Default TMS9918 palette for MSX1 modes (Screen 1, 2) or fallback
         let colors: [PaletteColor] = [
             PaletteColor(r: 0x00, g: 0x00, b: 0x00),  // 0: Transparent (rendered as black)
             PaletteColor(r: 0x00, g: 0x00, b: 0x00),  // 1: Black
@@ -1217,6 +1307,125 @@ struct PaletteExtractor {
             PaletteColor(r: 0xFF, g: 0xFF, b: 0xFF)   // 15: White
         ]
         return PaletteInfo(singlePalette: colors, platformName: "MSX Screen \(mode)")
+    }
+
+    // Extract MSX2 palette from VRAM location 0x7680
+    private static func extractMSX2EmbeddedPalette(from data: Data) -> [PaletteColor]? {
+        let vramPaletteOffset = 0x7680  // MSX2 VRAM palette location
+
+        // Determine file offset based on whether BSAVE header is present
+        var paletteFileOffset = vramPaletteOffset
+        if data.count >= 7 && data[0] == 0xFE {
+            paletteFileOffset = 7 + vramPaletteOffset
+        }
+
+        // Check if file is large enough to contain palette at VRAM location
+        // Need paletteFileOffset + 32 bytes for 16 colors × 2 bytes each
+        guard data.count >= paletteFileOffset + 32 else { return nil }
+
+        var colors: [PaletteColor] = []
+        var hasNonBlack = 0
+        var total = 0
+
+        for i in 0..<16 {
+            let byteOffset = paletteFileOffset + i * 2
+            guard byteOffset + 1 < data.count else {
+                // Fill with black if out of bounds
+                colors.append(PaletteColor(r: 0, g: 0, b: 0))
+                continue
+            }
+            let byte1 = data[byteOffset]
+            let byte2 = data[byteOffset + 1]
+
+            // MSX2 VDP palette format: byte1 = 0RRR0BBB, byte2 = 00000GGG
+            let r3 = (byte1 >> 4) & 0x07
+            let b3 = byte1 & 0x07
+            let g3 = byte2 & 0x07
+
+            // Scale 3-bit values (0-7) to 8-bit (0-255)
+            let r = UInt8((Int(r3) * 255) / 7)
+            let g = UInt8((Int(g3) * 255) / 7)
+            let b = UInt8((Int(b3) * 255) / 7)
+
+            colors.append(PaletteColor(r: r, g: g, b: b))
+
+            total += Int(r) + Int(g) + Int(b)
+            if r > 0 || g > 0 || b > 0 {
+                hasNonBlack += 1
+            }
+        }
+
+        // Validate palette - should have at least one non-black color and some variation
+        // Use relaxed validation since we've verified file structure is correct
+        guard hasNonBlack >= 1 && total > 50 else { return nil }
+
+        return colors
+    }
+
+    // Try alternative MSX2 palette locations (after header or after image data)
+    private static func extractMSX2AlternativePalette(from data: Data) -> [PaletteColor]? {
+        let imageDataSize = 27136  // Screen 5: 256x212 at 4bpp
+
+        // Check for BSAVE header
+        let hasBSaveHeader = data.count >= 7 && data[0] == 0xFE
+        let headerOffset = hasBSaveHeader ? 7 : 0
+
+        // Try palette right after header (before image data)
+        if data.count >= headerOffset + 32 + imageDataSize {
+            if let palette = tryExtractMSX2PaletteAt(data: data, offset: headerOffset) {
+                return palette
+            }
+        }
+
+        // Try palette right after image data
+        let afterImageOffset = headerOffset + imageDataSize
+        if data.count >= afterImageOffset + 32 {
+            if let palette = tryExtractMSX2PaletteAt(data: data, offset: afterImageOffset) {
+                return palette
+            }
+        }
+
+        return nil
+    }
+
+    // Helper to extract and validate MSX2 palette at a specific offset
+    private static func tryExtractMSX2PaletteAt(data: Data, offset: Int) -> [PaletteColor]? {
+        guard data.count >= offset + 32 else { return nil }
+
+        var colors: [PaletteColor] = []
+        var hasNonBlack = 0
+        var total = 0
+
+        for i in 0..<16 {
+            let byteOffset = offset + i * 2
+            guard byteOffset + 1 < data.count else {
+                colors.append(PaletteColor(r: 0, g: 0, b: 0))
+                continue
+            }
+            let byte1 = data[byteOffset]
+            let byte2 = data[byteOffset + 1]
+
+            // MSX2 VDP palette format: byte1 = 0RRR0BBB, byte2 = 00000GGG
+            let r3 = (byte1 >> 4) & 0x07
+            let b3 = byte1 & 0x07
+            let g3 = byte2 & 0x07
+
+            let r = UInt8((Int(r3) * 255) / 7)
+            let g = UInt8((Int(g3) * 255) / 7)
+            let b = UInt8((Int(b3) * 255) / 7)
+
+            colors.append(PaletteColor(r: r, g: g, b: b))
+
+            total += Int(r) + Int(g) + Int(b)
+            if r > 0 || g > 0 || b > 0 {
+                hasNonBlack += 1
+            }
+        }
+
+        // Validate - need at least one non-black color
+        guard hasNonBlack >= 1 && total > 50 else { return nil }
+
+        return colors
     }
 
     // MARK: - BBC Micro Palette

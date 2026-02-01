@@ -10,7 +10,7 @@ Just drag and drop your disk images in the app and extract your pics from there.
 
 <img width="1608" height="1004" alt="Screenshot 2026-01-23 at 21 27 44" src="https://github.com/user-attachments/assets/f9526914-2f72-41f8-bd90-cebcfd1576f4" />
 
-📂 Supported Formats (14 Platforms)
+📂 Supported Formats (15 Platforms)
 Retro Platforms
 
 🍎 Apple II/IIGS: SHR (Standard/3200/3200 Packed/816Paint/DreamGrafix), HGR, DHGR, PNT, PIC<br>
@@ -18,6 +18,7 @@ Retro Platforms
 🕹️ Atari ST: Degas (PI1/PI2/PI3), NEOchrome (.NEO), ST disk images (.st)<br>
 🎰 Atari 8-bit (400/800/XL/XE): GR.8, GR.9, GR.10, GR.11, GR.15/GR.7, MicroIllustrator (.MIC), ATR disk images<br>
 💾 Commodore 64: Koala Painter, HIRES, Art Studio, D64/D71/D81 disk images<br>
+🎹 Commodore Plus/4: HiRes (320×200), Multicolor (160×200), 128-color TED palette<br>
 🎮 ZX Spectrum: SCR (6912 bytes)<br>
 💻 Amstrad CPC: Mode 0 (16 colors), Mode 1 (4 colors), DSK disk images<br>
 📺 MSX/MSX2: Screen 1, 2, 5, 7, 8 (SC2/SC5/SC7/SC8/GRP files, BSAVE format), DSK disk images<br>
@@ -58,7 +59,7 @@ Image Tools
 Palette Editing
 
 🎨 Live Color Editing: Click any palette color to modify it in real-time<br>
-🖼️ Supported Formats: SHR, 3200-color, C64, Amiga IFF, Atari ST, ZX Spectrum, MSX, BBC Micro, TRS-80/CoCo, MacPaint, and more<br>
+🖼️ Supported Formats: SHR, 3200-color, C64, Plus/4, Amiga IFF, Atari ST, ZX Spectrum, MSX, BBC Micro, TRS-80/CoCo, MacPaint, and more<br>
 📍 Scanline Palettes: For 3200-color images<br>
 🔄 Reset: One-click reset to restore original palette<br>
 

@@ -2,6 +2,16 @@
 
 ## Version 4.3 - 2026-02-01
 
+### Commodore Plus/4 Support
+
+- **Plus/4 Graphics Formats**: Added full support for Commodore Plus/4 computer graphics formats:
+  - **HiRes Mode** (320×200, 2 colors per 8×8 cell): High-resolution bitmap mode
+  - **Multicolor Mode** (160×200, 4 colors per 4×8 cell): Multicolor bitmap mode with wider pixels
+- **128-Color TED Palette**: Uses authentic Plus/4 TED chip palette (16 hues × 8 luminance levels)
+- **D64 Disk Image Support**: Import Plus/4 graphics directly from C64/Plus4 D64 disk images
+- **BitPast Compatibility**: Imports files exported from BitPast with correct colors
+- **Smart Format Detection**: Distinguishes Plus/4 files from C64 Koala format using heuristics on file headers
+
 ### Atari 8-bit (400/800/XL/XE) Support
 
 - **Atari 8-bit Graphics Formats**: Added full support for Atari 8-bit computer graphics formats:

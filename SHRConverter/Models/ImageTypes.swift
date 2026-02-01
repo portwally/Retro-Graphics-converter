@@ -32,6 +32,7 @@ enum AppleIIImageType: Equatable {
     case DEGAS(resolution: String, colors: Int)
     case NEOchrome(colors: Int)
     case C64(format: String)
+    case Plus4(mode: String, colors: Int)
     case ZXSpectrum
     case AmstradCPC(mode: Int, colors: Int)
     case PCX(width: Int, height: Int, bitsPerPixel: Int)
@@ -66,6 +67,8 @@ enum AppleIIImageType: Equatable {
             default: return (320, 200)
             }
         case .C64: return (320, 200)
+        case .Plus4(let mode, _):
+            return mode == "Multicolor" ? (160, 200) : (320, 200)
         case .ZXSpectrum: return (256, 192)
         case .AmstradCPC(let mode, _):
             switch mode {
@@ -138,6 +141,7 @@ enum AppleIIImageType: Equatable {
         case .DEGAS(let res, let colors): return "Degas (\(res), \(colors) colors)"
         case .NEOchrome(let colors): return "NEOchrome (\(colors) colors)"
         case .C64(let format): return "C64 (\(format))"
+        case .Plus4(let mode, _): return "Plus/4 (\(mode))"
         case .ZXSpectrum: return "ZX Spectrum"
         case .AmstradCPC(let mode, let colors): return "Amstrad CPC (Mode \(mode), \(colors) colors)"
         case .PCX(let width, let height, let bpp): return "PCX (\(width)x\(height), \(bpp)-bit)"
@@ -175,6 +179,7 @@ enum AppleIIImageType: Equatable {
             } else {
                 return "1-bit (2 colors)"
             }
+        case .Plus4(_, let colors): return "\(colors) colors"
         case .ZXSpectrum: return "3-bit (8 colors)"
         case .AmstradCPC(_, let colors): return "\(colors) colors"
         case .PCX(_, _, let bpp): return "\(bpp)-bit"
