@@ -234,8 +234,8 @@ class MSXDiskReader {
             if firstByte == 0xE5 { continue }  // Deleted entry
 
             // Parse 8.3 filename
-            var nameBytes = [UInt8](data[entryOffset..<entryOffset + 8])
-            var extBytes = [UInt8](data[entryOffset + 8..<entryOffset + 11])
+            let nameBytes = [UInt8](data[entryOffset..<entryOffset + 8])
+            let extBytes = [UInt8](data[entryOffset + 8..<entryOffset + 11])
 
             // Convert to string, handling special characters
             let name = String(bytes: nameBytes, encoding: .ascii)?.trimmingCharacters(in: .whitespaces) ?? ""

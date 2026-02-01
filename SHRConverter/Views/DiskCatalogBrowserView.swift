@@ -183,6 +183,6 @@ struct CatalogEntryRow: View {
                     CatalogEntryRow(entry: child, isSelected: isSelected, onToggle: onToggle, level: level + 1, expandAllTrigger: expandAllTrigger)
                 }
             }
-        }.onChange(of: expandAllTrigger) { newValue in isExpanded = newValue }
+        }.onChange(of: expandAllTrigger) { _, newValue in isExpanded = newValue }
     }
 }

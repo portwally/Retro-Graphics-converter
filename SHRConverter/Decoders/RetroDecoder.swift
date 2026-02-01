@@ -269,7 +269,7 @@ class RetroDecoder {
         let width = 576, height = 720, bytesPerRow = 72
         let expectedSize = bytesPerRow * height
         
-        var compressed = Array(data[512...])
+        let compressed = Array(data[512...])
         var decompressed: [UInt8] = []
         var offset = 0
         

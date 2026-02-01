@@ -152,9 +152,8 @@ class Atari8bitDecoder {
             return (nil, .Unknown)
         }
 
-        let nativeWidth = 80
         let height = 192
-        let displayWidth = 160  // 2x horizontal for correct aspect ratio
+        let displayWidth = 160  // 2x horizontal for correct aspect ratio (native 80 pixels)
         var rgbaBuffer = [UInt8](repeating: 0, count: displayWidth * height * 4)
 
         // Check for embedded palette from BitPast (16 shades)
@@ -311,9 +310,8 @@ class Atari8bitDecoder {
             return (nil, .Unknown)
         }
 
-        let nativeWidth = 80
         let height = 192
-        let displayWidth = 160  // 2x horizontal for correct aspect ratio
+        let displayWidth = 160  // 2x horizontal for correct aspect ratio (native 80 pixels)
         var rgbaBuffer = [UInt8](repeating: 0, count: displayWidth * height * 4)
 
         // Check for embedded palette from BitPast (16 hues at fixed luminance)
@@ -375,9 +373,8 @@ class Atari8bitDecoder {
             return (nil, .Unknown)
         }
 
-        let nativeWidth = 80
         let height = 192
-        let displayWidth = 160  // 2x horizontal for correct aspect ratio
+        let displayWidth = 160  // 2x horizontal for correct aspect ratio (native 80 pixels)
         var rgbaBuffer = [UInt8](repeating: 0, count: displayWidth * height * 4)
 
         // Check for embedded palette from BitPast (9 colors for GR.10)

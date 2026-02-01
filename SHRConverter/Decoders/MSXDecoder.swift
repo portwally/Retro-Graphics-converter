@@ -40,11 +40,10 @@ class MSXDecoder {
         let height = 192
 
         var offset = 0
-        var startAddress: UInt16 = 0
 
         // Check for BSAVE header (7 bytes: 0xFE + start addr + end addr + exec addr)
         if data.count >= 7 && data[0] == 0xFE {
-            startAddress = UInt16(data[1]) | (UInt16(data[2]) << 8)
+            // Start address not used for decoding, just skip header
             offset = 7
         }
 

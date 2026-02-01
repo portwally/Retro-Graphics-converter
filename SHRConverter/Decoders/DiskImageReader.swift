@@ -1100,8 +1100,8 @@ class DiskImageReader {
                 let fileTrack = Int(sectorData[entryOffset + 1])
                 let fileSector = Int(sectorData[entryOffset + 2])
                 
-                // File size in sectors (2 bytes, little endian)
-                let sizeInSectors = Int(sectorData[entryOffset + 28]) | (Int(sectorData[entryOffset + 29]) << 8)
+                // File size in sectors (2 bytes, little endian) - not used for extraction
+                let _ = Int(sectorData[entryOffset + 28]) | (Int(sectorData[entryOffset + 29]) << 8)
                 
                 // Extract file data
                 if let fileData = extractD64File(data: data, startTrack: fileTrack, startSector: fileSector) {
@@ -1524,17 +1524,6 @@ extension DiskImageReader {
                         }
 
                         let isImage = result.image != nil && result.type != .Unknown
-                        
-                        let displayFileType: UInt8
-                        if couldBeGraphics && isImage {
-                            if fileData.count >= 16380 && fileData.count <= 16400 {
-                                displayFileType = 0x08
-                            } else {
-                                displayFileType = 0x08
-                            }
-                        } else {
-                            displayFileType = fileType
-                        }
 
                         let displayAuxType: Int?
                         if fileType == 0xC0 || fileType == 0xC1 {
@@ -1659,12 +1648,10 @@ extension DiskImageReader {
 
                     // Strip header for decoding if it's a binary file with valid header
                     var dataToDecode = fileData
-                    var hasValidHeader = false
                     if (fileType & 0x7F == 0x04 || fileType & 0x7F == 0x06),
                        let addr = loadAddr, let len = length,
                        len > 100 && len <= fileData.count - 4 && addr >= 0x0800 && addr <= 0xBFFF {
                         dataToDecode = fileData.subdata(in: 4..<(4 + len))
-                        hasValidHeader = true
                     }
 
                     let result: (image: CGImage?, type: AppleIIImageType)

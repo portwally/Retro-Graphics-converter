@@ -662,7 +662,7 @@ struct ContentView: View {
     }
 
     private func createVideoFile(images: [CGImage], outputURL: URL, settings: MovieExportSettings) -> Bool {
-        guard let firstImage = images.first else { return false }
+        guard !images.isEmpty else { return false }
 
         // Use target resolution size directly
         let outputSize = settings.resolution.size
@@ -1143,7 +1143,7 @@ struct ContentView: View {
                 var successCount = 0
                 for (index, item) in self.imageItems.enumerated() {
                     DispatchQueue.main.async { self.progressString = "Exporting \(index + 1) of \(self.imageItems.count)" }
-                    var newName = pattern.replacingOccurrences(of: "{n}", with: "\(index + 1)").replacingOccurrences(of: "{name}", with: item.url.deletingPathExtension().lastPathComponent)
+                    let newName = pattern.replacingOccurrences(of: "{n}", with: "\(index + 1)").replacingOccurrences(of: "{name}", with: item.url.deletingPathExtension().lastPathComponent)
                     let fileExtension = self.selectedExportFormat == .original ? item.originalFileExtension : self.selectedExportFormat.fileExtension
                     let filename = "\(newName).\(fileExtension)"
                     if self.saveImage(image: item.image, to: outputFolderURL.appendingPathComponent(filename), format: self.selectedExportFormat, originalData: item.originalData, originalExtension: item.originalFileExtension) { successCount += 1 }
@@ -1236,7 +1236,7 @@ struct ContentView: View {
                     
                     if !processedAsDiskImage {
                         let result = SHRDecoder.decode(data: data, filename: fileName)
-                        if let cgImage = result.image, result.type != .Unknown {
+                        if let cgImage = result.image, result.type.isKnown {
                             let fileURL = file.url ?? URL(fileURLWithPath: "/\(fileName)")
                             let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
                             let paletteInfo = PaletteExtractor.extractPalette(from: data, type: result.type, filename: fileName)
@@ -1308,7 +1308,7 @@ struct ContentView: View {
                     }
                 } else {
                     let result = SHRDecoder.decode(data: data, filename: url.lastPathComponent)
-                    if let cgImage = result.image, result.type != .Unknown {
+                    if let cgImage = result.image, result.type.isKnown {
                         let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
                         let paletteInfo = PaletteExtractor.extractPalette(from: data, type: result.type, filename: url.lastPathComponent)
                         newItems.append(ImageItem(url: url, image: nsImage, type: result.type, originalData: data, paletteInfo: paletteInfo)); successCount += 1

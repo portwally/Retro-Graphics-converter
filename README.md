@@ -37,6 +37,26 @@ Modern Formats
 📄 TIFF: Tagged Image File Format<br>
 📱 HEIC/HEIF: High Efficiency Image Format<br>
 
+💿 Supported Disk Image Formats (15 Types)
+
+| Extension | Platform | Description |
+|-----------|----------|-------------|
+| **.2mg** | Apple II | 2IMG container format (ProDOS or DOS 3.3 volumes) |
+| **.po** | Apple II | ProDOS-order disk image (140KB-32MB) |
+| **.do** | Apple II | DOS 3.3-order disk image (140KB) |
+| **.dsk** | Apple II / Amstrad CPC / MSX | Universal disk format (auto-detected) |
+| **.hdv** | Apple II | ProDOS hard disk volume (up to 32MB) |
+| **.img** | Various | Generic disk image format |
+| **.d64** | Commodore 64 | 1541 disk image (170KB, 35 tracks) |
+| **.d71** | Commodore 128 | 1571 disk image (340KB, 70 tracks, double-sided) |
+| **.d81** | Commodore 128 | 1581 disk image (800KB, 80 tracks, 3.5" floppy) |
+| **.adf** | Amiga | Amiga Disk File (880KB OFS/FFS) |
+| **.st** | Atari ST | Atari ST disk image (360KB-720KB) |
+| **.atr** | Atari 8-bit | Atari 400/800/XL/XE disk image (90KB-360KB) |
+| **.ssd** | BBC Micro | Single-sided DFS disk (100KB/200KB) |
+| **.dsd** | BBC Micro | Double-sided DFS disk (200KB/400KB) |
+| **.trd** | ZX Spectrum | TR-DOS disk image (640KB, Beta Disk Interface) |
+
 ✨ Features
 File Management
 
@@ -117,7 +137,7 @@ Technical Highlights
 🔄 Format Migration: Batch convert old formats to modern standards<br>
 📚 Collection Management: Browse and organize retro graphics libraries<br>
 🖼️ Comparison: View retro and modern images side-by-side<br>
-💿 Archive Processing: Extract and convert graphics from disk images (.2mg, .po, .do, .dsk, .hdv, .d64, .d71, .d81, .adf, .st, .atr, .ssd, .dsd, .trd)<br>
+💿 Archive Processing: Extract and convert graphics from 15 disk image formats (.2mg, .po, .do, .dsk, .hdv, .img, .d64, .d71, .d81, .adf, .st, .atr, .ssd, .dsd, .trd)<br>
 📺 Screensavers: Turn your retro art collection into a beautiful macOS screensaver<br>
 🎬 Video Slideshows: Create movies from your graphics with transitions for sharing or presentations<br>
 

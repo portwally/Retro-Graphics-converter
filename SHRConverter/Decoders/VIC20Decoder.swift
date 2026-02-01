@@ -77,7 +77,7 @@ class VIC20Decoder {
             (0x01, 0x00)   // $0001 - possible
         ]
 
-        let isValidLoadAddr = validLoadAddrs.contains { $0.0 == loadAddrLo && $0.1 == loadAddrHi }
+        let _ = validLoadAddrs.contains { $0.0 == loadAddrLo && $0.1 == loadAddrHi }
 
         // VIC-20 PRG file structure (BitPast format):
         // - 2 bytes: Load address ($1201)
@@ -155,7 +155,6 @@ class VIC20Decoder {
         // Screen data should contain character codes 0-255
         // Color data should contain values 0-15 (or with multicolor bit set, 8-15)
 
-        let screenStart = dataOffset
         let colorStart = dataOffset + 506
 
         // Check if color data looks valid (values 0-15 or 8-23 for multicolor)

@@ -24,7 +24,7 @@ enum ExportFormat: String, CaseIterable {
 
 // MARK: - Apple II Image Type Enum
 
-enum AppleIIImageType: Equatable {
+enum AppleIIImageType: Equatable, Sendable {
     case SHR(mode: String, width: Int?, height: Int?)
     case DHGR
     case HGR
@@ -45,7 +45,12 @@ enum AppleIIImageType: Equatable {
     case Atari8bit(mode: String, colors: Int)
     case ModernImage(format: String, width: Int, height: Int)
     case Unknown
-    
+
+    var isKnown: Bool {
+        if case .Unknown = self { return false }
+        return true
+    }
+
     var resolution: (width: Int, height: Int) {
         switch self {
         case .SHR(_, let width, let height): 

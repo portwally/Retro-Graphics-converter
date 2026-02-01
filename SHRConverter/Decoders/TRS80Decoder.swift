@@ -379,17 +379,12 @@ class TRS80Decoder {
         // Try to determine format by file extension
         let ext = filename?.split(separator: ".").last?.lowercased() ?? ""
 
-        switch ext {
-        case "bin", "cas" where dataSize == 1024:
+        if (ext == "bin" || ext == "cas") && dataSize == 1024 {
             return decodeBlockGraphics(data: data)
-        case "max", "pic" where dataSize == 6144:
+        } else if (ext == "max" || ext == "pic") && dataSize == 6144 {
             return decodePMode4(data: data)
-        case "cm3", "pi3":
-            if dataSize >= 32000 {
-                return decodeCoCo3_320(data: data)
-            }
-        default:
-            break
+        } else if (ext == "cm3" || ext == "pi3") && dataSize >= 32000 {
+            return decodeCoCo3_320(data: data)
         }
 
         // Auto-detect by size
