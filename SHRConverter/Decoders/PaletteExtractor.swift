@@ -61,6 +61,9 @@ struct PaletteExtractor {
         case .Plus4(let mode, _):
             return createPlus4Palette(mode: mode, data: data)
 
+        case .VIC20(_, _):
+            return createVIC20Palette()
+
         case .IFF(_, _, _):
             return extractIFFPalette(from: data)
 
@@ -1671,5 +1674,29 @@ struct PaletteExtractor {
         }
 
         return palette
+    }
+
+    // MARK: - VIC-20 Palette
+
+    private static func createVIC20Palette() -> PaletteInfo {
+        let colors: [PaletteColor] = [
+            PaletteColor(r: 0x00, g: 0x00, b: 0x00),  // 0: Black
+            PaletteColor(r: 0xFF, g: 0xFF, b: 0xFF),  // 1: White
+            PaletteColor(r: 0xF0, g: 0x00, b: 0x00),  // 2: Red
+            PaletteColor(r: 0x00, g: 0xF0, b: 0xF0),  // 3: Cyan
+            PaletteColor(r: 0x60, g: 0x00, b: 0x60),  // 4: Purple
+            PaletteColor(r: 0x00, g: 0xA0, b: 0x00),  // 5: Green
+            PaletteColor(r: 0x00, g: 0x00, b: 0xF0),  // 6: Blue
+            PaletteColor(r: 0xD0, g: 0xD0, b: 0x00),  // 7: Yellow
+            PaletteColor(r: 0xC0, g: 0xA0, b: 0x00),  // 8: Orange
+            PaletteColor(r: 0xFF, g: 0xA0, b: 0x00),  // 9: Light Orange
+            PaletteColor(r: 0xF0, g: 0x80, b: 0x80),  // 10: Light Red (Pink)
+            PaletteColor(r: 0x00, g: 0xFF, b: 0xFF),  // 11: Light Cyan
+            PaletteColor(r: 0xFF, g: 0x00, b: 0xFF),  // 12: Light Purple (Magenta)
+            PaletteColor(r: 0x00, g: 0xFF, b: 0x00),  // 13: Light Green
+            PaletteColor(r: 0x00, g: 0xA0, b: 0xFF),  // 14: Light Blue
+            PaletteColor(r: 0xFF, g: 0xFF, b: 0x00)   // 15: Light Yellow
+        ]
+        return PaletteInfo(singlePalette: colors, platformName: "Commodore VIC-20")
     }
 }

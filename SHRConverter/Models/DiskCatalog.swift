@@ -165,22 +165,23 @@ struct ImageItem: Identifiable {
         
         // Fallback basierend auf Bildtyp
         switch type {
-        case .SHR: return "shr"
+        case .SHR(_, _, _): return "shr"
         case .HGR: return "hgr"
         case .DHGR: return "dhgr"
-        case .IFF: return "iff"
-        case .DEGAS: return "pi1"
-        case .NEOchrome: return "neo"
-        case .C64: return "c64"
+        case .IFF(_, _, _): return "iff"
+        case .DEGAS(_, _): return "pi1"
+        case .NEOchrome(_): return "neo"
+        case .C64(_): return "c64"
         case .Plus4(let mode, _): return mode == "Multicolor" ? "ocp" : "art"
+        case .VIC20(_, _): return "prg"
         case .ZXSpectrum: return "scr"
-        case .AmstradCPC: return "cpc"
-        case .PCX: return "pcx"
-        case .BMP: return "bmp"
+        case .AmstradCPC(_, _): return "cpc"
+        case .PCX(_, _, _): return "pcx"
+        case .BMP(_, _, _): return "bmp"
         case .MacPaint: return "mac"
         case .MSX(let mode, _): return "sc\(mode)"
         case .BBCMicro(let mode, _): return "bbm\(mode)"
-        case .TRS80: return "bin"
+        case .TRS80(_, _): return "bin"
         case .Atari8bit(let mode, _): return mode.lowercased().replacingOccurrences(of: ".", with: "")
         case .ModernImage(let format, _, _):
             return format.lowercased()

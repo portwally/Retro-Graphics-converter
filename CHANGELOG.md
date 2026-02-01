@@ -11,6 +11,21 @@
 - **Auto-detect Screens**: Automatically identifies ZX Spectrum screen files (6912 bytes, .scr extension)
 - **BitPast Compatibility**: Fully compatible with TR-DOS disks created by BitPast
 
+### Commodore VIC-20 Support
+
+- **VIC-20 Graphics Formats**: Added full support for Commodore VIC-20 computer graphics formats:
+  - **HiRes Mode** (176×184, 2 colors per 8×8 cell): High-resolution bitmap mode with 22×23 character cells
+  - **Multicolor Mode** (88×184, 4 colors per 4×8 cell): Multicolor mode with double-wide pixels
+- **16-Color Palette**: Uses authentic VIC-20 VIC chip palette with 8 base colors + 8 light variants
+- **PRG File Support**: Decodes PRG files containing BASIC stub, viewer code, screen/color RAM, and custom charset
+- **Auto-detect Mode**: Automatically distinguishes HiRes from Multicolor based on color RAM data
+- **BitPast Compatibility**: Imports VIC-20 graphics files exported from BitPast
+
+### Bug Fixes
+
+- **D64 File Extraction Off-by-One**: Fixed critical bug in D64 disk image extraction that caused 1-byte misalignment. The last sector's byte count was incorrectly interpreted (byte 1 is the offset to the byte after the last data byte, not the count). This caused VIC-20 and other files loaded from D64 disks to display with visual artifacts (dots, colored lines, corrupted graphics).
+- **VIC-20 Multicolor Header Parsing**: Improved color extraction from PRG headers with direct offset checking for BitPast format, ensuring correct color0, color1, and color3 values are read from $900F and $900E register writes.
+
 ### Commodore Plus/4 Support
 
 - **Plus/4 Graphics Formats**: Added full support for Commodore Plus/4 computer graphics formats:

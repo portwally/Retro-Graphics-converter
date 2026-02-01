@@ -222,6 +222,12 @@ class SHRDecoder {
             return C64Decoder.decodeArtStudioHires(data: data)
         case 6912:
             return RetroDecoder.decodeZXSpectrum(data: data)
+        case 3060...3500:
+            // VIC-20 graphics (176×184, screen + color + charset)
+            let vic20Result = VIC20Decoder.decode(data: data, filename: filename)
+            if vic20Result.image != nil {
+                return vic20Result
+            }
         case 16384:
             return handleSize16384(data: data, fileExtension: fileExtension)
         case 16512:

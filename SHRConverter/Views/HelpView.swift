@@ -69,7 +69,7 @@ struct HelpView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
 
-            Text("Retro Graphics Converter is a powerful tool for viewing, editing, and converting vintage computer graphics from platforms like the Apple II, Apple IIgs, Commodore 64, Commodore Plus/4, Amiga, Atari ST, Atari 8-bit, MSX, BBC Micro, TRS-80/CoCo, and more.")
+            Text("Retro Graphics Converter is a powerful tool for viewing, editing, and converting vintage computer graphics from platforms like the Apple II, Apple IIgs, Commodore 64, Commodore Plus/4, Commodore VIC-20, Amiga, Atari ST, Atari 8-bit, MSX, BBC Micro, TRS-80/CoCo, and more.")
                 .font(.body)
 
             Divider()
@@ -455,6 +455,14 @@ struct HelpView: View {
             FormatRow(format: "Art Studio", description: "C64 high-res art format")
             FormatRow(format: "Plus/4 HiRes", description: "Plus/4 320x200, 2 colors per 8x8 cell")
             FormatRow(format: "Plus/4 Multi", description: "Plus/4 160x200, 4 colors per 4x8 cell")
+            FormatRow(format: "VIC-20 HiRes", description: "VIC-20 176x184, 2 colors per 8x8 cell")
+            FormatRow(format: "VIC-20 Multi", description: "VIC-20 88x184, 4 colors per 4x8 cell")
+
+            Text("Note: VIC-20 PRG files have a 256-character limit but 506 screen cells. Images may show artifacts in areas where character patterns are reused.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.leading, 16)
+                .padding(.top, 4)
 
             Divider()
 

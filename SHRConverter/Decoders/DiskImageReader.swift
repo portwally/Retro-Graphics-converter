@@ -1117,9 +1117,13 @@ class DiskImageReader {
                     }
                     
                     // Check if it's a graphics file
+                    // C64: 9000-10020 bytes (Koala, Art Studio, etc.)
+                    // Plus/4: 10002-10004 bytes (Multicolor/HiRes)
+                    // VIC-20: 3060-3500 bytes (PRG with screen+color+charset)
                     let result: (image: CGImage?, type: AppleIIImageType)
-                    let isGraphics = (fileData.count >= 9000 && fileData.count <= 10020)
-                    
+                    let isGraphics = (fileData.count >= 3060 && fileData.count <= 3500) ||
+                                     (fileData.count >= 9000 && fileData.count <= 10020)
+
                     if isGraphics {
                         result = SHRDecoder.decode(data: fileData, filename: fileName)
                     } else {
@@ -1198,8 +1202,10 @@ class DiskImageReader {
             let nextSector = Int(sectorData[1])
             
             if nextTrack == 0 {
-                // Last sector: byte 1 contains number of bytes used (1-255)
-                let bytesUsed = max(1, min(Int(sectorData[1]), 254))
+                // Last sector: byte 1 is the offset to the byte AFTER the last data byte
+                // So actual data byte count = byte 1 - 1 (since data starts at byte 2)
+                // Example: byte 1 = 74 means 73 bytes of data (bytes 2-74 are positions 0-72)
+                let bytesUsed = max(0, min(Int(sectorData[1]) - 1, 254))
                 let endIdx = min(2 + bytesUsed, sectorData.count)
                 if endIdx > 2 {
                     fileData.append(sectorData.subdata(in: 2..<endIdx))
@@ -1796,9 +1802,13 @@ extension DiskImageReader {
                     }
                     
                     // Check for graphics
-                    let isGraphics = (fileData.count >= 9000 && fileData.count <= 10020)
+                    // C64: 9000-10020 bytes (Koala, Art Studio, etc.)
+                    // Plus/4: 10002-10004 bytes (Multicolor/HiRes)
+                    // VIC-20: 3060-3500 bytes (PRG with screen+color+charset)
+                    let isGraphics = (fileData.count >= 3060 && fileData.count <= 3500) ||
+                                     (fileData.count >= 9000 && fileData.count <= 10020)
                     var result: (image: CGImage?, type: AppleIIImageType) = (nil, .Unknown)
-                    
+
                     if isGraphics {
                         result = SHRDecoder.decode(data: fileData, filename: fileName)
                     }
