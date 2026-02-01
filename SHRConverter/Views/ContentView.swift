@@ -1220,7 +1220,8 @@ struct ContentView: View {
                         fileName.lowercased().hasSuffix(".st") ||
                         fileName.lowercased().hasSuffix(".atr") ||
                         fileName.lowercased().hasSuffix(".ssd") ||
-                        fileName.lowercased().hasSuffix(".dsd")
+                        fileName.lowercased().hasSuffix(".dsd") ||
+                        fileName.lowercased().hasSuffix(".trd")
                     )
                     var processedAsDiskImage = false
                     
@@ -1292,7 +1293,7 @@ struct ContentView: View {
                 DispatchQueue.main.async { self.progressString = "Processing \(index + 1) of \(urls.count): \(url.lastPathComponent)" }
                 guard let data = try? Data(contentsOf: url) else { continue }
                 let fileExtension = url.pathExtension.lowercased()
-                if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" || fileExtension == "do" || fileExtension == "img" || fileExtension == "d64" || fileExtension == "d71" || fileExtension == "d81" || fileExtension == "adf" || fileExtension == "st" || fileExtension == "atr" || fileExtension == "ssd" || fileExtension == "dsd" {
+                if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" || fileExtension == "do" || fileExtension == "img" || fileExtension == "d64" || fileExtension == "d71" || fileExtension == "d81" || fileExtension == "adf" || fileExtension == "st" || fileExtension == "atr" || fileExtension == "ssd" || fileExtension == "dsd" || fileExtension == "trd" {
                     if let catalog = DiskImageReader.readDiskCatalog(data: data, filename: url.lastPathComponent) {
                         DispatchQueue.main.async { self.currentCatalog = catalog; self.showCatalogBrowser = true; self.isProcessing = false }
                         continue

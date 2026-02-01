@@ -19,7 +19,7 @@ Retro Platforms
 🎰 Atari 8-bit (400/800/XL/XE): GR.8, GR.9, GR.10, GR.11, GR.15/GR.7, MicroIllustrator (.MIC), ATR disk images<br>
 💾 Commodore 64: Koala Painter, HIRES, Art Studio, D64/D71/D81 disk images<br>
 🎹 Commodore Plus/4: HiRes (320×200), Multicolor (160×200), 128-color TED palette<br>
-🎮 ZX Spectrum: SCR (6912 bytes)<br>
+🎮 ZX Spectrum: SCR (6912 bytes), TRD disk images (TR-DOS Beta Disk Interface)<br>
 💻 Amstrad CPC: Mode 0 (16 colors), Mode 1 (4 colors), DSK disk images<br>
 📺 MSX/MSX2: Screen 1, 2, 5, 7, 8 (SC2/SC5/SC7/SC8/GRP files, BSAVE format), DSK disk images<br>
 📻 BBC Micro: MODE 0-5 (2/4/16 colors, .bbc/.bbm0-5 files, BitPast palette support), SSD/DSD disk images<br>
@@ -116,7 +116,7 @@ Technical Highlights
 🔄 Format Migration: Batch convert old formats to modern standards<br>
 📚 Collection Management: Browse and organize retro graphics libraries<br>
 🖼️ Comparison: View retro and modern images side-by-side<br>
-💿 Archive Processing: Extract and convert graphics from disk images (.2mg, .po, .do, .dsk, .hdv, .d64, .d71, .d81, .adf, .st, .atr)<br>
+💿 Archive Processing: Extract and convert graphics from disk images (.2mg, .po, .do, .dsk, .hdv, .d64, .d71, .d81, .adf, .st, .atr, .ssd, .dsd, .trd)<br>
 📺 Screensavers: Turn your retro art collection into a beautiful macOS screensaver<br>
 🎬 Video Slideshows: Create movies from your graphics with transitions for sharing or presentations<br>
 

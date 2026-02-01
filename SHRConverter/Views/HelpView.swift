@@ -125,6 +125,7 @@ struct HelpView: View {
             BulletPoint(text: "**Amiga disk images** - .adf (AmigaDOS DD/HD floppy disks)")
             BulletPoint(text: "**Atari ST disk images** - .st (360KB/720KB/1.44MB FAT12 floppy disks)")
             BulletPoint(text: "**Atari 8-bit disk images** - .atr (Atari DOS 2.0/2.5 format, 90KB/130KB/180KB)")
+            BulletPoint(text: "**ZX Spectrum disk images** - .trd (TR-DOS Beta Disk Interface format, 640KB)")
             BulletPoint(text: "**MSX disk images** - .dsk (360KB/720KB FAT12 floppy disks)")
             BulletPoint(text: "**ProDOS volumes** - PNT and PIC files are automatically detected")
             BulletPoint(text: "**DOS 3.3 disks** - Binary graphics files")

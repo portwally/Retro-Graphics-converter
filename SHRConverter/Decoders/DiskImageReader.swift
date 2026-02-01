@@ -32,6 +32,9 @@ class DiskImageReader {
         else if let d64Files = readD64(data: data) {
             files.append(contentsOf: d64Files)
         }
+        else if let trdFiles = readTRDOS(data: data) {
+            files.append(contentsOf: trdFiles)
+        }
         else if let proDOSFiles = readProDOSDSK(data: data) {
             files.append(contentsOf: proDOSFiles)
         }
@@ -1220,6 +1223,53 @@ class DiskImageReader {
         
         return fileData.isEmpty ? nil : fileData
     }
+
+    // MARK: - TR-DOS Disk Image (ZX Spectrum)
+
+    static func readTRDOS(data: Data) -> [DiskImageFile]? {
+        let reader = TRDOSDiskReader()
+        guard reader.canRead(data: data) else { return nil }
+
+        guard let entries = reader.readDisk(data: data) else { return nil }
+
+        var files: [DiskImageFile] = []
+
+        for entry in entries {
+            // Try to decode as ZX Spectrum screen (6912 bytes)
+            var imageData: Data? = nil
+            var imageType: AppleIIImageType = .Unknown
+
+            let ext = (entry.name as NSString).pathExtension.lowercased()
+
+            // ZX Spectrum screen files are typically .scr or Code files of 6912 bytes
+            if ext == "scr" || ext == "$c" || entry.data.count == 6912 {
+                let (cgImage, type) = RetroDecoder.decodeZXSpectrum(data: entry.data)
+                if cgImage != nil {
+                    imageData = entry.data
+                    imageType = type
+                }
+            }
+
+            // Also try generic decode for other sizes
+            if imageData == nil {
+                let (cgImage, type) = SHRDecoder.decode(data: entry.data, filename: entry.name)
+                if cgImage != nil {
+                    imageData = entry.data
+                    imageType = type
+                }
+            }
+
+            if imageData != nil {
+                files.append(DiskImageFile(
+                    name: entry.name,
+                    data: entry.data,
+                    type: imageType
+                ))
+            }
+        }
+
+        return files.isEmpty ? nil : files
+    }
 }
 
 // MARK: - Catalog Reading Extension
@@ -1263,6 +1313,11 @@ extension DiskImageReader {
 
         // C64 D64 Format
         if let catalog = readD64CatalogFull(data: data, filename: filename) {
+            return catalog
+        }
+
+        // ZX Spectrum TR-DOS Format
+        if let catalog = readTRDOSCatalogFull(data: data, filename: filename) {
             return catalog
         }
 
@@ -1775,6 +1830,62 @@ extension DiskImageReader {
         return DiskCatalog(
             diskName: diskName,
             diskFormat: "C64 D64",
+            diskSize: data.count,
+            entries: entries
+        )
+    }
+
+    static func readTRDOSCatalogFull(data: Data, filename: String) -> DiskCatalog? {
+        let reader = TRDOSDiskReader()
+        guard reader.canRead(data: data) else { return nil }
+
+        guard let diskFiles = reader.readDisk(data: data) else { return nil }
+
+        var entries: [DiskCatalogEntry] = []
+
+        for file in diskFiles {
+            // Check for ZX Spectrum graphics (6912 bytes = standard screen)
+            let isGraphics = (file.data.count == 6912) ||
+                             (file.name.lowercased().hasSuffix(".scr")) ||
+                             (file.name.lowercased().hasSuffix(".$c"))
+
+            var result: (image: CGImage?, type: AppleIIImageType) = (nil, .Unknown)
+
+            if isGraphics || file.data.count == 6912 {
+                result = RetroDecoder.decodeZXSpectrum(data: file.data)
+            }
+
+            // Also try generic decode
+            if result.image == nil {
+                result = SHRDecoder.decode(data: file.data, filename: file.name)
+            }
+
+            let isImage = result.image != nil && result.type != .Unknown
+
+            // Extract extension for file type string
+            let ext = (file.name as NSString).pathExtension.uppercased()
+            let fileTypeString = ext.isEmpty ? "BIN" : ext
+
+            let entry = DiskCatalogEntry(
+                name: file.name,
+                fileType: 0,  // TR-DOS doesn't use numeric file types like this
+                fileTypeString: fileTypeString,
+                size: file.data.count,
+                blocks: (file.data.count + 255) / 256,  // Approximate sectors
+                loadAddress: nil,
+                length: nil,
+                data: file.data,
+                isImage: isImage,
+                imageType: result.type,
+                isDirectory: false,
+                children: nil
+            )
+            entries.append(entry)
+        }
+
+        return DiskCatalog(
+            diskName: filename,
+            diskFormat: "ZX Spectrum TR-DOS",
             diskSize: data.count,
             entries: entries
         )

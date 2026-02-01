@@ -50,6 +50,7 @@
 		3E75F2762F1E000000C49434 /* Atari8bitDiskReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2772F1E000000C49434 /* Atari8bitDiskReader.swift */; };
 		3E75F2782F1F000000C49434 /* BBCMicroDiskReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2792F1F000000C49434 /* BBCMicroDiskReader.swift */; };
 		3E75F27A2F20000000C49434 /* Plus4Decoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F27B2F20000000C49434 /* Plus4Decoder.swift */; };
+		3E75F27C2F21000000C49434 /* TRDOSDiskReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F27D2F21000000C49434 /* TRDOSDiskReader.swift */; };
 		3E9F97B22F156505009196E9 /* ImageCropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9F97B12F156505009196E9 /* ImageCropView.swift */; };
 /* End PBXBuildFile section */
 
@@ -97,6 +98,7 @@
 		3E75F2772F1E000000C49434 /* Atari8bitDiskReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Atari8bitDiskReader.swift; sourceTree = "<group>"; };
 		3E75F2792F1F000000C49434 /* BBCMicroDiskReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BBCMicroDiskReader.swift; sourceTree = "<group>"; };
 		3E75F27B2F20000000C49434 /* Plus4Decoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plus4Decoder.swift; sourceTree = "<group>"; };
+		3E75F27D2F21000000C49434 /* TRDOSDiskReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TRDOSDiskReader.swift; sourceTree = "<group>"; };
 		3E9C9E9A2EE37BDF00DEE453 /* Retro-Graphics-Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Retro-Graphics-Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3E9F97B12F156505009196E9 /* ImageCropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -144,6 +146,7 @@
 				3E75F2242F11204400C49434 /* PCImageDecoder.swift */,
 				3E75F2252F11204400C49434 /* RetroDecoder.swift */,
 				3E75F2262F11204400C49434 /* SHRDecoder.swift */,
+				3E75F27D2F21000000C49434 /* TRDOSDiskReader.swift */,
 				3E75F26A2F1A000000C49434 /* TRS80Decoder.swift */,
 			);
 			path = Decoders;
@@ -338,6 +341,7 @@
 				3E75F2762F1E000000C49434 /* Atari8bitDiskReader.swift in Sources */,
 				3E75F2782F1F000000C49434 /* BBCMicroDiskReader.swift in Sources */,
 				3E75F27A2F20000000C49434 /* Plus4Decoder.swift in Sources */,
+				3E75F27C2F21000000C49434 /* TRDOSDiskReader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

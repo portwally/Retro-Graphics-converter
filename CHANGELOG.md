@@ -2,6 +2,15 @@
 
 ## Version 4.3 - 2026-02-01
 
+### ZX Spectrum TR-DOS Support
+
+- **TR-DOS Disk Images**: Added full support for ZX Spectrum TR-DOS disk images (.trd files)
+- **Beta Disk Interface**: Reads the most common ZX Spectrum disk format used by the Beta Disk Interface
+- **Directory Parsing**: Parses TR-DOS directory structure (sectors 0-7) with up to 128 files
+- **Double-Sided Disks**: Supports 80-track double-sided disks (640KB) with linear sector addressing
+- **Auto-detect Screens**: Automatically identifies ZX Spectrum screen files (6912 bytes, .scr extension)
+- **BitPast Compatibility**: Fully compatible with TR-DOS disks created by BitPast
+
 ### Commodore Plus/4 Support
 
 - **Plus/4 Graphics Formats**: Added full support for Commodore Plus/4 computer graphics formats:
