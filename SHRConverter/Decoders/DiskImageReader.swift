@@ -29,6 +29,9 @@ class DiskImageReader {
         else if let bbcFiles = readBBCMicro(data: data) {
             files.append(contentsOf: bbcFiles)
         }
+        else if let cocoFiles = readCoCo(data: data) {
+            files.append(contentsOf: cocoFiles)
+        }
         else if let d64Files = readD64(data: data) {
             files.append(contentsOf: d64Files)
         }
@@ -196,6 +199,47 @@ class DiskImageReader {
 
             if is20KBScreen || is10KBScreen {
                 let result = BBCMicroDecoder.decode(data: entry.data, filename: entry.name)
+                if result.image != nil {
+                    imageData = entry.data
+                    imageType = result.type
+                }
+            }
+
+            if imageData != nil {
+                files.append(DiskImageFile(
+                    name: entry.name,
+                    data: entry.data,
+                    type: imageType
+                ))
+            }
+        }
+
+        return files.isEmpty ? nil : files
+    }
+
+    // MARK: - TRS-80 CoCo Disk Image
+
+    static func readCoCo(data: Data) -> [DiskImageFile]? {
+        let reader = CoCoDiskReader()
+        guard reader.canRead(data: data) else { return nil }
+
+        guard let entries = reader.readDisk(data: data) else { return nil }
+
+        var files: [DiskImageFile] = []
+
+        for entry in entries {
+            // Try to decode as image
+            var imageData: Data? = nil
+            var imageType: AppleIIImageType = .Unknown
+
+            // Check for CoCo graphics by size or extension
+            let ext = (entry.name as NSString).pathExtension.lowercased()
+            let isCoCoPMODE = entry.size == 6144 || entry.size == 6145
+            let isCoCo3 = entry.size >= 24000 && entry.size <= 33000
+            let isCoCoExt = ["cm3", "pi3", "mg3", "pic", "max", "pix"].contains(ext)
+
+            if isCoCoPMODE || isCoCo3 || isCoCoExt {
+                let result = TRS80Decoder.decode(data: entry.data, filename: entry.name)
                 if result.image != nil {
                     imageData = entry.data
                     imageType = result.type
@@ -1314,6 +1358,11 @@ extension DiskImageReader {
 
         // BBC Micro DFS Disk Image
         if let catalog = readBBCMicroCatalogFull(data: data, filename: filename) {
+            return catalog
+        }
+
+        // TRS-80 CoCo RS-DOS Disk Image
+        if let catalog = readCoCoCatalogFull(data: data, filename: filename) {
             return catalog
         }
 
@@ -2733,6 +2782,89 @@ extension DiskImageReader {
 
         return DiskCatalog(
             diskName: diskTitle,
+            diskFormat: diskFormat,
+            diskSize: data.count,
+            entries: entries
+        )
+    }
+
+    static func readCoCoCatalogFull(data: Data, filename: String) -> DiskCatalog? {
+        let reader = CoCoDiskReader()
+        guard reader.canRead(data: data) else { return nil }
+
+        guard let diskEntries = reader.readDisk(data: data) else { return nil }
+
+        // Determine disk format string based on size
+        let diskFormat: String
+        switch data.count {
+        case 161280:
+            diskFormat = "CoCo RS-DOS (156KB SS)"
+        case 163840:
+            diskFormat = "CoCo RS-DOS (160KB SS)"
+        case 184320:
+            diskFormat = "CoCo RS-DOS (180KB SS)"
+        case 322560:
+            diskFormat = "CoCo RS-DOS (315KB DS)"
+        case 327680:
+            diskFormat = "CoCo RS-DOS (320KB DS)"
+        case 368640:
+            diskFormat = "CoCo RS-DOS (360KB DS)"
+        default:
+            diskFormat = "CoCo RS-DOS"
+        }
+
+        // Extract disk name from filename
+        let diskName = (filename as NSString).deletingPathExtension
+
+        var entries: [DiskCatalogEntry] = []
+
+        for diskEntry in diskEntries {
+            var isImage = diskEntry.isImage
+            var imageType = diskEntry.imageType
+
+            // Try to decode as TRS-80/CoCo image format
+            let ext = (diskEntry.name as NSString).pathExtension.lowercased()
+            let isCoCoPMODE = diskEntry.size == 6144 || diskEntry.size == 6145
+            let isCoCo3 = diskEntry.size >= 24000 && diskEntry.size <= 33000
+            let isCoCoExt = ["cm3", "pi3", "mg3", "pic", "max", "pix"].contains(ext)
+
+            if isCoCoPMODE || isCoCo3 || isCoCoExt {
+                let result = TRS80Decoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                if result.image != nil {
+                    isImage = true
+                    imageType = result.type
+                }
+            } else {
+                // Try general decode for unknown extensions
+                let result = SHRDecoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                if result.type != AppleIIImageType.Unknown && result.image != nil {
+                    isImage = true
+                    imageType = result.type
+                }
+            }
+
+            let entry = DiskCatalogEntry(
+                name: diskEntry.name,
+                fileType: diskEntry.fileType,
+                fileTypeString: diskEntry.fileTypeString,
+                size: diskEntry.size,
+                blocks: diskEntry.blocks,
+                loadAddress: nil,
+                length: nil,
+                data: diskEntry.data,
+                isImage: isImage,
+                imageType: imageType,
+                isDirectory: false,
+                children: nil
+            )
+            entries.append(entry)
+        }
+
+        // Sort entries by name
+        entries.sort { $0.name.lowercased() < $1.name.lowercased() }
+
+        return DiskCatalog(
+            diskName: diskName,
             diskFormat: diskFormat,
             diskSize: data.count,
             entries: entries

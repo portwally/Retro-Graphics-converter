@@ -94,8 +94,8 @@ struct PaletteExtractor {
         case .BBCMicro(let mode, _):
             return createBBCMicroPalette(mode: mode, data: data)
 
-        case .TRS80(let model, _):
-            return createTRS80Palette(model: model)
+        case .TRS80(let model, let resolution):
+            return createTRS80Palette(model: model, resolution: resolution, data: data)
 
         case .Atari8bit(let mode, _):
             return createAtari8bitPalette(mode: mode, data: data)
@@ -1513,28 +1513,55 @@ struct PaletteExtractor {
 
     // MARK: - TRS-80 / CoCo Palette
 
-    private static func createTRS80Palette(model: String) -> PaletteInfo {
-        if model.contains("CoCo") {
-            // Color Computer palette
-            let colors: [PaletteColor] = [
-                PaletteColor(r: 0x00, g: 0xFF, b: 0x00),  // 0: Green
-                PaletteColor(r: 0xFF, g: 0xFF, b: 0x00),  // 1: Yellow
-                PaletteColor(r: 0x00, g: 0x00, b: 0xFF),  // 2: Blue
-                PaletteColor(r: 0xFF, g: 0x00, b: 0x00),  // 3: Red
-                PaletteColor(r: 0xFF, g: 0xFF, b: 0xFF),  // 4: Buff (White)
-                PaletteColor(r: 0x00, g: 0xFF, b: 0xFF),  // 5: Cyan
-                PaletteColor(r: 0xFF, g: 0x00, b: 0xFF),  // 6: Magenta
-                PaletteColor(r: 0xFF, g: 0x80, b: 0x00),  // 7: Orange
-                PaletteColor(r: 0x00, g: 0x00, b: 0x00),  // 8: Black
-                PaletteColor(r: 0x00, g: 0x80, b: 0x00),  // 9: Dark Green
-                PaletteColor(r: 0x00, g: 0x00, b: 0x80),  // 10: Dark Blue
-                PaletteColor(r: 0x80, g: 0x00, b: 0x00),  // 11: Dark Red
-                PaletteColor(r: 0x80, g: 0x80, b: 0x80),  // 12: Gray
-                PaletteColor(r: 0x00, g: 0x80, b: 0x80),  // 13: Dark Cyan
-                PaletteColor(r: 0x80, g: 0x00, b: 0x80),  // 14: Dark Magenta
-                PaletteColor(r: 0x80, g: 0x40, b: 0x00)   // 15: Brown
-            ]
+    private static func createTRS80Palette(model: String, resolution: String, data: Data) -> PaletteInfo {
+        if model.contains("CoCo 3") {
+            // Check for embedded palette in CoCo 3 files
+            // Some formats include 16 GIME register values at start or end of file
+            if let embeddedPalette = extractCoCo3EmbeddedPalette(from: data) {
+                // For 4-color mode (640x200), only show first 4 colors
+                if resolution.contains("4 colors") {
+                    return PaletteInfo(singlePalette: Array(embeddedPalette.prefix(4)), platformName: "TRS-80 \(model)")
+                }
+                return PaletteInfo(singlePalette: embeddedPalette, platformName: "TRS-80 \(model)")
+            }
+
+            // Default: CoCo 3 GIME palette - calculated from GIME indices
+            // Must match exactly: TRS80Decoder.coco3Palette and BitPast's coco3Fixed16
+            // GIME RGB222: index = R*16 + G*4 + B, each channel scaled by 85 (0→0, 1→85, 2→170, 3→255)
+            let gimeIndices = [0, 63, 48, 12, 3, 15, 51, 60, 21, 42, 32, 8, 2, 52, 44, 7]
+            var colors: [PaletteColor] = []
+
+            // For 4-color mode (640x200), only use first 4 colors
+            let numColors = resolution.contains("4 colors") ? 4 : 16
+            for idx in gimeIndices.prefix(numColors) {
+                let r = UInt8(((idx >> 4) & 0x03) * 85)
+                let g = UInt8(((idx >> 2) & 0x03) * 85)
+                let b = UInt8((idx & 0x03) * 85)
+                colors.append(PaletteColor(r: r, g: g, b: b))
+            }
             return PaletteInfo(singlePalette: colors, platformName: "TRS-80 \(model)")
+
+        } else if model.contains("CoCo") {
+            // CoCo 1/2 - determine mode from resolution string
+            if resolution.contains("2 colors") {
+                // PMODE 4: 2-color mode (Black + Green)
+                let colors: [PaletteColor] = [
+                    PaletteColor(r: 0x00, g: 0x00, b: 0x00),  // 0: Black
+                    PaletteColor(r: 0x00, g: 0xFF, b: 0x00)   // 1: Green
+                ]
+                return PaletteInfo(singlePalette: colors, platformName: "TRS-80 CoCo PMODE 4")
+
+            } else {
+                // PMODE 3: 4-color mode (Black, Green, Yellow, Blue)
+                // Matches TRS80Decoder.cocoPalette (Color Set 0)
+                let colors: [PaletteColor] = [
+                    PaletteColor(r: 0x00, g: 0x00, b: 0x00),  // 0: Black (background)
+                    PaletteColor(r: 0x00, g: 0xFF, b: 0x00),  // 1: Green
+                    PaletteColor(r: 0xFF, g: 0xFF, b: 0x00),  // 2: Yellow
+                    PaletteColor(r: 0x00, g: 0x00, b: 0xFF)   // 3: Blue
+                ]
+                return PaletteInfo(singlePalette: colors, platformName: "TRS-80 CoCo PMODE 3")
+            }
         } else {
             // Model I/III - green phosphor
             let colors: [PaletteColor] = [
@@ -1698,5 +1725,52 @@ struct PaletteExtractor {
             PaletteColor(r: 0xFF, g: 0xFF, b: 0x00)   // 15: Light Yellow
         ]
         return PaletteInfo(singlePalette: colors, platformName: "Commodore VIC-20")
+    }
+
+    // MARK: - CoCo 3 Embedded Palette
+
+    /// Extract embedded palette from CoCo 3 files
+    /// Some formats include 16 GIME register values (6-bit indices into 64-color palette)
+    private static func extractCoCo3EmbeddedPalette(from data: Data) -> [PaletteColor]? {
+        // Check for 32016-byte file (16 bytes palette + 32000 bytes pixels)
+        guard data.count == 32016 else { return nil }
+
+        // Try palette at START of file
+        var paletteOffset = 0
+        var validAtStart = true
+        for i in 0..<16 {
+            if data[i] > 63 {
+                validAtStart = false
+                break
+            }
+        }
+
+        if validAtStart {
+            paletteOffset = 0
+        } else {
+            // Try palette at END of file
+            paletteOffset = 32000
+            var validAtEnd = true
+            for i in 0..<16 {
+                if data[paletteOffset + i] > 63 {
+                    validAtEnd = false
+                    break
+                }
+            }
+            guard validAtEnd else { return nil }
+        }
+
+        // Build palette from GIME indices
+        var colors: [PaletteColor] = []
+        for i in 0..<16 {
+            let gimeIndex = Int(data[paletteOffset + i])
+            // GIME RGB222: index = R*16 + G*4 + B
+            let r = UInt8(((gimeIndex >> 4) & 0x03) * 85)
+            let g = UInt8(((gimeIndex >> 2) & 0x03) * 85)
+            let b = UInt8((gimeIndex & 0x03) * 85)
+            colors.append(PaletteColor(r: r, g: g, b: b))
+        }
+
+        return colors
     }
 }

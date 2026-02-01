@@ -21,6 +21,19 @@
 - **Auto-detect Mode**: Automatically distinguishes HiRes from Multicolor based on color RAM data
 - **BitPast Compatibility**: Imports VIC-20 graphics files exported from BitPast
 
+### TRS-80 CoCo 3 Improvements
+
+- **Embedded Palette Support**: Added detection of embedded GIME palettes in CoCo 3 320x200 16-color files
+  - Supports 32016-byte files with 16-byte GIME palette at the start (palette + pixels)
+  - Supports 32016-byte files with 16-byte GIME palette at the end (pixels + palette)
+  - Validates palette bytes are valid GIME indices (0-63)
+- **640x200 4-Color Mode**: Added auto-detection for CoCo 3 640x200 4-color mode vs 320x200 16-color mode
+  - Uses content heuristics (nibble patterns, pixel correlation) to distinguish modes with same file size
+  - Fixed palette mapping to match BitPast (Black, White, Red, Green)
+- **GIME RGB222 Palette**: Uses correct GIME chip 64-color palette calculation (R×16 + G×4 + B, each channel scaled by 85)
+- **BitPast Compatibility**: Palette and rendering verified compatible with BitPast's coco3Fixed16 format for both 16-color and 4-color modes
+- **Palette Display**: Info bar now correctly extracts and displays embedded CoCo 3 palettes, showing 4 or 16 colors based on mode
+
 ### Bug Fixes
 
 - **D64 File Extraction Off-by-One**: Fixed critical bug in D64 disk image extraction that caused 1-byte misalignment. The last sector's byte count was incorrectly interpreted (byte 1 is the offset to the byte after the last data byte, not the count). This caused VIC-20 and other files loaded from D64 disks to display with visual artifacts (dots, colored lines, corrupted graphics).

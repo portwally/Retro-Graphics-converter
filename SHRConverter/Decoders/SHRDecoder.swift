@@ -33,7 +33,7 @@ class SHRDecoder {
         }
 
         // TRS-80/CoCo formats by extension
-        let trs80Extensions = ["max", "cm3"]
+        let trs80Extensions = ["max", "cm3", "pi3", "mg3", "pic", "pix", "bin"]
         if trs80Extensions.contains(fileExtension) {
             return TRS80Decoder.decode(data: data, filename: filename)
         }
@@ -256,8 +256,9 @@ class SHRDecoder {
             // TRS-80 Model I/III block graphics
             return TRS80Decoder.decodeBlockGraphics(data: data)
         case 6144:
-            // CoCo PMODE 3/4 (128x192 or 256x192)
-            return TRS80Decoder.decodePMode4(data: data)
+            // CoCo PMODE 3/4 (128x192 4-color or 256x192 2-color)
+            // Auto-detect mode based on content analysis
+            return TRS80Decoder.decode(data: data, filename: filename)
         case 32000:
             // CoCo 3 320x200 16-color mode
             return TRS80Decoder.decodeCoCo3_320(data: data)
@@ -338,7 +339,16 @@ class SHRDecoder {
             if size >= 546 && PackedSHRDecoder.isPaintworksFormat(data) {
                 return PackedSHRDecoder.decodePNT0000(data: data)
             }
-            
+
+            // CoCo 3 graphics (320x150 to 320x200, 16 colors)
+            // Size range: 24000-33000 bytes (160 bytes/line × 150-200 lines)
+            if size >= 24000 && size <= 33000 {
+                let result = TRS80Decoder.decodeCoCo3_320(data: data)
+                if result.image != nil {
+                    return result
+                }
+            }
+
             // Last resort: MacPaint
             if size >= 20000 && size <= 100000 && size >= 512 {
                 let result = RetroDecoder.decodeMacPaint(data: data)
