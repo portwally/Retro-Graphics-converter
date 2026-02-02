@@ -162,8 +162,7 @@ class TRS80Decoder {
     // Output: 256x192 to correct aspect ratio (CoCo pixels were ~2:1 wide)
 
     static func decodePMode3(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
-        let sourceWidth = 128
-        let outputWidth = 256  // Double horizontal for correct aspect ratio
+        let outputWidth = 256  // Double horizontal for correct aspect ratio (source is 128)
         let height = 192
         let bytesPerLine = 32  // 128 pixels * 2 bits / 8 = 32 bytes
         let expectedSize = bytesPerLine * height  // 6144 bytes
@@ -319,8 +318,7 @@ class TRS80Decoder {
 
     static func decodeCoCo3_320(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         let width = 320
-        let bytesPerLine = 160  // 320 pixels * 4 bits / 8 = 160 bytes
-        let imageDataSize = 32000  // 320x200 @ 4bpp
+        let bytesPerLine = 160  // 320 pixels * 4 bits / 8 = 160 bytes (32000 bytes for 320x200 @ 4bpp)
 
         // Accept files >= 24000 bytes (some CoCo 3 images are 320x150 to 320x200)
         guard data.count >= 24000 else {
@@ -516,9 +514,8 @@ class TRS80Decoder {
         let totalPossibleTransitions = sampleSize * 7
         let transitionRatio = Double(transitionCount) / Double(totalPossibleTransitions)
 
-        // Count "mixed" pairs (01, 10) vs "solid" pairs (00, 11)
+        // Count "mixed" pairs (01, 10) - high ratio indicates PMODE 4 dithering
         let mixedPairs = pairCounts[1] + pairCounts[2]  // 01 and 10
-        let solidPairs = pairCounts[0] + pairCounts[3]  // 00 and 11
         let mixedRatio = Double(mixedPairs) / Double(totalPairs)
 
         // Count how many of the 4 possible values are significantly used
