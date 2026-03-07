@@ -1392,10 +1392,10 @@ struct ContentView: View {
     }
     
     func saveImage(image: NSImage, to outputURL: URL, format: ExportFormat, originalData: Data? = nil, originalExtension: String = "bin") -> Bool {
-        // Bei "Original" Format die Original-Daten direkt speichern
+        // For "Original" format, save the original data directly
         if format == .original {
             guard let data = originalData else {
-                // Keine Original-Daten verfügbar - kann nicht exportieren
+                // No original data available - cannot export
                 DispatchQueue.main.async {
                     let alert = NSAlert()
                     alert.messageText = "Original data not available"
@@ -1414,7 +1414,7 @@ struct ContentView: View {
             }
         }
         
-        // Für andere Formate: Bild konvertieren
+        // For other formats: convert the image
         var finalImage = image
         if upscaleFactor > 1 {
             if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil), let upscaled = SHRDecoder.upscaleCGImage(cgImage, factor: upscaleFactor) {
@@ -1432,7 +1432,7 @@ struct ContentView: View {
         case .heic:
             if let cgImage = finalImage.cgImage(forProposedRect: nil, context: nil, hints: nil) { outputData = HEICConverter.convert(cgImage: cgImage) }
         case .original:
-            return false // wird oben behandelt
+            return false // handled above
         }
         guard let finalData = outputData else { return false }
         do { try finalData.write(to: outputURL); return true } catch { return false }
@@ -1524,7 +1524,7 @@ struct ContentView: View {
                 
                 let newImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
 
-                // Behalte die gleiche ID bei! Preserve originalData for Original toggle
+                // Keep the same ID! Preserve originalData for Original toggle
                 var croppedItem = ImageItem(
                     id: selectedImg.id,
                     url: selectedImg.url,
@@ -1555,7 +1555,7 @@ struct ContentView: View {
 
         // Find and restore the image
         if let index = imageItems.firstIndex(where: { $0.id == lastAction.id }) {
-            // Behalte die gleiche ID bei!
+            // Keep the same ID!
             var restoredItem = ImageItem(
                 id: lastAction.id,
                 url: imageItems[index].url,

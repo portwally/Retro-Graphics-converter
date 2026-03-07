@@ -125,7 +125,7 @@ struct ImageItem: Identifiable {
     var modifiedPalette: PaletteInfo?
     var hasImageModification: Bool  // Track transforms (rotate, flip, crop, adjustments)
 
-    // Initializer mit optionaler ID - wenn keine ID übergeben wird, wird eine neue erstellt
+    // Initializer with optional ID - if no ID is provided, a new one is created
     init(id: UUID = UUID(), url: URL, image: NSImage, type: AppleIIImageType, originalData: Data?, paletteInfo: PaletteInfo? = nil, hasImageModification: Bool = false) {
         self.id = id
         self.url = url
@@ -157,13 +157,13 @@ struct ImageItem: Identifiable {
     }
     
     var originalFileExtension: String {
-        // Versuche die Original-Dateierweiterung zu ermitteln
+        // Try to determine the original file extension
         let ext = url.pathExtension.lowercased()
         if !ext.isEmpty {
             return ext
         }
         
-        // Fallback basierend auf Bildtyp
+        // Fallback based on image type
         switch type {
         case .SHR(_, _, _): return "shr"
         case .HGR: return "hgr"

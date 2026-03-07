@@ -30,28 +30,6 @@
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
       <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "3E9C9EA62EE37BE000DEE453"
-               BuildableName = "Retro-Graphics-ConverterTests.xctest"
-               BlueprintName = "Retro-Graphics-ConverterTests"
-               ReferencedContainer = "container:Retro-Graphics-Converter.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "3E9C9EB02EE37BE000DEE453"
-               BuildableName = "Retro-Graphics-ConverterUITests.xctest"
-               BlueprintName = "Retro-Graphics-ConverterUITests"
-               ReferencedContainer = "container:Retro-Graphics-Converter.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

@@ -1558,7 +1558,7 @@ extension DiskImageReader {
 
                         let result: (image: CGImage?, type: AppleIIImageType)
                         if couldBeGraphics || fileTypeInfo.isGraphics {
-                            // Für BIN/TXT Dateien mit Graphics: 4-Byte-Header abschneiden falls vorhanden
+                            // For BIN/TXT files with graphics: strip 4-byte header if present
                             var dataToDecode = fileData
                             if (fileType == 0x04 || fileType == 0x06) && loadAddr != nil && length != nil && fileData.count >= 4 {
                                 // Header detected, strip it

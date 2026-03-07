@@ -1,5 +1,28 @@
 # Changelog
 
+## Version 4.3.1 - 2026-03-07
+
+### Code Quality Improvements
+
+- **Shared LZW Decompressor**: Extracted the DreamGrafix LZW decompression algorithm (GIF-style variable-width, 9-12 bits) into a single shared utility class `LZWDecompressor`. Previously the same ~110-line implementation was duplicated across three files (`DreamGrafixDecoder.swift`, `PaletteRenderer.swift`, `PaletteExtractor.swift`). All three now call `LZWDecompressor.decompressDreamGrafixLZW(data:)`.
+- **Translated German Comments to English**: Standardized all source code comments to English for consistency and accessibility. Translated 11 German comments across `ImageTypes.swift`, `DiskCatalog.swift`, `DiskImageReader.swift`, and `ContentView.swift`.
+
+### Files Added
+
+- `SHRConverter/Utilities/LZWDecompressor.swift` - Shared LZW decompression utility for DreamGrafix format
+
+### Files Modified
+
+- `SHRConverter/Decoders/DreamGrafixDecoder.swift` - Removed private `decompressLZW12()`, now uses shared `LZWDecompressor`
+- `SHRConverter/Decoders/PaletteRenderer.swift` - Removed private `decompressDreamGrafixLZW()`, now uses shared `LZWDecompressor`
+- `SHRConverter/Decoders/PaletteExtractor.swift` - Removed private `decompressDreamGrafixLZW()`, now uses shared `LZWDecompressor`
+- `SHRConverter/Models/ImageTypes.swift` - Translated German comment to English
+- `SHRConverter/Models/DiskCatalog.swift` - Translated German comments to English
+- `SHRConverter/Decoders/DiskImageReader.swift` - Translated German comment to English
+- `SHRConverter/Views/ContentView.swift` - Translated German comments to English
+
+---
+
 ## Version 4.3 - 2026-02-01
 
 ### ZX Spectrum TR-DOS Support

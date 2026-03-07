@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3E114C3F2F5C9458008317A0 /* LZWDecompressor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E114C3E2F5C9458008317A0 /* LZWDecompressor.swift */; };
 		3E75F2362F11204400C49434 /* PCImageDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2242F11204400C49434 /* PCImageDecoder.swift */; };
 		3E75F2372F11204400C49434 /* DiskCatalogBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2312F11204400C49434 /* DiskCatalogBrowserView.swift */; };
 		3E75F2382F11204400C49434 /* ModernImageDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2222F11204400C49434 /* ModernImageDecoder.swift */; };
@@ -57,6 +58,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		3E114C3E2F5C9458008317A0 /* LZWDecompressor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LZWDecompressor.swift; sourceTree = "<group>"; };
 		3E75F21D2F11204400C49434 /* AmigaIFFDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmigaIFFDecoder.swift; sourceTree = "<group>"; };
 		3E75F21E2F11204400C49434 /* AppleIIDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIIDecoder.swift; sourceTree = "<group>"; };
 		3E75F21F2F11204400C49434 /* AtariSTDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtariSTDecoder.swift; sourceTree = "<group>"; };
@@ -175,6 +177,7 @@
 				3E75F22C2F11204400C49434 /* HEICConverter.swift */,
 				3E75F22D2F11204400C49434 /* ImageHelpers.swift */,
 				3E75F22E2F11204400C49434 /* UTTypeExtensions.swift */,
+				3E114C3E2F5C9458008317A0 /* LZWDecompressor.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -322,6 +325,7 @@
 				3E75F2442F11204400C49434 /* ContentView.swift in Sources */,
 				3E75F2452F11204400C49434 /* ImageThumbnailView.swift in Sources */,
 				3E75F2462F11204400C49434 /* AtariSTDecoder.swift in Sources */,
+				3E114C3F2F5C9458008317A0 /* LZWDecompressor.swift in Sources */,
 				3E75F2472F11204400C49434 /* SHRDecoder.swift in Sources */,
 				3E75F2482F11204400C49434 /* RetroDecoder.swift in Sources */,
 				3E75F2492F11204400C49434 /* AppleIIDecoder.swift in Sources */,
@@ -486,7 +490,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 551;
+				CURRENT_PROJECT_VERSION = 560;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = ZFE2VJD462;
 				ENABLE_APP_SANDBOX = NO;
@@ -501,7 +505,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 4.3;
+				MARKETING_VERSION = 4.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.portwally.retroGFX;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -523,7 +527,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 551;
+				CURRENT_PROJECT_VERSION = 560;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				"DEVELOPMENT_TEAM[sdk=macosx*]" = ZFE2VJD462;
@@ -550,7 +554,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 4.3;
+				MARKETING_VERSION = 4.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.portwally.retroGFX;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

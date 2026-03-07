@@ -133,7 +133,7 @@ struct PaletteRenderer {
             // DreamGrafix: LZW compressed, pixels at start of decompressed data
             guard data.count >= 17 else { return nil }
             let compressedData = data.subdata(in: 0..<(data.count - 17))
-            if let decompressed = decompressDreamGrafixLZW(data: compressedData), decompressed.count >= 32000 {
+            if let decompressed = LZWDecompressor.decompressDreamGrafixLZW(data: compressedData), decompressed.count >= 32000 {
                 pixelData = decompressed.subdata(in: 0..<32000)
             } else if data.count >= 32000 {
                 // Try using raw data if decompression fails
@@ -181,120 +181,6 @@ struct PaletteRenderer {
             buffer[bufferIdx2 + 2] = c2.b
             buffer[bufferIdx2 + 3] = 255
         }
-    }
-
-    // DreamGrafix LZW decompression (GIF-style variable width 9-12 bits)
-    private static func decompressDreamGrafixLZW(data: Data) -> Data? {
-        guard data.count > 0 else { return nil }
-
-        var output = Data()
-        output.reserveCapacity(65536)
-
-        let clearCode = 256
-        let endCode = 257
-        let maxCode = 4095
-
-        var codeWidth = 9
-        var nextCodeWidthThreshold = 512
-
-        var dictionary: [[UInt8]] = []
-
-        func resetDictionary() {
-            dictionary = []
-            for i in 0..<256 {
-                dictionary.append([UInt8(i)])
-            }
-            dictionary.append([])  // clear code
-            dictionary.append([])  // end code
-            codeWidth = 9
-            nextCodeWidthThreshold = 512
-        }
-
-        resetDictionary()
-
-        var bitBuffer: UInt32 = 0
-        var bitsInBuffer = 0
-        var bytePos = 0
-
-        func readCode() -> Int? {
-            while bitsInBuffer < codeWidth && bytePos < data.count {
-                bitBuffer |= UInt32(data[bytePos]) << bitsInBuffer
-                bitsInBuffer += 8
-                bytePos += 1
-            }
-            guard bitsInBuffer >= codeWidth else { return nil }
-            let mask = (1 << codeWidth) - 1
-            let code = Int(bitBuffer) & mask
-            bitBuffer >>= codeWidth
-            bitsInBuffer -= codeWidth
-            return code
-        }
-
-        guard let firstCodeValue = readCode() else { return nil }
-
-        var prevCode: Int
-
-        if firstCodeValue == clearCode {
-            guard let nextCode = readCode() else { return nil }
-            if nextCode == endCode { return output }
-            if nextCode < 256 { output.append(UInt8(nextCode)) }
-            prevCode = nextCode
-        } else if firstCodeValue < 256 {
-            output.append(UInt8(firstCodeValue))
-            prevCode = firstCodeValue
-        } else {
-            return nil
-        }
-
-        if prevCode == endCode { return output }
-
-        while let code = readCode() {
-            if code == endCode { break }
-
-            if code == clearCode {
-                resetDictionary()
-                guard let nextCode = readCode() else { break }
-                if nextCode == endCode { break }
-                if nextCode < 256 {
-                    output.append(UInt8(nextCode))
-                    prevCode = nextCode
-                }
-                continue
-            }
-
-            var sequence: [UInt8]
-
-            if code < dictionary.count {
-                sequence = dictionary[code]
-            } else if code == dictionary.count {
-                if prevCode < dictionary.count {
-                    let prevSequence = dictionary[prevCode]
-                    sequence = prevSequence + [prevSequence[0]]
-                } else {
-                    break
-                }
-            } else {
-                break
-            }
-
-            output.append(contentsOf: sequence)
-
-            if dictionary.count <= maxCode && prevCode < dictionary.count {
-                let prevSequence = dictionary[prevCode]
-                dictionary.append(prevSequence + [sequence[0]])
-
-                if dictionary.count == nextCodeWidthThreshold && codeWidth < 12 {
-                    codeWidth += 1
-                    nextCodeWidthThreshold *= 2
-                }
-            }
-
-            prevCode = code
-
-            if output.count > 50000 { break }
-        }
-
-        return output.isEmpty ? nil : output
     }
 
     private static func renderSHRLine(y: Int, data: Data, pixelStart: Int, palette: [(r: UInt8, g: UInt8, b: UInt8)], to buffer: inout [UInt8], width: Int) {

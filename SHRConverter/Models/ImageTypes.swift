@@ -17,7 +17,7 @@ enum ExportFormat: String, CaseIterable {
         case .tiff: return "tiff"
         case .gif: return "gif"
         case .heic: return "heic"
-        case .original: return "bin" // wird dynamisch basierend auf Dateityp gesetzt
+        case .original: return "bin" // set dynamically based on file type
         }
     }
 }
