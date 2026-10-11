@@ -494,17 +494,7 @@ class SHRDecoder {
     }
     
     static func scaleCGImage(_ image: CGImage, to newSize: CGSize) -> CGImage? {
-        guard let colorSpace = image.colorSpace else { return nil }
-
-        guard let ctx = CGContext(
-            data: nil,
-            width: Int(newSize.width),
-            height: Int(newSize.height),
-            bitsPerComponent: image.bitsPerComponent,
-            bytesPerRow: 0,
-            space: colorSpace,
-            bitmapInfo: image.bitmapInfo.rawValue
-        ) else { return nil }
+        guard let ctx = ImageHelpers.makeBitmapContext(matching: image, width: Int(newSize.width), height: Int(newSize.height)) else { return nil }
 
         ctx.interpolationQuality = .none
         ctx.draw(image, in: CGRect(origin: .zero, size: newSize))

@@ -9,25 +9,26 @@ import VideoToolbox
 
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
-    @State private var filesToConvert: [URL] = []
     @State private var imageItems: [ImageItem] = []
     @State private var selectedImage: ImageItem?
     @State private var selectedImages: Set<UUID> = []
-    @State private var selectedExportFormat: ExportFormat = .png
     @State private var statusMessage: String = "Drag files/folders or open files to start."
     @State private var isProcessing = false
     @State private var progressString = ""
     @State private var showBrowser = true
-    @State private var upscaleFactor: Int = 1
     @State private var zoomScale: CGFloat = -1.0  // -1 means "fit to window"
     @State private var filterFormat: String = "All"
     @State private var showCatalogBrowser = false
     @State private var currentCatalog: DiskCatalog? = nil
+    @State private var pendingCatalogs: [DiskCatalog] = []  // further disk images waiting for the browser
     @State private var cropMode = false
     @State private var cropStart: CGPoint?
     @State private var cropEnd: CGPoint?
     @State private var cropScale: CGFloat = 1.0  // Store the scale used during crop selection
-    @State private var undoStack: [(id: UUID, image: NSImage, type: AppleIIImageType, data: Data?, paletteInfo: PaletteInfo?, modifiedPalette: PaletteInfo?, hasImageModification: Bool)] = []
+    typealias UndoEntry = (id: UUID, image: NSImage, type: AppleIIImageType, data: Data?, paletteInfo: PaletteInfo?, modifiedPalette: PaletteInfo?, hasImageModification: Bool)
+    /// Each element is one user action; a batch transform is a single step holding one entry per image
+    @State private var undoStack: [[UndoEntry]] = []
+    private let maxUndoSteps = 10
 
     // New UI state
     @State private var showExportSheet = false
@@ -56,7 +57,7 @@ struct ContentView: View {
                 return originalImage
             }
             // Fallback: re-decode from scratch
-            let result = SHRDecoder.decode(data: originalData, filename: selected.url.lastPathComponent)
+            let result = SHRDecoder.decode(data: originalData, filename: selected.decodeFilename ?? selected.url.lastPathComponent)
             if let cgImage = result.image {
                 return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
             }
@@ -76,23 +77,9 @@ struct ContentView: View {
 
     var filteredImages: [ImageItem] {
         if filterFormat == "All" { return imageItems }
-        return imageItems.filter { item in
-            let typeName = item.type.displayName
-            switch filterFormat {
-            case "Apple II": return typeName.contains("SHR") || typeName.contains("HGR") || typeName.contains("DHGR")
-            case "C64": return typeName.contains("C64")
-            case "Amiga": return typeName.contains("IFF")
-            case "Atari ST": return typeName.contains("DEGAS")
-            case "ZX Spectrum": return typeName.contains("ZX Spectrum")
-            case "CPC": return typeName.contains("CPC")
-            case "PC": return typeName.contains("PCX") || typeName.contains("BMP")
-            case "Mac": return typeName.contains("MacPaint")
-            case "Modern": return typeName.contains("PNG") || typeName.contains("JPEG") || typeName.contains("GIF") || typeName.contains("TIFF") || typeName.contains("HEIC") || typeName.contains("WEBP")
-            default: return true
-            }
-        }
+        return imageItems.filter { $0.type.platformCategory == filterFormat }
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Main Toolbar
@@ -194,6 +181,21 @@ struct ContentView: View {
         .onChange(of: appState.undoTrigger) { oldValue, newValue in
             undoLastAction()
         }
+        .onChange(of: filterFormat) { _, _ in
+            // Keep the selection to what is visible, so Delete/Export never touch hidden images
+            let visible = Set(filteredImages.map { $0.id })
+            selectedImages.formIntersection(visible)
+        }
+        .onChange(of: showCatalogBrowser) { _, isShowing in
+            // When one disk's browser closes, show the next disk that was loaded in the same batch
+            if !isShowing && !pendingCatalogs.isEmpty {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    guard !showCatalogBrowser, !pendingCatalogs.isEmpty else { return }
+                    currentCatalog = pendingCatalogs.removeFirst()
+                    showCatalogBrowser = true
+                }
+            }
+        }
         .onChange(of: appState.openFolderRequest) { oldValue, newValue in
             if let folder = newValue {
                 processFilesAndFolders(urls: [folder])
@@ -207,9 +209,10 @@ struct ContentView: View {
             HStack {
                 Text("Image Browser").font(.headline)
                 Spacer()
-                Button(action: { if selectedImages.count == filteredImages.count { selectedImages.removeAll() } else { selectedImages = Set(filteredImages.map { $0.id }) } }) {
-                    Image(systemName: selectedImages.count == filteredImages.count ? "checkmark.square.fill" : "square")
-                }.help(selectedImages.count == filteredImages.count ? "Deselect All" : "Select All")
+                let allVisibleSelected = !filteredImages.isEmpty && selectedImages.count == filteredImages.count
+                Button(action: { if allVisibleSelected { selectedImages.removeAll() } else { selectedImages = Set(filteredImages.map { $0.id }) } }) {
+                    Image(systemName: allVisibleSelected ? "checkmark.square.fill" : "square")
+                }.help(allVisibleSelected ? "Deselect All" : "Select All")
                 Button(action: { deleteSelectedImages() }) { Image(systemName: "trash") }.help(selectedImages.isEmpty ? "Delete current image" : "Delete \(selectedImages.count) selected image(s)")
             }
             HStack {
@@ -217,6 +220,8 @@ struct ContentView: View {
                 Picker("", selection: $filterFormat) {
                     Text("All").tag("All"); Text("Apple II").tag("Apple II"); Text("C64").tag("C64"); Text("Amiga").tag("Amiga")
                     Text("Atari ST").tag("Atari ST"); Text("ZX Spectrum").tag("ZX Spectrum"); Text("Amstrad CPC").tag("CPC")
+                    Text("Atari 8-bit").tag("Atari 8-bit"); Text("BBC Micro").tag("BBC Micro"); Text("MSX").tag("MSX")
+                    Text("Plus/4").tag("Plus/4"); Text("VIC-20").tag("VIC-20"); Text("TRS-80 / CoCo").tag("TRS-80")
                     Text("PC (PCX/BMP)").tag("PC"); Text("Mac").tag("Mac"); Text("Modern (PNG/JPG)").tag("Modern")
                 }.labelsHidden()
                 Spacer()
@@ -432,7 +437,7 @@ struct ContentView: View {
             item.image = originalImage
         } else {
             // Fallback: re-decode from original data
-            let result = SHRDecoder.decode(data: originalData, filename: item.url.lastPathComponent)
+            let result = SHRDecoder.decode(data: originalData, filename: item.decodeFilename ?? item.url.lastPathComponent)
             if let cgImage = result.image {
                 item.image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
             }
@@ -470,47 +475,64 @@ struct ContentView: View {
 
         if openPanel.runModal() == .OK, let outputFolderURL = openPanel.url {
             isProcessing = true
-            let savedUpscale = upscaleFactor
-            upscaleFactor = scale
 
             DispatchQueue.global(qos: .userInitiated).async {
                 var totalExported = 0
+                var missingOriginal = 0
+                var usedNames = Set<String>()
 
                 for format in formats {
-                    self.selectedExportFormat = format
-
                     for (index, item) in itemsToExport.enumerated() {
                         DispatchQueue.main.async {
                             self.progressString = "Exporting \(index + 1)/\(itemsToExport.count) as \(format.rawValue)"
                         }
 
-                        let fileExtension = format == .original ? item.originalFileExtension : format.fileExtension
-                        let baseName = item.url.deletingPathExtension().lastPathComponent
-                        let filename: String
-
-                        if formats.count > 1 && format != .original {
-                            filename = "\(baseName).\(fileExtension)"
-                        } else {
-                            filename = "\(baseName).\(fileExtension)"
+                        if format == .original && item.originalData == nil {
+                            missingOriginal += 1
+                            continue
                         }
 
-                        let outputURL = outputFolderURL.appendingPathComponent(filename)
+                        let fileExtension = format == .original ? item.originalFileExtension : format.fileExtension
+                        let baseName = item.url.deletingPathExtension().lastPathComponent
+                        let outputURL = Self.unusedFileURL(in: outputFolderURL, baseName: baseName, fileExtension: fileExtension, usedNames: &usedNames)
 
-                        if self.saveImage(image: item.image, to: outputURL, format: format, originalData: item.originalData, originalExtension: item.originalFileExtension) {
+                        if self.saveImage(image: item.image, to: outputURL, format: format, scale: scale, originalData: item.originalData) {
                             totalExported += 1
                         }
                     }
                 }
 
                 DispatchQueue.main.async {
-                    self.upscaleFactor = savedUpscale
                     self.isProcessing = false
                     self.exportedCount += totalExported
                     self.statusMessage = "Exported \(totalExported) file(s) to \(outputFolderURL.lastPathComponent)"
                     self.progressString = ""
+
+                    if missingOriginal > 0 {
+                        let alert = NSAlert()
+                        alert.messageText = "Original data not available"
+                        alert.informativeText = "\(missingOriginal) image(s) were loaded without their original file data and could not be exported in the original format. Choose a different export format for them."
+                        alert.alertStyle = .warning
+                        alert.addButton(withTitle: "OK")
+                        alert.runModal()
+                    }
                 }
             }
         }
+    }
+
+    /// Picks a file name that neither exists in the folder nor was used earlier in this export,
+    /// so images that share a name (common for files from different disks) do not overwrite each other
+    static func unusedFileURL(in folder: URL, baseName: String, fileExtension: String, usedNames: inout Set<String>) -> URL {
+        let safeBase = baseName.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+        var candidate = "\(safeBase).\(fileExtension)"
+        var counter = 2
+        while usedNames.contains(candidate.lowercased()) || FileManager.default.fileExists(atPath: folder.appendingPathComponent(candidate).path) {
+            candidate = "\(safeBase) \(counter).\(fileExtension)"
+            counter += 1
+        }
+        usedNames.insert(candidate.lowercased())
+        return folder.appendingPathComponent(candidate)
     }
 
     // MARK: - Screensaver Export
@@ -546,8 +568,6 @@ struct ContentView: View {
         }
 
         isProcessing = true
-        let savedUpscale = upscaleFactor
-        upscaleFactor = scale
 
         DispatchQueue.global(qos: .userInitiated).async {
             var totalExported = 0
@@ -562,13 +582,12 @@ struct ContentView: View {
                 let filename = "\(String(format: "%03d", index + 1))_\(baseName).png"
                 let outputURL = picturesFolder.appendingPathComponent(filename)
 
-                if self.saveImage(image: item.image, to: outputURL, format: .png, originalData: nil, originalExtension: "png") {
+                if self.saveImage(image: item.image, to: outputURL, format: .png, scale: scale) {
                     totalExported += 1
                 }
             }
 
             DispatchQueue.main.async {
-                self.upscaleFactor = savedUpscale
                 self.isProcessing = false
                 self.exportedCount += totalExported
                 self.statusMessage = "Created screensaver '\(name)' with \(totalExported) images"
@@ -841,91 +860,6 @@ struct ContentView: View {
         return buffer
     }
 
-    private func createPixelBuffer(from image: CGImage, size: CGSize) -> CVPixelBuffer? {
-        var pixelBuffer: CVPixelBuffer?
-        let attrs: [String: Any] = [
-            kCVPixelBufferCGImageCompatibilityKey as String: true,
-            kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
-        ]
-
-        let status = CVPixelBufferCreate(
-            kCFAllocatorDefault,
-            Int(size.width),
-            Int(size.height),
-            kCVPixelFormatType_32ARGB,
-            attrs as CFDictionary,
-            &pixelBuffer
-        )
-
-        guard status == kCVReturnSuccess, let buffer = pixelBuffer else { return nil }
-
-        CVPixelBufferLockBaseAddress(buffer, [])
-        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
-
-        guard let context = CGContext(
-            data: CVPixelBufferGetBaseAddress(buffer),
-            width: Int(size.width),
-            height: Int(size.height),
-            bitsPerComponent: 8,
-            bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
-        ) else { return nil }
-
-        // Fill with black background
-        context.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
-        context.fill(CGRect(origin: .zero, size: size))
-
-        // Calculate centered position
-        let imageSize = CGSize(width: image.width, height: image.height)
-        let scale = min(size.width / imageSize.width, size.height / imageSize.height)
-        let scaledSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
-        let origin = CGPoint(
-            x: (size.width - scaledSize.width) / 2,
-            y: (size.height - scaledSize.height) / 2
-        )
-
-        context.interpolationQuality = .none  // Nearest neighbor for pixel art
-        context.draw(image, in: CGRect(origin: origin, size: scaledSize))
-
-        return buffer
-    }
-
-    private func blendImages(_ image1: CGImage, _ image2: CGImage, alpha: CGFloat, size: CGSize) -> CGImage? {
-        guard let context = CGContext(
-            data: nil,
-            width: Int(size.width),
-            height: Int(size.height),
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return nil }
-
-        context.interpolationQuality = .none
-
-        // Calculate centered positions for both images
-        let image1Size = CGSize(width: image1.width, height: image1.height)
-        let scale1 = min(size.width / image1Size.width, size.height / image1Size.height)
-        let scaledSize1 = CGSize(width: image1Size.width * scale1, height: image1Size.height * scale1)
-        let origin1 = CGPoint(x: (size.width - scaledSize1.width) / 2, y: (size.height - scaledSize1.height) / 2)
-
-        let image2Size = CGSize(width: image2.width, height: image2.height)
-        let scale2 = min(size.width / image2Size.width, size.height / image2Size.height)
-        let scaledSize2 = CGSize(width: image2Size.width * scale2, height: image2Size.height * scale2)
-        let origin2 = CGPoint(x: (size.width - scaledSize2.width) / 2, y: (size.height - scaledSize2.height) / 2)
-
-        // Draw first image
-        context.setAlpha(1 - alpha)
-        context.draw(image1, in: CGRect(origin: origin1, size: scaledSize1))
-
-        // Draw second image blended
-        context.setAlpha(alpha)
-        context.draw(image2, in: CGRect(origin: origin2, size: scaledSize2))
-
-        return context.makeImage()
-    }
-
     private func renderTransitionFrame(
         from image1: CGImage,
         to image2: CGImage,
@@ -1063,6 +997,7 @@ struct ContentView: View {
                 // Check if the entry already has a specific platform type (e.g., AmstradCPC from DSK reader)
                 var finalType: AppleIIImageType = entry.imageType
                 var cgImage: CGImage? = nil
+                var decodeFilename: String? = nil  // name that produced the image, for later re-decoding
 
                 // For AmstradCPC types, use the CPC decoder directly to preserve the type
                 if case .AmstradCPC = entry.imageType {
@@ -1096,6 +1031,7 @@ struct ContentView: View {
                     // Use original name for non-Apple II formats (fileType 0) to preserve extension,
                     // but nameWithTypeInfo for ProDOS files to pass file type info
                     let filename = entry.fileType == 0 ? entry.name : entry.nameWithTypeInfo
+                    decodeFilename = filename
                     let decodeResult = SHRDecoder.decode(data: entry.data, filename: filename)
                     cgImage = decodeResult.image
                     finalType = decodeResult.type
@@ -1106,7 +1042,9 @@ struct ContentView: View {
                     let nsImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
                     // Extract palette info
                     let paletteInfo = PaletteExtractor.extractPalette(from: entry.data, type: finalType, filename: entry.name)
-                    newItems.append(ImageItem(url: url, image: nsImage, type: finalType, originalData: entry.data, paletteInfo: paletteInfo))
+                    var newItem = ImageItem(url: url, image: nsImage, type: finalType, originalData: entry.data, paletteInfo: paletteInfo)
+                    newItem.decodeFilename = decodeFilename
+                    newItems.append(newItem)
                 }
             }
             DispatchQueue.main.async {
@@ -1117,11 +1055,22 @@ struct ContentView: View {
         }
     }
     
-    func clearAllImages() {
-        imageItems = []; selectedImage = nil; selectedImages.removeAll(); filesToConvert = []
-        statusMessage = "All images cleared."; progressString = ""; showBrowser = false
+    /// Shows a disk catalog, or queues it if another disk's browser is already open
+    func presentCatalog(_ catalog: DiskCatalog) {
+        let maxQueued = 20
+        if showCatalogBrowser {
+            if pendingCatalogs.count < maxQueued {
+                pendingCatalogs.append(catalog)
+                statusMessage = "\(pendingCatalogs.count) more disk image(s) waiting - they open after this one"
+            } else {
+                statusMessage = "Too many disk images at once - \(catalog.diskName) was skipped, open it separately"
+            }
+        } else {
+            currentCatalog = catalog
+            showCatalogBrowser = true
+        }
     }
-    
+
     func deleteSelectedImages() {
         if selectedImages.isEmpty {
             if let current = selectedImage {
@@ -1139,37 +1088,6 @@ struct ContentView: View {
             if imageItems.isEmpty { selectedImage = nil; showBrowser = false }
             removedCount += count
             statusMessage = "Deleted \(count) image(s)."
-        }
-    }
-    
-    func showBatchRename() {
-        let alert = NSAlert()
-        alert.messageText = "Batch Export with Custom Names"
-        alert.informativeText = "Export all images with custom names. Use {n} for number, {name} for original name."
-        alert.alertStyle = .informational; alert.addButton(withTitle: "Export"); alert.addButton(withTitle: "Cancel")
-        let inputField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        inputField.stringValue = "{name}_converted"; alert.accessoryView = inputField
-        if alert.runModal() == .alertFirstButtonReturn { batchExportWithRename(pattern: inputField.stringValue) }
-    }
-    
-    func batchExportWithRename(pattern: String) {
-        guard !imageItems.isEmpty else { return }
-        let openPanel = NSOpenPanel()
-        openPanel.canChooseFiles = false; openPanel.canChooseDirectories = true; openPanel.allowsMultipleSelection = false
-        openPanel.canCreateDirectories = true; openPanel.prompt = "Select Export Folder"
-        if openPanel.runModal() == .OK, let outputFolderURL = openPanel.url {
-            isProcessing = true
-            DispatchQueue.global(qos: .userInitiated).async {
-                var successCount = 0
-                for (index, item) in self.imageItems.enumerated() {
-                    DispatchQueue.main.async { self.progressString = "Exporting \(index + 1) of \(self.imageItems.count)" }
-                    let newName = pattern.replacingOccurrences(of: "{n}", with: "\(index + 1)").replacingOccurrences(of: "{name}", with: item.url.deletingPathExtension().lastPathComponent)
-                    let fileExtension = self.selectedExportFormat == .original ? item.originalFileExtension : self.selectedExportFormat.fileExtension
-                    let filename = "\(newName).\(fileExtension)"
-                    if self.saveImage(image: item.image, to: outputFolderURL.appendingPathComponent(filename), format: self.selectedExportFormat, originalData: item.originalData, originalExtension: item.originalFileExtension) { successCount += 1 }
-                }
-                DispatchQueue.main.async { self.isProcessing = false; self.statusMessage = "Exported \(successCount) of \(self.imageItems.count) image(s) with custom names"; self.progressString = "" }
-            }
         }
     }
     
@@ -1254,7 +1172,7 @@ struct ContentView: View {
                     
                     if possibleDiskImage {
                         if let catalog = DiskImageReader.readDiskCatalog(data: data, filename: fileName) {
-                            DispatchQueue.main.async { self.currentCatalog = catalog; self.showCatalogBrowser = true; self.isProcessing = false }
+                            DispatchQueue.main.async { self.presentCatalog(catalog); self.isProcessing = false }
                             continue
                         }
                         DispatchQueue.main.async { self.statusMessage = "Could not read disk image: \(fileName)" }
@@ -1322,7 +1240,7 @@ struct ContentView: View {
                 let fileExtension = url.pathExtension.lowercased()
                 if fileExtension == "2mg" || fileExtension == "dsk" || fileExtension == "hdv" || fileExtension == "po" || fileExtension == "do" || fileExtension == "img" || fileExtension == "d64" || fileExtension == "d71" || fileExtension == "d81" || fileExtension == "adf" || fileExtension == "st" || fileExtension == "atr" || fileExtension == "ssd" || fileExtension == "dsd" || fileExtension == "trd" {
                     if let catalog = DiskImageReader.readDiskCatalog(data: data, filename: url.lastPathComponent) {
-                        DispatchQueue.main.async { self.currentCatalog = catalog; self.showCatalogBrowser = true; self.isProcessing = false }
+                        DispatchQueue.main.async { self.presentCatalog(catalog); self.isProcessing = false }
                         continue
                     }
                     for diskFile in DiskImageReader.readDiskImage(data: data) {
@@ -1352,87 +1270,11 @@ struct ContentView: View {
     
     // MARK: - Export Functions
     
-    func exportSingleImage(_ item: ImageItem) {
-        let savePanel = NSSavePanel()
-        let fileExtension = selectedExportFormat == .original ? item.originalFileExtension : selectedExportFormat.fileExtension
-        savePanel.allowedContentTypes = [UTType(filenameExtension: fileExtension) ?? .data]
-        savePanel.nameFieldStringValue = "\(item.url.deletingPathExtension().lastPathComponent).\(fileExtension)"
-        savePanel.prompt = "Export"; savePanel.canCreateDirectories = true
-        savePanel.begin { response in
-            if response == .OK, let outputURL = savePanel.url {
-                self.isProcessing = true
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let success = self.saveImage(image: item.image, to: outputURL, format: self.selectedExportFormat, originalData: item.originalData, originalExtension: item.originalFileExtension)
-                    DispatchQueue.main.async {
-                        self.isProcessing = false
-                        self.statusMessage = success ? "Exported: \(outputURL.lastPathComponent)" : "Export failed!"; self.progressString = ""
-                    }
-                }
-            }
-        }
-    }
-    
-    func exportSelectedImages() {
-        var itemsToExport: [ImageItem] = []
-        if !selectedImages.isEmpty { itemsToExport = imageItems.filter { selectedImages.contains($0.id) } }
-        else if let current = selectedImage { itemsToExport = [current] }
-        guard !itemsToExport.isEmpty else { return }
-        
-        if itemsToExport.count == 1 { exportSingleImage(itemsToExport[0]) }
-        else {
-            let openPanel = NSOpenPanel()
-            openPanel.canChooseFiles = false; openPanel.canChooseDirectories = true; openPanel.allowsMultipleSelection = false
-            openPanel.canCreateDirectories = true; openPanel.prompt = "Select Export Folder"
-            if openPanel.runModal() == .OK, let outputFolderURL = openPanel.url {
-                isProcessing = true
-                DispatchQueue.global(qos: .userInitiated).async {
-                    var successCount = 0
-                    for (index, item) in itemsToExport.enumerated() {
-                        DispatchQueue.main.async { self.progressString = "Exporting \(index + 1) of \(itemsToExport.count)" }
-                        let fileExtension = self.selectedExportFormat == .original ? item.originalFileExtension : self.selectedExportFormat.fileExtension
-                        let filename = "\(item.url.deletingPathExtension().lastPathComponent).\(fileExtension)"
-                        if self.saveImage(image: item.image, to: outputFolderURL.appendingPathComponent(filename), format: self.selectedExportFormat, originalData: item.originalData, originalExtension: item.originalFileExtension) { successCount += 1 }
-                    }
-                    DispatchQueue.main.async { self.isProcessing = false; self.statusMessage = "Exported \(successCount) of \(itemsToExport.count) selected image(s)"; self.progressString = "" }
-                }
-            }
-        }
-    }
-    
-    func exportAllImages() {
-        let openPanel = NSOpenPanel()
-        openPanel.canChooseFiles = false; openPanel.canChooseDirectories = true; openPanel.allowsMultipleSelection = false
-        openPanel.canCreateDirectories = true; openPanel.prompt = "Select Export Folder"
-        if openPanel.runModal() == .OK, let outputFolderURL = openPanel.url {
-            isProcessing = true
-            DispatchQueue.global(qos: .userInitiated).async {
-                var successCount = 0
-                for (index, item) in self.imageItems.enumerated() {
-                    DispatchQueue.main.async { self.progressString = "Exporting \(index + 1) of \(self.imageItems.count)" }
-                    let fileExtension = self.selectedExportFormat == .original ? item.originalFileExtension : self.selectedExportFormat.fileExtension
-                    let filename = "\(item.url.deletingPathExtension().lastPathComponent).\(fileExtension)"
-                    if self.saveImage(image: item.image, to: outputFolderURL.appendingPathComponent(filename), format: self.selectedExportFormat, originalData: item.originalData, originalExtension: item.originalFileExtension) { successCount += 1 }
-                }
-                DispatchQueue.main.async { self.isProcessing = false; self.statusMessage = "Exported \(successCount) of \(self.imageItems.count) image(s)"; self.progressString = "" }
-            }
-        }
-    }
-    
-    func saveImage(image: NSImage, to outputURL: URL, format: ExportFormat, originalData: Data? = nil, originalExtension: String = "bin") -> Bool {
+    /// Writes one image. Safe to call off the main thread: it reads no view state.
+    func saveImage(image: NSImage, to outputURL: URL, format: ExportFormat, scale: Int, originalData: Data? = nil) -> Bool {
         // For "Original" format, save the original data directly
         if format == .original {
-            guard let data = originalData else {
-                // No original data available - cannot export
-                DispatchQueue.main.async {
-                    let alert = NSAlert()
-                    alert.messageText = "Original data not available"
-                    alert.informativeText = "This image was loaded without preserving the original data. Please select a different export format."
-                    alert.alertStyle = .warning
-                    alert.addButton(withTitle: "OK")
-                    alert.runModal()
-                }
-                return false
-            }
+            guard let data = originalData else { return false }
             do {
                 try data.write(to: outputURL)
                 return true
@@ -1440,11 +1282,11 @@ struct ContentView: View {
                 return false
             }
         }
-        
+
         // For other formats: convert the image
         var finalImage = image
-        if upscaleFactor > 1 {
-            if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil), let upscaled = SHRDecoder.upscaleCGImage(cgImage, factor: upscaleFactor) {
+        if scale > 1 {
+            if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil), let upscaled = SHRDecoder.upscaleCGImage(cgImage, factor: scale) {
                 finalImage = NSImage(cgImage: upscaled, size: NSSize(width: upscaled.width, height: upscaled.height))
             }
         }
@@ -1466,14 +1308,6 @@ struct ContentView: View {
     }
     
     // MARK: - Crop Tool Functions
-    
-    func toggleCropMode() {
-        cropMode.toggle()
-        if !cropMode {
-            clearSelection()
-            NSCursor.pop() // Reset cursor when exiting crop mode
-        }
-    }
     
     func clearSelection() {
         cropStart = nil
@@ -1539,15 +1373,7 @@ struct ContentView: View {
                     modifiedPalette: selectedImg.modifiedPalette,
                     hasImageModification: selectedImg.hasImageModification
                 )
-                undoStack.append(undoItem)
-                
-                // Limit undo stack to 10 items
-                if undoStack.count > 10 {
-                    undoStack.removeFirst()
-                }
-                
-                // Update undo availability
-                appState.setCanUndo(true)
+                pushUndoStep([undoItem])
                 
                 let newImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
 
@@ -1562,6 +1388,7 @@ struct ContentView: View {
                     hasImageModification: true  // Mark as modified
                 )
                 croppedItem.modifiedPalette = selectedImg.modifiedPalette
+                croppedItem.decodeFilename = selectedImg.decodeFilename
                 imageItems[index] = croppedItem
                 
                 selectedImage = imageItems[index]
@@ -1574,14 +1401,26 @@ struct ContentView: View {
         }
     }
     
+    private func pushUndoStep(_ step: [UndoEntry]) {
+        undoStack.append(step)
+        while undoStack.count > maxUndoSteps {
+            undoStack.removeFirst()
+        }
+        appState.setCanUndo(true)
+    }
+
     func undoLastAction() {
-        guard let lastAction = undoStack.popLast() else {
+        guard let lastStep = undoStack.popLast() else {
             statusMessage = "Nothing to undo"
+            appState.setCanUndo(false)
             return
         }
 
-        // Find and restore the image
-        if let index = imageItems.firstIndex(where: { $0.id == lastAction.id }) {
+        var restoredCount = 0
+        for lastAction in lastStep {
+            // Find and restore the image (it may have been deleted since)
+            guard let index = imageItems.firstIndex(where: { $0.id == lastAction.id }) else { continue }
+
             // Keep the same ID!
             var restoredItem = ImageItem(
                 id: lastAction.id,
@@ -1593,61 +1432,18 @@ struct ContentView: View {
                 hasImageModification: lastAction.hasImageModification
             )
             restoredItem.modifiedPalette = lastAction.modifiedPalette
+            restoredItem.decodeFilename = imageItems[index].decodeFilename
             imageItems[index] = restoredItem
 
-            selectedImage = imageItems[index]
-            statusMessage = "Undo successful"
-
-            // Update undo availability
-            appState.setCanUndo(!undoStack.isEmpty)
-        }
-    }
-
-    func rotateSelectedImage(clockwise: Bool) {
-        guard let current = selectedImage,
-              let index = imageItems.firstIndex(where: { $0.id == current.id }) else {
-            return
+            if selectedImage?.id == lastAction.id {
+                selectedImage = imageItems[index]
+            }
+            restoredCount += 1
         }
 
-        // Save to undo stack before rotating
-        let undoItem = (
-            id: current.id,
-            image: current.image,
-            type: current.type,
-            data: current.originalData,
-            paletteInfo: current.paletteInfo,
-            modifiedPalette: current.modifiedPalette,
-            hasImageModification: current.hasImageModification
-        )
-        undoStack.append(undoItem)
-
-        // Limit undo stack to 10 items
-        if undoStack.count > 10 {
-            undoStack.removeFirst()
-        }
-
-        appState.setCanUndo(true)
-
-        // Rotate the image
-        guard let rotatedImage = rotateImage(current.image, clockwise: clockwise) else {
-            return
-        }
-
-        // Update the image item - preserve originalData for Original toggle
-        var updatedItem = ImageItem(
-            id: current.id,
-            url: current.url,
-            image: rotatedImage,
-            type: current.type,
-            originalData: current.originalData,  // Preserve original data
-            paletteInfo: current.paletteInfo,
-            hasImageModification: true  // Mark as modified
-        )
-        updatedItem.modifiedPalette = current.modifiedPalette
-        imageItems[index] = updatedItem
-        selectedImage = updatedItem
-
-        statusMessage = clockwise ? "Rotated right 90°" : "Rotated left 90°"
+        statusMessage = restoredCount > 1 ? "Undo successful (\(restoredCount) images)" :
+                        restoredCount == 1 ? "Undo successful" : "Nothing to undo - the image was removed"
+        appState.setCanUndo(!undoStack.isEmpty)
     }
 
     private func rotateImage(_ image: NSImage, clockwise: Bool) -> NSImage? {
@@ -1659,16 +1455,7 @@ struct ContentView: View {
         let height = cgImage.height
 
         // Create a new bitmap context with swapped dimensions
-        guard let colorSpace = cgImage.colorSpace,
-              let context = CGContext(
-                data: nil,
-                width: height,
-                height: width,
-                bitsPerComponent: cgImage.bitsPerComponent,
-                bytesPerRow: 0,
-                space: colorSpace,
-                bitmapInfo: cgImage.bitmapInfo.rawValue
-              ) else {
+        guard let context = ImageHelpers.makeBitmapContext(matching: cgImage, width: height, height: width) else {
             return nil
         }
 
@@ -1694,53 +1481,6 @@ struct ContentView: View {
         return NSImage(cgImage: rotatedCGImage, size: NSSize(width: height, height: width))
     }
 
-    func flipSelectedImage(horizontal: Bool) {
-        guard let current = selectedImage,
-              let index = imageItems.firstIndex(where: { $0.id == current.id }) else {
-            return
-        }
-
-        // Save to undo stack before flipping
-        let undoItem = (
-            id: current.id,
-            image: current.image,
-            type: current.type,
-            data: current.originalData,
-            paletteInfo: current.paletteInfo,
-            modifiedPalette: current.modifiedPalette,
-            hasImageModification: current.hasImageModification
-        )
-        undoStack.append(undoItem)
-
-        // Limit undo stack to 10 items
-        if undoStack.count > 10 {
-            undoStack.removeFirst()
-        }
-
-        appState.setCanUndo(true)
-
-        // Flip the image
-        guard let flippedImage = flipImage(current.image, horizontal: horizontal) else {
-            return
-        }
-
-        // Update the image item - preserve originalData for Original toggle
-        var updatedItem = ImageItem(
-            id: current.id,
-            url: current.url,
-            image: flippedImage,
-            type: current.type,
-            originalData: current.originalData,  // Preserve original data
-            paletteInfo: current.paletteInfo,
-            hasImageModification: true  // Mark as modified
-        )
-        updatedItem.modifiedPalette = current.modifiedPalette
-        imageItems[index] = updatedItem
-        selectedImage = updatedItem
-
-        statusMessage = horizontal ? "Flipped horizontally" : "Flipped vertically"
-    }
-
     private func flipImage(_ image: NSImage, horizontal: Bool) -> NSImage? {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return nil
@@ -1750,16 +1490,7 @@ struct ContentView: View {
         let height = cgImage.height
 
         // Create a new bitmap context
-        guard let colorSpace = cgImage.colorSpace,
-              let context = CGContext(
-                data: nil,
-                width: width,
-                height: height,
-                bitsPerComponent: cgImage.bitsPerComponent,
-                bytesPerRow: 0,
-                space: colorSpace,
-                bitmapInfo: cgImage.bitmapInfo.rawValue
-              ) else {
+        guard let context = ImageHelpers.makeBitmapContext(matching: cgImage, width: width, height: height) else {
             return nil
         }
 
@@ -1809,6 +1540,8 @@ struct ContentView: View {
 
         guard !itemsToTransform.isEmpty else { return }
 
+        var undoStep: [UndoEntry] = []
+
         for item in itemsToTransform {
             guard let index = imageItems.firstIndex(where: { $0.id == item.id }) else { continue }
 
@@ -1822,8 +1555,6 @@ struct ContentView: View {
                 modifiedPalette: item.modifiedPalette,
                 hasImageModification: item.hasImageModification
             )
-            undoStack.append(undoItem)
-
             // Apply the transform
             var transformedImage: NSImage?
             switch transform {
@@ -1840,6 +1571,7 @@ struct ContentView: View {
             }
 
             guard let newImage = transformedImage else { continue }
+            undoStep.append(undoItem)  // only images that actually changed
 
             // Update the image item - preserve originalData so Original toggle works
             var updatedItem = ImageItem(
@@ -1852,6 +1584,7 @@ struct ContentView: View {
                 hasImageModification: true  // Mark as modified
             )
             updatedItem.modifiedPalette = item.modifiedPalette
+            updatedItem.decodeFilename = item.decodeFilename
             imageItems[index] = updatedItem
 
             // Update selected image if it was the one transformed
@@ -1860,12 +1593,11 @@ struct ContentView: View {
             }
         }
 
-        // Limit undo stack to 10 items
-        while undoStack.count > 10 {
-            undoStack.removeFirst()
+        guard !undoStep.isEmpty else {
+            statusMessage = "This image could not be transformed"
+            return
         }
-
-        appState.setCanUndo(true)
+        pushUndoStep(undoStep)
 
         // Status message
         let transformName: String
@@ -1877,8 +1609,8 @@ struct ContentView: View {
         case .invert: transformName = "Inverted colors"
         }
 
-        if itemsToTransform.count > 1 {
-            statusMessage = "\(transformName) \(itemsToTransform.count) images (⌘Z to undo)"
+        if undoStep.count > 1 {
+            statusMessage = "\(transformName) \(undoStep.count) images (⌘Z to undo)"
         } else {
             statusMessage = "\(transformName) (⌘Z to undo)"
         }
@@ -1952,22 +1684,21 @@ struct ContentView: View {
             return
         }
 
-        // Push current state to undo stack
-        undoStack.append((
-            id: current.id,
-            image: current.image,
-            type: current.type,
-            data: current.originalData,
-            paletteInfo: current.paletteInfo,
-            modifiedPalette: current.modifiedPalette,
-            hasImageModification: current.hasImageModification
-        ))
-
         // Apply adjustments
         if let adjustedImage = current.image.adjustedImage(
             brightness: currentAdjustments.brightness,
             contrast: currentAdjustments.contrast
         ) {
+            pushUndoStep([(
+                id: current.id,
+                image: current.image,
+                type: current.type,
+                data: current.originalData,
+                paletteInfo: current.paletteInfo,
+                modifiedPalette: current.modifiedPalette,
+                hasImageModification: current.hasImageModification
+            )])
+
             // Update the image item - preserve originalData so Original toggle works
             if let index = imageItems.firstIndex(where: { $0.id == current.id }) {
                 var newItem = ImageItem(
@@ -1980,6 +1711,7 @@ struct ContentView: View {
                     hasImageModification: true  // Mark as modified
                 )
                 newItem.modifiedPalette = current.modifiedPalette
+                newItem.decodeFilename = current.decodeFilename
                 imageItems[index] = newItem
                 selectedImage = imageItems[index]
             }

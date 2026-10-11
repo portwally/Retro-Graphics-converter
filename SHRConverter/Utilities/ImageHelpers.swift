@@ -64,6 +64,26 @@ class ImageHelpers {
         )
     }
     
+    // MARK: - Bitmap Contexts
+
+    /// A drawing context in the image's own pixel format, or plain 8-bit RGBA when Core Graphics
+    /// cannot draw into that format (indexed, 16-bit or grayscale-with-alpha sources from PNG/GIF).
+    static func makeBitmapContext(matching image: CGImage, width: Int, height: Int) -> CGContext? {
+        guard width > 0, height > 0 else { return nil }
+
+        if let colorSpace = image.colorSpace,
+           let context = CGContext(data: nil, width: width, height: height,
+                                   bitsPerComponent: image.bitsPerComponent, bytesPerRow: 0,
+                                   space: colorSpace, bitmapInfo: image.bitmapInfo.rawValue) {
+            return context
+        }
+
+        return CGContext(data: nil, width: width, height: height,
+                         bitsPerComponent: 8, bytesPerRow: 0,
+                         space: CGColorSpaceCreateDeviceRGB(),
+                         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    }
+
     // MARK: - Palette Reading (Apple IIgs format)
     
     static func readPalette(from data: Data, offset: Int, reverseOrder: Bool) -> [(r: UInt8, g: UInt8, b: UInt8)] {

@@ -117,7 +117,8 @@ struct SHRConverterApp: App {
     @StateObject private var appState = AppState()
 
     var body: some Scene {
-        WindowGroup {
+        // A single window: undo, recent folders and help state live in one shared AppState
+        Window("Retro Graphics Converter", id: "main") {
             ContentView()
                 .frame(minWidth: 900, minHeight: 600)
                 .environmentObject(appState)
@@ -128,7 +129,7 @@ struct SHRConverterApp: App {
         }
         .commands {
             CommandGroup(replacing: .undoRedo) {
-                Button("Undo Crop") {
+                Button("Undo") {
                     appState.triggerUndo()
                 }
                 .keyboardShortcut("z", modifiers: .command)

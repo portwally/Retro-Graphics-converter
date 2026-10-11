@@ -51,11 +51,33 @@ enum AppleIIImageType: Equatable, Sendable {
         return true
     }
 
+    /// Platform group used by the browser's filter menu
+    var platformCategory: String {
+        switch self {
+        case .SHR, .DHGR, .HGR: return "Apple II"
+        case .IFF: return "Amiga"
+        case .DEGAS, .NEOchrome: return "Atari ST"
+        case .C64: return "C64"
+        case .Plus4: return "Plus/4"
+        case .VIC20: return "VIC-20"
+        case .ZXSpectrum: return "ZX Spectrum"
+        case .AmstradCPC: return "CPC"
+        case .PCX, .BMP: return "PC"
+        case .MacPaint: return "Mac"
+        case .MSX: return "MSX"
+        case .BBCMicro: return "BBC Micro"
+        case .TRS80: return "TRS-80"
+        case .Atari8bit: return "Atari 8-bit"
+        case .ModernImage: return "Modern"
+        case .Unknown: return "Unknown"
+        }
+    }
+
     var resolution: (width: Int, height: Int) {
         switch self {
         case .SHR(_, let width, let height): 
             return (width ?? 320, height ?? 200)
-        case .DHGR: return (560, 192)
+        case .DHGR: return (280, 192)  // decoded at 280 wide (560 native, halved)
         case .HGR: return (280, 192)
         case .IFF(let width, let height, _): return (width, height)
         case .DEGAS(let res, _):
@@ -111,7 +133,7 @@ enum AppleIIImageType: Equatable, Sendable {
             }
         case .TRS80(_, let resolution):
             if resolution.contains("128x48") { return (128, 48) }
-            else if resolution.contains("256x192") { return (256, 192) }
+            else if resolution.contains("256x192") || resolution.contains("128x192") || resolution.contains("128x96") { return (256, 192) }  // PMODE images are rendered 256x192
             else if resolution.contains("320x200") { return (320, 200) }  // CoCo
             else if resolution.contains("640x200") { return (640, 200) }  // CoCo 3
             else { return (128, 48) }
@@ -183,7 +205,7 @@ enum AppleIIImageType: Equatable, Sendable {
         case .DEGAS(_, let colors): return "\(colors) colors"
         case .NEOchrome(let colors): return "\(colors) colors"
         case .C64(let format):
-            if format.contains("FLI") || format.contains("Multicolor") {
+            if format.contains("FLI") || format.contains("Multicolor") || format.contains("Koala") {
                 return "4-bit (16 colors)"
             } else {
                 return "1-bit (2 colors)"
@@ -197,7 +219,10 @@ enum AppleIIImageType: Equatable, Sendable {
         case .MacPaint: return "1-bit (2 colors)"
         case .MSX(_, let colors): return "\(colors) colors"
         case .BBCMicro(_, let colors): return "\(colors) colors"
-        case .TRS80: return "1-bit (2 colors)"
+        case .TRS80(_, let resolution):
+            if resolution.contains("16 colors") { return "4-bit (16 colors)" }
+            if resolution.contains("4 colors") || resolution.contains("Artifact") { return "2-bit (4 colors)" }
+            return "1-bit (2 colors)"
         case .Atari8bit(_, let colors): return "\(colors) colors"
         case .ModernImage(let format, _, _):
             switch format.uppercased() {

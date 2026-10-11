@@ -205,30 +205,51 @@ Still open in this section:
 
 ## 5. UI and export
 
-- [ ] **[code] "Atari ST" filter never matches.** `ContentView.swift:85` looks for `"DEGAS"`, the
+**All fixed on 2026-10-11 (branch `audit-fixes`).** The app builds without warnings and launches
+with a single window. Checked by test: filter categories, colour-depth labels, and upscaling of
+indexed / 16-bit images. **Not exercised by hand:** everything that needs clicking through the UI
+(batch export naming, the disk-browser queue, grouped undo, selection pruning on filter change).
+How each was fixed:
+- Filters use a `platformCategory` on the image type instead of matching display strings; six
+  platforms were added to the menu.
+- `saveImage` takes the scale as a parameter and reads no view state; the background write to
+  `selectedExportFormat` is gone.
+- Batch export never overwrites: a name already used in this export or present in the folder
+  gets " 2", " 3" ... appended. (Screensaver export still overwrites by design - same slot, same name.)
+- Scale / rotate / flip fall back to plain 8-bit RGBA when the image's own pixel format cannot be drawn into.
+- Several disk images loaded together open one after another (up to 20 queued; more are
+  skipped with a status message).
+- Items imported from a disk catalog remember the type-tagged name they were decoded with.
+- Undo: a batch transform is one step; failed transforms add nothing; the menu item is "Undo".
+- Changing the filter drops hidden images from the selection.
+- The app is now a single-window app (`Window` instead of `WindowGroup`), so there is no
+  File > New Window any more.
+- Missing original data gives one alert per export, not one per image.
+
+- [x] **[code] "Atari ST" filter never matches.** `ContentView.swift:85` looks for `"DEGAS"`, the
   display name is `"Degas (…)"`; NEOchrome is not included either.
-- [ ] **[code] "Modern" filter misses `.jpg`, `.tif`, `.heif`** — the type name is the upper-cased
+- [x] **[code] "Modern" filter misses `.jpg`, `.tif`, `.heif`** — the type name is the upper-cased
   extension (`JPG`), the filter looks for `JPEG`/`TIFF`/`HEIC` (line 90).
-- [ ] **[code] No filter entries for MSX, BBC, TRS-80, Atari 8-bit, Plus/4, VIC-20.**
-- [ ] **[code] `@State` is written from a background thread** — `self.selectedExportFormat = format`
+- [x] **[code] No filter entries for MSX, BBC, TRS-80, Atari 8-bit, Plus/4, VIC-20.**
+- [x] **[code] `@State` is written from a background thread** — `self.selectedExportFormat = format`
   at `ContentView.swift:480`; it is also never restored, so a batch export silently changes the
   format used by later exports. `imageItems` is read off the main thread at lines 1144 and 1383.
-- [ ] **[code] Exports overwrite without warning.** Two images with the same base name (common for
+- [x] **[code] Exports overwrite without warning.** Two images with the same base name (common for
   disk files) overwrite each other, as do existing files in the target folder.
-- [ ] **[code] Upscale, rotate, flip and movie scaling silently do nothing for some images.**
+- [x] **[code] Upscale, rotate, flip and movie scaling silently do nothing for some images.**
   `scaleCGImage`/`rotateImage`/`flipImage` reuse the source `bitmapInfo`; indexed, grayscale or
   16-bit PNG/GIF sources make `CGContext` creation fail. Export then writes 1x, and movies drop the image.
-- [ ] **[code] Only the last disk image opens when several are loaded at once** — each one
+- [x] **[code] Only the last disk image opens when several are loaded at once** — each one
   overwrites `currentCatalog` (lines 1230, 1298).
-- [ ] **[code] "Original" toggle / palette reset can re-decode differently for catalog items** —
+- [x] **[code] "Original" toggle / palette reset can re-decode differently for catalog items** —
   the fallback at lines 59 and 435 uses the plain filename, not the `#c0xxxx` type-tagged name used on import.
-- [ ] **[code] Undo issues:** failed transforms still push an undo entry (line 1798); a batch
+- [x] **[code] Undo issues:** failed transforms still push an undo entry (line 1798); a batch
   transform of more than 10 images can only be partly undone; `clearAllImages` leaves the undo stack
   and menu state; the menu item always says "Undo Crop".
-- [ ] **[code] Selection survives filter changes**, so Delete/Export can act on images hidden by the filter.
-- [ ] **[code] Multiple windows share one `AppState`** — ⌘Z and "Open Recent" fire in every window.
-- [ ] **[code] One modal alert per image** when batch-exporting "Original" without original data (line 1399).
-- [ ] **[code] Cosmetic type info:** Koala reports "1-bit (2 colors)", every TRS-80/CoCo type
+- [x] **[code] Selection survives filter changes**, so Delete/Export can act on images hidden by the filter.
+- [x] **[code] Multiple windows share one `AppState`** — ⌘Z and "Open Recent" fire in every window.
+- [x] **[code] One modal alert per image** when batch-exporting "Original" without original data (line 1399).
+- [x] **[code] Cosmetic type info:** Koala reports "1-bit (2 colors)", every TRS-80/CoCo type
   reports "1-bit (2 colors)", DHGR reports 560x192 for a 280x192 image (`ImageTypes.swift`).
 
 ## 5b. Palette editing and the Original/Modified toggle
@@ -279,7 +300,7 @@ file, over 12,000 generated inputs.
 ## 6b. Dead code (compiled, never called)
 
 - [ ] `ImageCropView.swift` (298 lines, at the repo root outside `SHRConverter/`) — only referenced by its own `#Preview`.
-- [ ] `ContentView`: `exportSelectedImages`, `exportSingleImage`, `exportAllImages`, `showBatchRename`,
+- [x] (removed 2026-10-11) `ContentView`: `exportSelectedImages`, `exportSingleImage`, `exportAllImages`, `showBatchRename`,
   `batchExportWithRename`, `rotateSelectedImage`, `flipSelectedImage`, `toggleCropMode`,
   `clearAllImages`, `blendImages`, `createPixelBuffer(from:size:)`, and the `filesToConvert` state.
 - [ ] Decoders: `TRS80Decoder.decodePMode4Artifact`, `PackedSHRDecoder.decompressPackBytes` /
