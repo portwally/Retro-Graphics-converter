@@ -361,9 +361,8 @@ class SHRDecoder {
         case 32767...32768:
             // Standard SHR: 32KB file (some files are 1 byte short)
             return (AppleIIDecoder.decodeSHR(data: data, is3200Color: false), .SHR(mode: "Standard", width: 320, height: 200))
-        case 38400...38656:
-            // 3200 color SHR ("Brooks"): 32000 pixels + 200 palettes = 38400 bytes,
-            // allowing for up to half a block of trailing padding
+        case 38400:
+            // 3200 color SHR ("Brooks"): 32000 pixels + 200 palettes, exactly 38400 bytes
             return (AppleIIDecoder.decodeSHR(data: data, is3200Color: true), .SHR(mode: "3200", width: 320, height: 200))
         case 8184...8200:
             return (AppleIIDecoder.decodeHGR(data: data), .HGR)

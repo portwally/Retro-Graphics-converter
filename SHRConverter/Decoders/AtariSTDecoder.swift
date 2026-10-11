@@ -24,6 +24,14 @@ class AtariSTDecoder {
         return (nil, .Unknown)
     }
 
+    /// High resolution is black and white on the ST whatever the palette says; bit 0 of the
+    /// first palette word only decides which of the two is the background.
+    static func monochromeColors(firstPaletteWord: UInt16) -> [(r: UInt8, g: UInt8, b: UInt8)] {
+        let white: (r: UInt8, g: UInt8, b: UInt8) = (255, 255, 255)
+        let black: (r: UInt8, g: UInt8, b: UInt8) = (0, 0, 0)
+        return (firstPaletteWord & 1) != 0 ? [white, black] : [black, white]
+    }
+
     // MARK: - Degas Format
 
     static func decodeDegas(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
@@ -81,6 +89,12 @@ class AtariSTDecoder {
             palette.append((r, g, b))
         }
         
+        if numPlanes == 1 {
+            let mono = monochromeColors(firstPaletteWord: ImageHelpers.readBigEndianUInt16(data: data, offset: 2))
+            palette[0] = mono[0]
+            palette[1] = mono[1]
+        }
+
         let imageDataOffset = 34
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
         
@@ -194,6 +208,12 @@ class AtariSTDecoder {
             let b = UInt8((Int(b3) * 255) / 7)
 
             palette.append((r, g, b))
+        }
+
+        if numPlanes == 1 {
+            let mono = monochromeColors(firstPaletteWord: ImageHelpers.readBigEndianUInt16(data: data, offset: 4))
+            palette[0] = mono[0]
+            palette[1] = mono[1]
         }
 
         // Image data starts at offset 128

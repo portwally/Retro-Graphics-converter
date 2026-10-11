@@ -775,6 +775,11 @@ struct PaletteExtractor {
             )
         }
 
+        // Extra-Half-Brite: only the first 32 colors are real; 32-63 are derived from them
+        if isEHB && numPlanes == 6 && colors.count > 32 {
+            colors = Array(colors.prefix(32))
+        }
+
         // Determine platform name based on mode
         let platformName: String
         if isEHB {
@@ -865,6 +870,12 @@ struct PaletteExtractor {
             ))
         }
 
+        if numColors == 2 {
+            // High resolution: black and white (see AtariSTDecoder.monochromeColors)
+            let mono = AtariSTDecoder.monochromeColors(firstPaletteWord: ImageHelpers.readBigEndianUInt16(data: data, offset: 2))
+            colors = mono.map { PaletteColor(r: $0.r, g: $0.g, b: $0.b) }
+        }
+
         return PaletteInfo(
             singlePalette: colors,
             platformName: "Atari ST"
@@ -902,6 +913,12 @@ struct PaletteExtractor {
                 g: UInt8((Int(g3) * 255) / 7),
                 b: UInt8((Int(b3) * 255) / 7)
             ))
+        }
+
+        if numColors == 2 {
+            // High resolution: black and white (see AtariSTDecoder.monochromeColors)
+            let mono = AtariSTDecoder.monochromeColors(firstPaletteWord: ImageHelpers.readBigEndianUInt16(data: data, offset: 4))
+            colors = mono.map { PaletteColor(r: $0.r, g: $0.g, b: $0.b) }
         }
 
         return PaletteInfo(
@@ -1173,7 +1190,7 @@ struct PaletteExtractor {
         if mode == 8 {
             var colors: [PaletteColor] = []
             for i in 0..<256 {
-                colors.append(PaletteColor(r: UInt8(((i >> 5) & 0x07) * 255 / 7), g: UInt8(((i >> 2) & 0x07) * 255 / 7), b: UInt8((i & 0x03) * 255 / 3)))
+                colors.append(PaletteColor(r: UInt8(((i >> 2) & 0x07) * 255 / 7), g: UInt8(((i >> 5) & 0x07) * 255 / 7), b: UInt8((i & 0x03) * 255 / 3)))
             }
             return PaletteInfo(fixedPalette: colors, platformName: "MSX2 Screen 8")
         }

@@ -107,6 +107,12 @@ class AmigaIFFDecoder {
             isHAM = false
         }
 
+        // Six planes that are not HAM and have at most 32 real colors can only be Extra-Half-Brite,
+        // even when the file has no CAMG chunk to say so
+        if numPlanes == 6 && !isHAM && !palette.isEmpty && palette.count <= 32 {
+            isEHB = true
+        }
+
         if let override = paletteOverride, !isHAM, !is24Bit {
             palette = override
         }
@@ -328,8 +334,10 @@ class AmigaIFFDecoder {
                 let gray = UInt8((i * 255) / max(numColors - 1, 1))
                 finalPalette.append((gray, gray, gray))
             }
-        } else if isEHB && numPlanes == 6 && finalPalette.count <= 32 {
-            // Extra-Half-Brite: colors 32-63 are colors 0-31 at half brightness
+        } else if isEHB && numPlanes == 6 {
+            // Extra-Half-Brite: colors 32-63 are always colors 0-31 at half brightness.
+            // Many files store 64 CMAP entries anyway; the upper 32 are leftovers the Amiga ignores.
+            finalPalette = Array(finalPalette.prefix(32))
             while finalPalette.count < 32 {
                 finalPalette.append((0, 0, 0))
             }

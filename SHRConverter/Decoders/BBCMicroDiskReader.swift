@@ -51,35 +51,11 @@ class BBCMicroDiskReader {
         // Must have at least the catalog sectors (0 and 1)
         guard data.count >= 512 else { return false }
 
-        // BBC Micro DFS disks come in standard sizes (with some tolerance)
-        // 100KB (40 track SS), 200KB (40 track DS or 80 track SS), 400KB (80 track DS)
-        let validSizeRanges: [(min: Int, max: Int)] = [
-            (99 * 1024, 105 * 1024),    // ~100KB: 40 track SS
-            (195 * 1024, 210 * 1024),   // ~200KB: 40 track DS or 80 track SS
-            (395 * 1024, 410 * 1024),   // ~400KB: 80 track DS
-        ]
-
-        let sizeIsValid = validSizeRanges.contains { data.count >= $0.min && data.count <= $0.max }
-        guard sizeIsValid else { return false }
-
-        // Validate DFS catalog structure in sector 1
-        // Byte 5 should contain number of entries × 8 (max 31 entries = 248)
-        let numEntriesRaw = data[256 + 5]
-        let numEntries = numEntriesRaw / 8
-        guard numEntries <= 31 else { return false }
-
-        // Sector count check - sector info at bytes 6-7 of sector 1
-        // Byte 6: bits 0-1 = sector count high, bits 4-5 = boot option
-        let sectorsHigh = data[256 + 6] & 0x03
-        let sectorsLow = data[256 + 7]
-        let totalSectors = (Int(sectorsHigh) << 8) | Int(sectorsLow)
-
-        // Total sectors should be reasonable for disk size
-        // Note: DFS catalog only describes one side, so for DSD disks the sector count
-        // may be half the physical capacity. Also some tools write incorrect sector counts.
-        let expectedSectors = data.count / 256
-        // Be lenient - some disks report much fewer sectors than physical capacity
-        guard totalSectors > 0 && totalSectors <= expectedSectors + 10 else { return false }
+        // A full disk is 100KB, 200KB or 400KB, but .ssd/.dsd files are very often cut off
+        // after the last used sector, so smaller files are accepted and the catalog itself
+        // has to prove that this is a DFS disk.
+        guard data.count <= 410 * 1024 else { return false }
+        guard isPlausibleCatalog(data: data, at: 0) else { return false }
 
         // Check disk title - should be printable ASCII, spaces, nulls, or high-bit set chars
         // Some old disks have non-standard characters, so be lenient
@@ -96,6 +72,63 @@ class BBCMicroDiskReader {
         return true
     }
 
+    /// Checks the two catalog sectors that start at `offset`: entry count, the disk size the
+    /// catalog declares, and that every file lies inside that disk with a printable name.
+    private func isPlausibleCatalog(data: Data, at offset: Int, strict: Bool = false) -> Bool {
+        guard offset >= 0, offset + 512 <= data.count else { return false }
+
+        let numEntriesRaw = Int(data[offset + 256 + 5])
+        guard numEntriesRaw % 8 == 0, numEntriesRaw / 8 <= 31 else { return false }
+
+        // Byte 6: bits 0-1 = sector count high bits, bits 4-5 = boot option
+        let totalSectors = (Int(data[offset + 256 + 6] & 0x03) << 8) | Int(data[offset + 256 + 7])
+        // Real disks declare 400 or 800 sectors; some tools write other counts, so that is only
+        // insisted on where a wrong guess would be costly (finding the second side of a disk)
+        // (an empty catalog proves nothing by itself, so it gets the strict check too)
+        if strict || numEntriesRaw == 0 {
+            guard totalSectors == 400 || totalSectors == 800 else { return false }
+        } else {
+            guard totalSectors > 0 && totalSectors <= 1600 else { return false }
+        }
+        let diskBytes = max(totalSectors * 256, data.count - offset)
+
+        for i in 0..<(numEntriesRaw / 8) {
+            let nameOffset = offset + 8 + i * 8
+            let infoOffset = offset + 256 + 8 + i * 8
+            for j in 0..<8 {
+                let char = data[nameOffset + j] & 0x7F
+                guard char >= 0x20 && char < 0x7F else { return false }
+            }
+            let extra = data[infoOffset + 6]
+            let length = Int(data[infoOffset + 4]) | (Int(data[infoOffset + 5]) << 8) | (Int((extra >> 4) & 0x03) << 16)
+            let startSector = Int(data[infoOffset + 7]) | (Int(extra & 0x03) << 8)
+            guard startSector >= 2, startSector * 256 + length <= diskBytes else { return false }
+        }
+        return true
+    }
+
+    /// Splits an image into its sides. A double-sided image stores track 0 of side 0, then
+    /// track 0 of side 1, then track 1 of side 0 and so on; each side is its own DFS disk with
+    /// its own catalog. An image is treated as double-sided when the place where side 1 would
+    /// start holds a second valid catalog (files named .dsd that are simply one long side exist too).
+    private func splitSides(data: Data) -> [Data] {
+        let trackSize = 10 * 256
+        guard isPlausibleCatalog(data: data, at: trackSize, strict: true) else { return [data] }
+
+        var sides = [Data(), Data()]
+        var offset = 0
+        var side = 0
+        while offset < data.count {
+            let end = min(offset + trackSize, data.count)
+            sides[side].append(data.subdata(in: offset..<end))
+            // keep both sides aligned even when the last track is cut short
+            if end - offset < trackSize { sides[side].append(Data(count: trackSize - (end - offset))) }
+            offset = end
+            side = 1 - side
+        }
+        return sides
+    }
+
     // MARK: - Reading
 
     /// Read all files from the BBC Micro disk image
@@ -105,39 +138,38 @@ class BBCMicroDiskReader {
     func readDisk(data: Data, diskFilename: String? = nil) -> [DiskCatalogEntry]? {
         guard data.count >= 512 else { return nil }
 
-        let geometry = detectGeometry(data: data)
-
         // Detect mode hint from disk filename (e.g., "bbc_double_mode0.dsd" -> mode 0)
         let modeHint = detectModeHint(from: diskFilename)
 
-        // Read catalog
-        let entries = readCatalog(data: data)
-        guard !entries.isEmpty || entries.count == 0 else { return nil }  // Empty disk is valid
-
         var catalogEntries: [DiskCatalogEntry] = []
 
-        for entry in entries {
-            guard entry.isValid else { continue }
+        for (sideIndex, sideData) in splitSides(data: data).enumerated() {
+            let geometry = detectGeometry(data: sideData)
 
-            if let fileData = extractFile(data: data, entry: entry, geometry: geometry) {
-                let fileTypeStr = detectFileType(entry: entry, data: fileData)
-                let (isImage, imageType) = detectImageType(entry: entry, data: fileData, modeHint: modeHint)
+            for entry in readCatalog(data: sideData) {
+                guard entry.isValid else { continue }
 
-                let catalogEntry = DiskCatalogEntry(
-                    name: entry.displayName,
-                    fileType: 0,
-                    fileTypeString: fileTypeStr,
-                    size: Int(entry.length),
-                    blocks: nil,
-                    loadAddress: Int(entry.loadAddress),
-                    length: Int(entry.length),
-                    data: fileData,
-                    isImage: isImage,
-                    imageType: imageType,
-                    isDirectory: false,
-                    children: nil
-                )
-                catalogEntries.append(catalogEntry)
+                if let fileData = extractFile(data: sideData, entry: entry, geometry: geometry) {
+                    let fileTypeStr = detectFileType(entry: entry, data: fileData)
+                    let (isImage, imageType) = detectImageType(entry: entry, data: fileData, modeHint: modeHint)
+
+                    let catalogEntry = DiskCatalogEntry(
+                        // files on the second side are marked the way DFS addresses them (drive 2)
+                        name: (sideIndex == 0 ? "" : ":2.") + (entry.directory == "$" ? entry.displayName : "\(entry.directory).\(entry.displayName)"),
+                        fileType: 0,
+                        fileTypeString: fileTypeStr,
+                        size: Int(entry.length),
+                        blocks: nil,
+                        loadAddress: Int(entry.loadAddress),
+                        length: Int(entry.length),
+                        data: fileData,
+                        isImage: isImage,
+                        imageType: imageType,
+                        isDirectory: false,
+                        children: nil
+                    )
+                    catalogEntries.append(catalogEntry)
+                }
             }
         }
 
@@ -232,15 +264,15 @@ class BBCMicroDiskReader {
 
             // Extra bits byte
             let extraBits = data[s1Offset + 6]
-            // Bits 0-1: exec address bits 16-17
-            // Bits 2-3: length bits 16-17
-            // Bits 4-5: load address bits 16-17
-            // Bits 6-7: start sector bits 8-9
+            // Bits 0-1: start sector bits 8-9
+            // Bits 2-3: load address bits 16-17
+            // Bits 4-5: length bits 16-17
+            // Bits 6-7: exec address bits 16-17
 
-            let execAddrHigh = UInt32(extraBits & 0x03) << 16
-            let lengthHigh = UInt32((extraBits >> 2) & 0x03) << 16
-            let loadAddrHigh = UInt32((extraBits >> 4) & 0x03) << 16
-            let startSectorHigh = UInt16((extraBits >> 6) & 0x03) << 8
+            let startSectorHigh = UInt16(extraBits & 0x03) << 8
+            let loadAddrHigh = UInt32((extraBits >> 2) & 0x03) << 16
+            let lengthHigh = UInt32((extraBits >> 4) & 0x03) << 16
+            let execAddrHigh = UInt32((extraBits >> 6) & 0x03) << 16
 
             let loadAddress = UInt32(loadAddrLow) | loadAddrHigh
             let execAddress = UInt32(execAddrLow) | execAddrHigh
@@ -281,9 +313,11 @@ class BBCMicroDiskReader {
         let startOffset = Int(entry.startSector) * geometry.bytesPerSector
         let length = Int(entry.length)
 
-        guard startOffset >= 0 && startOffset + length <= data.count else { return nil }
+        // Images are often cut off after the last used sector; return what is there
+        guard startOffset >= 0 && startOffset < data.count else { return nil }
+        let endOffset = min(startOffset + length, data.count)
 
-        return Data(data[startOffset..<startOffset + length])
+        return Data(data[startOffset..<endOffset])
     }
 
     // MARK: - Mode Hint Detection

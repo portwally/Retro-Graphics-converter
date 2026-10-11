@@ -8,8 +8,11 @@ class TRDOSDiskReader {
     // MARK: - Constants
 
     private let sectorSize = 256
-    private let sectorsPerTrack = 16
-    private let sectorsPerTrackDS = 32  // Double-sided: 16 sectors per side × 2 sides
+    /// A .trd file is a plain run of logical tracks of 16 sectors each (a double-sided disk
+    /// simply alternates sides). Some tools number sectors 0-31 per cylinder instead; which of
+    /// the two a disk uses is detected from its directory.
+    private let standardSectorsPerTrack = 16
+    private let cylinderSectorsPerTrack = 32
     private let directoryTrack = 0
     private let directorySectors = 8  // Sectors 0-7 contain directory
     private let directoryEntrySize = 16
@@ -68,22 +71,14 @@ class TRDOSDiskReader {
 
     /// Check if data appears to be a TR-DOS disk image
     func canRead(data: Data) -> Bool {
-        // Common TR-DOS disk sizes
-        let validSizes = [
-            655360,   // 80 track DS (most common)
-            327680,   // 40 track DS or 80 track SS
-            163840,   // 40 track SS
-            819200,   // Extended 80 track DS
-            737280    // 80 track DS (alternative)
-        ]
-
-        // Check for reasonable size
-        guard validSizes.contains(data.count) || (data.count >= 163840 && data.count <= 860160) else {
+        // A full disk is 163,840 to 819,200 bytes, but images are often cut off after the last
+        // used track, so anything that holds the directory and the info sector is accepted.
+        guard data.count >= 9 * sectorSize, data.count <= 860160, data.count % sectorSize == 0 else {
             return false
         }
 
         // Read disk info sector (track 0, sector 8)
-        let infoOffset = getSectorOffset(track: 0, sector: 8)
+        let infoOffset = 8 * sectorSize  // track 0, sector 8 - the same in both layouts
         guard infoOffset + 256 <= data.count else { return false }
 
         // Check TR-DOS signature byte at offset 231 (0x10)
@@ -108,13 +103,14 @@ class TRDOSDiskReader {
         guard let entries = parseDirectory(data: data) else { return nil }
 
         var files: [(name: String, data: Data)] = []
+        let sectorsPerTrack = detectSectorsPerTrack(entries: entries)
 
         for entry in entries {
             guard !entry.isDeleted && !entry.isEndOfDirectory else { continue }
             guard entry.length > 0 else { continue }
 
             // Extract file data
-            if let fileData = extractFile(data: data, entry: entry) {
+            if let fileData = extractFile(data: data, entry: entry, sectorsPerTrack: sectorsPerTrack) {
                 files.append((name: entry.fullName, data: fileData))
             }
         }
@@ -124,18 +120,31 @@ class TRDOSDiskReader {
 
     // MARK: - Sector Access
 
+    /// TR-DOS stores files back to back, so in the right layout each file starts exactly where
+    /// the previous one ends. Count how often that holds for 16 and for 32 sectors per track.
+    private func detectSectorsPerTrack(entries: [DirectoryEntry]) -> Int {
+        // A start sector above 15 can only exist in the 32-sector numbering
+        if entries.contains(where: { $0.startSector >= UInt8(standardSectorsPerTrack) }) {
+            return cylinderSectorsPerTrack
+        }
+
+        var fits16 = 0, fits32 = 0
+        for (current, next) in zip(entries, entries.dropFirst()) {
+            let sectors = Int(current.sectorCount)
+            if Int(current.startTrack) * 16 + Int(current.startSector) + sectors == Int(next.startTrack) * 16 + Int(next.startSector) { fits16 += 1 }
+            if Int(current.startTrack) * 32 + Int(current.startSector) + sectors == Int(next.startTrack) * 32 + Int(next.startSector) { fits32 += 1 }
+        }
+        return fits32 > fits16 ? cylinderSectorsPerTrack : standardSectorsPerTrack
+    }
+
     /// Calculate byte offset for a given track and sector
-    /// For double-sided disks: sector 0-15 = side 0, sector 16-31 = side 1
-    /// Linear layout: track * 32 + sector (for DS disks)
-    private func getSectorOffset(track: Int, sector: Int) -> Int {
-        // Linear sector addressing for double-sided disks
-        let logicalSector = track * sectorsPerTrackDS + sector
-        return logicalSector * sectorSize
+    private func getSectorOffset(track: Int, sector: Int, sectorsPerTrack: Int) -> Int {
+        return (track * sectorsPerTrack + sector) * sectorSize
     }
 
     /// Read a sector from the disk image
-    private func readSector(data: Data, track: Int, sector: Int) -> Data? {
-        let offset = getSectorOffset(track: track, sector: sector)
+    private func readSector(data: Data, track: Int, sector: Int, sectorsPerTrack: Int) -> Data? {
+        let offset = getSectorOffset(track: track, sector: sector, sectorsPerTrack: sectorsPerTrack)
         guard offset >= 0 && offset + sectorSize <= data.count else { return nil }
         return data.subdata(in: offset..<(offset + sectorSize))
     }
@@ -148,7 +157,7 @@ class TRDOSDiskReader {
 
         // Directory is in track 0, sectors 0-7 (8 sectors total)
         for sectorNum in 0..<directorySectors {
-            guard let sectorData = readSector(data: data, track: 0, sector: sectorNum) else {
+            guard let sectorData = readSector(data: data, track: 0, sector: sectorNum, sectorsPerTrack: standardSectorsPerTrack) else {
                 continue
             }
 
@@ -217,7 +226,7 @@ class TRDOSDiskReader {
     // MARK: - File Extraction
 
     /// Extract file data following the sector chain
-    private func extractFile(data: Data, entry: DirectoryEntry) -> Data? {
+    private func extractFile(data: Data, entry: DirectoryEntry, sectorsPerTrack: Int) -> Data? {
         var fileData = Data()
         var currentTrack = Int(entry.startTrack)
         var currentSector = Int(entry.startSector)
@@ -226,7 +235,7 @@ class TRDOSDiskReader {
         let maxSectors = Int(entry.sectorCount)
 
         while bytesRemaining > 0 && sectorsRead < maxSectors {
-            guard let sectorData = readSector(data: data, track: currentTrack, sector: currentSector) else {
+            guard let sectorData = readSector(data: data, track: currentTrack, sector: currentSector, sectorsPerTrack: sectorsPerTrack) else {
                 break
             }
 
@@ -235,9 +244,9 @@ class TRDOSDiskReader {
             bytesRemaining -= bytesToRead
             sectorsRead += 1
 
-            // Move to next sector (double-sided: 32 sectors per track)
+            // Move to next sector
             currentSector += 1
-            if currentSector >= sectorsPerTrackDS {
+            if currentSector >= sectorsPerTrack {
                 currentSector = 0
                 currentTrack += 1
             }

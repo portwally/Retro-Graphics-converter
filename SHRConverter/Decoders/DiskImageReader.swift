@@ -569,6 +569,20 @@ extension DiskImageReader {
         return data.subdata(in: headerSize..<(headerSize + dataSize))
     }
 
+    /// Generic decode for a file found on a non-Apple disk. Formats that are recognised only by
+    /// their size (HGR, DHGR, SHR, CoCo ...) belong to other machines, so on this disk they are
+    /// almost certainly ordinary data of that size; only the disk's own platform and the formats
+    /// with a real signature (IFF, PCX, BMP, PNG/GIF/JPEG) are accepted.
+    static func decodeOnForeignDisk(data: Data, filename: String, platform: String) -> (image: CGImage?, type: AppleIIImageType) {
+        let result = SHRDecoder.decode(data: data, filename: filename)
+        guard result.image != nil else { return (nil, .Unknown) }
+        let category = result.type.platformCategory
+        if category == platform || category == "Amiga" || category == "PC" || category == "Modern" {
+            return result
+        }
+        return (nil, .Unknown)
+    }
+
     static func read2IMGCatalogFull(data: Data, filename: String) -> DiskCatalog? {
         guard data.count >= 64 else { return nil }
         
@@ -1086,7 +1100,7 @@ extension DiskImageReader {
 
             // Also try generic decode
             if result.image == nil {
-                result = SHRDecoder.decode(data: file.data, filename: file.name)
+                result = decodeOnForeignDisk(data: file.data, filename: file.name, platform: "ZX Spectrum")
             }
 
             let isImage = result.image != nil && result.type != .Unknown
@@ -1601,7 +1615,7 @@ extension DiskImageReader {
 
                 // Fall back to the general decoder (other platforms also use .SCR)
                 if !isImage {
-                    let result = SHRDecoder.decode(data: fileData, filename: filename)
+                    let result = decodeOnForeignDisk(data: fileData, filename: filename, platform: "CPC")
                     if result.type != .Unknown && result.image != nil {
                         isImage = true
                         imageType = result.type
@@ -1694,7 +1708,7 @@ extension DiskImageReader {
                 }
             } else {
                 // Try general decode for unknown extensions
-                let result = SHRDecoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                let result = decodeOnForeignDisk(data: diskEntry.data, filename: diskEntry.name, platform: "Atari ST")
                 if result.type != AppleIIImageType.Unknown && result.image != nil {
                     isImage = true
                     imageType = result.type
@@ -1768,7 +1782,7 @@ extension DiskImageReader {
                 }
             } else {
                 // Try general decode for unknown extensions
-                let result = SHRDecoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                let result = decodeOnForeignDisk(data: diskEntry.data, filename: diskEntry.name, platform: "MSX")
                 if result.type != AppleIIImageType.Unknown && result.image != nil {
                     isImage = true
                     imageType = result.type
@@ -1851,7 +1865,7 @@ extension DiskImageReader {
                 }
             } else {
                 // Try general decode for unknown extensions
-                let result = SHRDecoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                let result = decodeOnForeignDisk(data: diskEntry.data, filename: diskEntry.name, platform: "Atari 8-bit")
                 if result.type != AppleIIImageType.Unknown && result.image != nil {
                     isImage = true
                     imageType = result.type
@@ -1935,7 +1949,7 @@ extension DiskImageReader {
                     }
                 } else {
                     // Try general decode for unknown files
-                    let result = SHRDecoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                    let result = decodeOnForeignDisk(data: diskEntry.data, filename: diskEntry.name, platform: "BBC Micro")
                     if result.type != AppleIIImageType.Unknown && result.image != nil {
                         isImage = true
                         imageType = result.type
@@ -2019,7 +2033,7 @@ extension DiskImageReader {
                 }
             } else {
                 // Try general decode for unknown extensions
-                let result = SHRDecoder.decode(data: diskEntry.data, filename: diskEntry.name)
+                let result = decodeOnForeignDisk(data: diskEntry.data, filename: diskEntry.name, platform: "TRS-80")
                 if result.type != AppleIIImageType.Unknown && result.image != nil {
                     isImage = true
                     imageType = result.type

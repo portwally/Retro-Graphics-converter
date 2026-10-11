@@ -119,15 +119,15 @@ on this Mac). The four **[likely]** items are untouched — they need sample fil
   Extra-Half-Brite image (32-colour CMAP, 6 planes) — the EHB flag is parsed but the half-bright
   colours are never generated. Pad the palette instead, and build entries 32–63 for EHB.
 - [x] **[code] IFF images with a mask plane (masking == 1) are garbled** — the extra plane per row is not skipped.
-- [ ] **[likely] C64 Advanced Art Studio (10018 bytes) uses the Koala layout.**
+- [x] **[confirmed and fixed 2026-10-12, see 6e] C64 Advanced Art Studio (10018 bytes) uses the Koala layout.**
   `C64Decoder.decodeArtStudio` reads colour RAM at 9002 and background at 10002; the format has
   border/background at 9002/9003 and colour RAM at 9018. Needs a real `.ocp` file to confirm.
-- [ ] **[likely] TR-DOS file offsets are doubled.** `TRDOSDiskReader.swift:156` uses 32 sectors per
+- [x] **[confirmed and fixed 2026-10-12, see 6e] TR-DOS file offsets are doubled.** `TRDOSDiskReader.swift:156` uses 32 sectors per
   logical track; TR-DOS directory entries store a logical track with 16 sectors each. Needs a real `.trd`.
 - [ ] **[likely] CoCo RS-DOS granule mapping is off by one track past the directory.**
   `CoCoDiskReader.swift:322` maps granules 34+ to track `n/2`; genuine RS-DOS skips track 17
   (`n/2 + 1`). The current mapping only matches BitPast-made disks.
-- [ ] **[likely] BBC `.dsd` images are read as if linear.** `BBCMicroDiskReader.extractFile` ignores
+- [x] **[confirmed and fixed 2026-10-12, see 6e] BBC `.dsd` images are read as if linear.** `BBCMicroDiskReader.extractFile` ignores
   side interleaving and never reads side 2's catalog.
 - [x] **[code] BBC `getDiskInfo` swaps the boot-option and sector-count bit fields** (lines 536–538;
   `canRead` has them right). Values are currently unused.
@@ -395,6 +395,68 @@ below were clicked through.**
 - Not a bug after testing: I expected `PaletteColor(nsColor:)` to crash on wide-gamut colours and
   to drift by one on round trips. A test showed neither happens (macOS clamps on conversion). The
   clamp-and-round I added there is harmless hardening only.
+
+## 6d. Checks against real sample files found on this Mac (2026-10-11)
+
+Found `~/Downloads/Testbilder` and `~/Roms` (not covered by the earlier disk search).
+
+- [x] **Real Extra-Half-Brite IFF was drawn with wrong colours** (`ChristopherPRoy_NantucketNative.iff`):
+  the file stores 64 palette entries, and the decoder used the upper 32 as written instead of
+  deriving them from the lower 32. Fixed and checked by eye. **Uncommitted.**
+- [x] Real D81 (`Roms/c64/Sonic_the_Hedgehog_R5.d81`) reads correctly: 65 files, sensible names.
+- [x] Real Degas `.PI3`, `.PI1`, `.PI2`, MacPaint, ZX `.SCR`, Koala, APF, DHGR: decode as the right type.
+- [x] PCX and palettised BMP re-render: identical to the decoder on all 35 real files
+  (2 + 30 PCX, 3 BMP). The mismatches seen on generated files do not show up on real ones.
+- [ ] Still no real sample anywhere on this Mac for: `.trd`, `.ssd` / `.dsd`, a genuine CoCo RS-DOS
+  `.dsk`, `.d71`, `.atr`, `.st`, `.adf`, MSX disks and `.sc2`-`.sc8`, `.neo`, `.mic` / `.gr8`,
+  `.cm3`, and a 10018-byte C64 Advanced Art Studio picture. The three **[likely]** disk items and
+  the Art Studio layout in section 3 therefore remain unconfirmed.
+
+## 6e. Checks against downloaded public samples (2026-10-12)
+
+Downloaded (about 26 MB) into the session scratch folder, not into the repo: RECOIL's
+`examples.zip` (1,096 test pictures), three TR-DOS disks, three BBC disks, three Atari disks,
+two Amiga disks. Pictures were rendered to contact sheets and checked by eye.
+**All fixes below are uncommitted.**
+
+Settled:
+- [x] **TR-DOS file offsets were doubled - confirmed and fixed.** All three real disks use 16
+  sectors per logical track (the reader assumed 32). The layout is now detected from the
+  directory, so disks written with the 32-sector numbering still read. Four ZX screens extracted
+  from a real disk render as proper pictures. Truncated `.trd` images are accepted.
+- [x] **C64 Advanced Art Studio layout was wrong - confirmed and fixed** (`Navy Seals.ocp`:
+  corrupted before, clean after; colour RAM is at 9018, background at 9003).
+- [x] **BBC DFS:** images cut off after the last used sector were rejected (very common for
+  `.ssd`); the catalog bit fields for start sector / length / load / exec were assigned to the
+  wrong bits; files in other DFS directories lost their directory letter; double-sided `.dsd`
+  images are now split into their two sides. Checked on three real disks.
+- [x] Atari 8-bit (`.atr`, double density) and Amiga (`.adf`, OFS and FFS) read correctly: file
+  sizes match the names, subfolders and GIFs are found.
+
+New bugs the samples exposed (fixed):
+- [x] **MSX Screen 8 had red and green swapped** (the byte is GGGRRRBB).
+- [x] **Atari ST high-resolution pictures** (Degas `.PI3`, NEOchrome) used the palette colours;
+  the ST shows them in black and white.
+- [x] **MacPaint files with a MacBinary header** were decoded 128 bytes off.
+- [x] **CoCo pictures saved from Disk BASIC** (5-byte header and trailer, e.g. `.MAX`) were rejected.
+- [x] **MSX files whose first pixel byte is $FE** were mistaken for BSAVE files and rejected.
+- [x] **Extra-Half-Brite** is now also recognised without a CAMG chunk (6 planes, at most 32 colours).
+- [x] **Non-Apple disks listed foreign formats as images** (a 16,384-byte file on a Spectrum disk
+  shown as Apple DHGR). On those disks only the disk's own platform and formats with a real
+  signature are accepted now.
+- [x] SHR 3200 by size is now exactly 38,400 bytes (a 38,404-byte file of another format was shown as garbage).
+- Verified working on real files: MSX Screen 2, 5 and 7 (the new Screen 7 decoder), NEOchrome
+  low-res, Degas, MicroIllustrator, GR.8, GR.9, HAM6/HAM8, EHB, Koala, 3200 and 3201.
+
+Still open after this pass:
+- [ ] **CoCo RS-DOS granule mapping** - still no genuine RS-DOS disk to test. `.st`, `.d71` and
+  MSX disks also still have no real sample.
+- [ ] Not supported (seen in the samples, shown as "not decoded"): IFF PBM (`.lbm` from Deluxe
+  Paint on PC), tall 240-line MicroIllustrator files, true GR.7 (160x96), `.P41` / `.P11` CoCo
+  files, ZX 6144-byte screens without attributes, STE / larger NEOchrome variants.
+- [ ] MicroIllustrator colour order (standard files vs BitPast) not checked against a reference.
+- [ ] The RECOIL archive has ~550 formats; only the ones this app claims were looked at, and
+  "looks right" was judged by eye, not against a reference decoder.
 
 ## 7. Audit work still to do
 

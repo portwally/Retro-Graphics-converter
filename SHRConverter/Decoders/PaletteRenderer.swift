@@ -830,8 +830,9 @@ struct PaletteRenderer {
 
         let bitmapOffset = 2
         let screenRAMOffset = 8002
-        let colorRAMOffset = 9002
-        let backgroundOffset = 10002
+        // Koala: color RAM at 9002, background last. Advanced Art Studio: background at 9003, color RAM at 9018.
+        let colorRAMOffset = isArtStudio ? 9018 : 9002
+        let backgroundOffset = isArtStudio ? 9003 : 10002
 
         guard backgroundOffset < data.count else { return nil }
         let backgroundColor = Int(data[backgroundOffset] & 0x0F)

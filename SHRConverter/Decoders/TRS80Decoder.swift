@@ -716,6 +716,15 @@ class TRS80Decoder {
     // MARK: - Auto-detect TRS-80 format
 
     static func decode(data: Data, filename: String? = nil) -> (image: CGImage?, type: AppleIIImageType) {
+        // Files saved from Disk BASIC carry a 5-byte preamble (00, length, load address) and a
+        // 5-byte postamble; the picture is the block in between
+        if data.count >= 10 && data[0] == 0x00 {
+            let blockLength = (Int(data[1]) << 8) | Int(data[2])
+            if [1024, 3072, 6144, 32000].contains(blockLength) && data.count >= 5 + blockLength && data.count <= 5 + blockLength + 16 {
+                return decode(data: data.subdata(in: 5..<(5 + blockLength)), filename: filename)
+            }
+        }
+
         let dataSize = data.count
 
         // Try to determine format by file extension

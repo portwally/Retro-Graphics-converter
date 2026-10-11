@@ -93,7 +93,7 @@ class C64Decoder {
         return (cgImage, .C64(format: "Koala Painter"))
     }
     
-    // MARK: - Art Studio (.ART, .OCP) - 10018 bytes
+    // MARK: - Advanced Art Studio (.OCP) - 10018 bytes
     
     static func decodeArtStudio(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         guard data.count == 10018 else {
@@ -104,10 +104,13 @@ class C64Decoder {
         let height = 200
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
         
+        // Advanced Art Studio: load address (2), bitmap (8000), screen RAM (1000),
+        // border (1), background (1), 14 unused bytes, color RAM (1000).
+        // (Koala Painter, by contrast, has color RAM right after screen RAM and the background last.)
         let bitmapOffset = 2
         let screenRAMOffset = 8002
-        let colorRAMOffset = 9002
-        let backgroundOffset = 10002
+        let backgroundOffset = 9003
+        let colorRAMOffset = 9018
         
         let backgroundColor = data[backgroundOffset] & 0x0F
         
@@ -158,7 +161,7 @@ class C64Decoder {
             return (nil, .Unknown)
         }
         
-        return (cgImage, .C64(format: "C64 Multicolor (10018 bytes)"))
+        return (cgImage, .C64(format: "Advanced Art Studio Multicolor"))
     }
     
     // MARK: - Art Studio Hi-Res (.ART) - 9002 bytes

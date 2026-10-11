@@ -264,7 +264,7 @@ class MSXDecoder {
         var paletteFound = false
 
         // Check for BSAVE header
-        if data.count >= 7 && data[0] == 0xFE {
+        if data.count >= 7 + imageDataSize && data[0] == 0xFE {
             // BSAVE format - check multiple palette locations
             // Format variations:
             // - BSAVE header (7) + palette (32) + image (27136) = 27175
@@ -395,7 +395,7 @@ class MSXDecoder {
         let imageDataSize = 256 * 212  // 54272
         let vramPaletteOffset = 0xFA80
 
-        let imageOffset = (data.count >= 7 && data[0] == 0xFE) ? 7 : 0
+        let imageOffset = (data.count >= 7 + imageDataSize && data[0] == 0xFE) ? 7 : 0
         guard data.count >= imageOffset + imageDataSize else { return nil }
 
         var palette = msxPalette
@@ -489,8 +489,9 @@ class MSXDecoder {
 
         var offset = 0
 
-        // Check for BSAVE header
-        if data.count >= 7 && data[0] == 0xFE {
+        // BSAVE header - but a raw dump can also start with the byte 0xFE, so only skip
+        // seven bytes when the picture still fits behind them
+        if data.count >= 7 + 54272 && data[0] == 0xFE {
             offset = 7
         }
 
@@ -509,9 +510,9 @@ class MSXDecoder {
                 guard byteOffset < data.count else { continue }
 
                 let colorByte = data[byteOffset]
-                // MSX2 Screen 8: RRRGGGBB format (3 bits R, 3 bits G, 2 bits B)
-                let r = UInt8((Int((colorByte >> 5) & 0x07) * 255) / 7)
-                let g = UInt8((Int((colorByte >> 2) & 0x07) * 255) / 7)
+                // MSX2 Screen 8: GGGRRRBB (3 bits green, 3 bits red, 2 bits blue)
+                let g = UInt8((Int((colorByte >> 5) & 0x07) * 255) / 7)
+                let r = UInt8((Int((colorByte >> 2) & 0x07) * 255) / 7)
                 let b = UInt8((Int(colorByte & 0x03) * 255) / 3)
 
                 let bufferIdx = (y * width + x) * 4

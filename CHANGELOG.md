@@ -1,5 +1,95 @@
 # Changelog
 
+## Version 4.5 - 2026-10-11
+
+A stability and correctness release following a full code audit. The disk readers and decoders were
+checked against 3,368 real Apple II disk images, public sample files for the other platforms, and tens of thousands of generated test files.
+
+### Crash and Hang Fixes
+
+- **Atari ST Disks**: Fixed a divide-by-zero when a disk's boot sector reports zero sectors per track
+- **DreamGrafix**: Fixed a crash on malformed LZW data (two clear codes in a row)
+- **Amiga IFF**: Files with invalid bitplane counts no longer crash or try to allocate gigabytes of memory
+- **Corrupt Disks**: Subdirectories that point back at a parent folder (ProDOS, ADF, Atari ST, MSX) no longer cause endless recursion
+- **Drag & Drop**: Fixed a race when dropping several files at once that could crash or lose files
+- **Movie Export**: Export now stops with an error instead of hanging forever when the video writer fails
+- **VIC-20**: Fixed unsafe memory handling when creating the image
+
+### Disk Images
+
+- **Apple II Disks Misdetected as CoCo**: About one in nine Apple II disks (.dsk, .do, .po) opened as a "CoCo RS-DOS" disk full of garbage files. Apple II volumes are now checked before the formats that can only be recognized by heuristics
+- **DiskCopy 4.2**: Apple DiskCopy 4.2 images are now supported
+- **ZX Spectrum TR-DOS**: Files were read from the wrong place on standard .trd images (the reader assumed 32 sectors per track instead of 16). The track layout is now detected per disk; images cut off after the last used track are accepted
+- **BBC Micro DFS**: .ssd/.dsd images shorter than a full disk are now accepted (most are); double-sided .dsd images show the files of both sides; files in other DFS directories keep their directory letter; start sector and file length are read from the correct catalog bits
+- **Other Platforms' Disks**: On Atari, MSX, CPC, BBC, CoCo and Spectrum disks, files are no longer listed as Apple II or other foreign picture formats just because of their size
+- **Commodore D71 and D81**: 1571 and 1581 disk images are now read, as are 40-track D64 images (previously only standard D64 worked)
+- **ProDOS Subdirectories on DOS-Ordered Disks**: Folders on ProDOS volumes stored in DOS sector order (.dsk, .do) are now listed; they were skipped before
+- **DOS 3.3 Filenames**: Names containing spaces are no longer cut off at the first space ("GRID SCRUNCH" was shown as "GRID")
+- **DOS 3.3 Catalog**: The catalog is validated and read from the sector the disk's VTOC points to
+- **Type Column**: The catalog browser now shows the correct file type for every disk format. Previously the ProDOS type table was applied to all disks, so DOS 3.3 binaries appeared as "TXT", C64 programs as "PCD", and files on Atari, MSX, CPC, BBC, CoCo, Amiga and TR-DOS disks as "NON"
+- **Several Disks at Once**: When more than one disk image is opened together, their catalog browsers now open one after another instead of only the last one appearing
+- **Export Files**: Exporting raw files from a catalog keeps subfolders, no longer overwrites same-named files, picks sensible extensions per disk format, and reports failures instead of stopping silently
+
+### Format Detection
+
+- **Atari ST .PI3**: Degas high-resolution files were decoded as CoCo 3 pictures; now recognized correctly
+- **NEOchrome**: .NEO files were decoded as CoCo 3 pictures; now recognized by extension and by size
+- **.BIN and .PIC Files**: A file with one of these extensions that is not a TRS-80/CoCo picture is now passed on to the other decoders (an HGR picture named PIC.BIN used to be rejected)
+- **Files Without Extension**: A name without a dot is no longer treated as its own extension
+- **Atari 8-bit**: .PIC, .GR5 and .GR10 files with embedded palettes are now recognized
+- **Fewer False Positives**: Unknown files of 38,400 bytes or more are no longer shown as SHR 3200 pictures (music and data files on real disks were listed as images); PCX, Paintworks and extension-less MacPaint detection now check the file header
+- **IIgs Animations**: PaintWorks animation files ($C2) now show their first frame
+
+### Decoders
+
+- **BMP**: Top-down and 32-bit files now load correctly; compressed and 16-bit variants are decoded by the system
+- **Amiga IFF**: Color maps shorter than the image's color depth are kept instead of being replaced by grayscale; Extra-Half-Brite images get their half-bright colors (also when the file stores 64 palette entries, whose upper half the Amiga ignores); images with a mask plane are no longer garbled
+- **C64 Advanced Art Studio**: 10,018-byte pictures were decoded with the Koala layout and came out corrupted; fixed
+- **MSX Screen 8**: Red and green were swapped; fixed
+- **Atari ST High Resolution**: Degas .PI3 and NEOchrome high-res pictures are shown in black and white, as on the ST
+- **MacPaint**: Files with a MacBinary header are now decoded correctly
+- **MSX Screen 7**: Now decoded at its real 512x212 resolution
+- **MSX**: Raw screen dumps whose first byte happens to be $FE are no longer rejected
+- **TRS-80 CoCo**: Added PMODE 1 (128x96, 4 colors); pictures saved from Disk BASIC with a file header (e.g. CoCoMax .MAX) are now recognized; 640x200 CoCo 3 pictures imported from a disk are no longer shown as 320x200
+- **MacPaint**: PackBits no-op bytes are handled correctly
+
+### Palette Editing
+
+- **Apple Preferred Format**: Palette editing now works for APF pictures, the most common Apple IIgs format. Before, edits had no effect or drew garbage
+- **816/Paint and DreamGrafix**: 256-color pictures are unpacked before re-rendering
+- **More Platforms**: Palette edits now take effect for Amstrad CPC, Atari 8-bit, BBC Micro, Plus/4, VIC-20, TRS-80/CoCo, C64 hi-res, NEOchrome and MSX Screen 1/7. If a color is not used in the picture, the status bar says so
+- **Accurate Palettes**: ZX Spectrum colors no longer shift after an edit; Amstrad CPC shows the inks actually used by the file; MSX Screen 5/7 show the palette found in the file
+- **Scanline Tracking**: The palette shown while moving the mouse over a multi-palette SHR picture now follows all 200 lines (it only tracked the top 16)
+- **Palette Editor**: Reset and Paste are applied in one step (Reset on a 3200-color picture used to re-render the image 3,200 times); the editor opens on the palette of the line under the mouse
+
+### Keyboard Shortcuts
+
+- **File**: Cmd+O Import, Cmd+E Export
+- **Selection**: Cmd+A Select All Images, Delete (or Cmd+Delete) removes the selected images
+- **View**: Cmd +, Cmd -, Cmd 0 for Zoom In, Zoom Out and Fit to Window
+- **Navigation**: Arrow keys for previous/next image, Home and End for first/last
+- The same commands are available in the File, Image and View menus
+
+### User Interface
+
+- **Browser Filter**: The "Atari ST" filter and the "Modern" filter for .jpg files now work; added filters for Atari 8-bit, BBC Micro, MSX, Plus/4, VIC-20 and TRS-80/CoCo
+- **Export**: Images that share a name no longer overwrite each other or existing files (" 2", " 3" is appended); a single message is shown when original data is unavailable
+- **Upscale, Rotate, Flip**: Now work for indexed-color and 16-bit images (PNG/GIF sources)
+- **Undo**: A batch transform is one undo step; the menu item is now "Undo"
+- **Selection**: Changing the filter removes hidden images from the selection, so Delete and Export only act on visible images
+- **Adjustments**: The brightness/contrast preview is cleared when the popover is closed without applying
+- **Thumbnails**: Keep the picture's aspect ratio
+- **Movie Export Sheet**: Fits on small screens
+- **Single Window**: The app now uses one window, so Undo and Recent Folders no longer act on several windows at once
+- **Help**: Updated to match the app
+
+### Code Quality
+
+- Removed about 1,650 lines of unused code, including `ImageCropView.swift` and the legacy disk-reading path
+- Palette re-rendering for IFF, APF, MSX and MacPaint now uses the same code as decoding, so the two cannot drift apart
+
+---
+
 ## Version 4.3.1 - 2026-03-07
 
 ### Code Quality Improvements

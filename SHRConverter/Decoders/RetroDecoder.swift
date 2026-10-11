@@ -281,11 +281,14 @@ class RetroDecoder {
     static func decodeMacPaint(data: Data, colors: (paper: (r: UInt8, g: UInt8, b: UInt8), ink: (r: UInt8, g: UInt8, b: UInt8))? = nil) -> (image: CGImage?, type: AppleIIImageType) {
         let paper = colors?.paper ?? (r: 255, g: 255, b: 255)
         let ink = colors?.ink ?? (r: 0, g: 0, b: 0)
-        guard data.count >= 512 else { return (nil, .Unknown) }
+        // Files copied from a Mac often carry a 128-byte MacBinary header (file type "PNTG" at offset 65)
+        let macBinaryHeader = (data.count >= 128 + 512 && data[65] == 0x50 && data[66] == 0x4E && data[67] == 0x54 && data[68] == 0x47) ? 128 : 0
+        let headerSize = macBinaryHeader + 512
+        guard data.count >= headerSize else { return (nil, .Unknown) }
         let width = 576, height = 720, bytesPerRow = 72
         let expectedSize = bytesPerRow * height
-        
-        let compressed = Array(data[512...])
+
+        let compressed = Array(data[headerSize...])
         var decompressed: [UInt8] = []
         var offset = 0
         
