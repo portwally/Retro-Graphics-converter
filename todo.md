@@ -136,7 +136,35 @@ on this Mac). The four **[likely]** items are untouched — they need sample fil
 
 ## 4. Disk images
 
-- [ ] **[confirmed] 11% of real Apple II disks open as "CoCo RS-DOS" with garbage contents.**
+**Fixed on 2026-10-11 (commit on branch `audit-fixes`).** Results on the 3,368 real Apple II
+disk images, before -> after:
+- Shown as "CoCo RS-DOS": 373 -> 0. (345 now open as DOS 3.3 / ProDOS; the other 28 are disks
+  no reader understands and now say so instead of showing garbage.)
+- No catalog at all: 229 -> 201. The 51 DiskCopy 4.2 images and 5 others now open.
+- Files listed: 132,177 -> 141,669. Images found: 17,940 -> 18,312.
+- 166 subdirectories on DOS-ordered ProDOS disks are now listed (they were skipped).
+- About a third of DOS 3.3 filenames contain a space and were being cut short; now complete.
+- No crashes on 7,500 mutated disk images (DOS 3.3, both ProDOS orders, D64, DiskCopy 4.2).
+
+Things that changed which you may notice:
+- DOS 3.3 catalogs now start at the sector named in the VTOC instead of always sector 15. Six
+  disks list fewer files as a result (Newsroom clip-art disks 2 -> 0, Print Shop Companion
+  57 -> 43); these were entries real DOS 3.3 would not show.
+- DOS-ordered ProDOS disks now go through the normal ProDOS reader after reordering sectors.
+  Eleven disks list 1-8 fewer files (entries the normal reader skips, e.g. empty or forked
+  files); none lost an image. The older special-case reader is kept as a fallback and is still
+  preferred when it finds more pictures.
+- D71, D81 and 40-track D64 are implemented, but only tested with synthetic disks built by the
+  test harness (file bytes read back intact, including from side 2 of a D71) - no real images.
+- CoCo disks must now be at least 161,280 bytes (the smallest real RS-DOS size).
+
+Still open in this section:
+- 201 real images still return no catalog (mostly 140K `.dsk` files that are copy-protected or
+  use Pascal/CP/M/Apple III formats; not examined one by one).
+- `readCPCDSK` in the legacy `readDiskImage` path still does not trim by record count. That
+  path only runs when the catalog reader fails, which it does not for CPC disks.
+
+- [x] **[confirmed] 11% of real Apple II disks open as "CoCo RS-DOS" with garbage contents.**
   Of 3,368 Apple II disk images on this Mac, 373 (344 `.dsk`, 20 `.po`, 9 `.do`) were claimed by
   `CoCoDiskReader.canRead`, which runs before the Apple readers in `readDiskCatalog` and accepts
   any 140–380 KB file whose 68 bytes at offset 78592 are ≤ 0x8F. Calling the Apple readers directly
@@ -144,34 +172,34 @@ on this Mac). The four **[likely]** items are untouched — they need sample fil
   25 ProDOS). Examples: `Tanks.dsk`, `Kaboom/graphics.dsk`, `Foxxivision demo.dsk`.
   Fix: try 2IMG/D64/ProDOS/DOS 3.3 before CoCo, BBC and TR-DOS, and tighten the CoCo check
   (size must be a known RS-DOS size; directory entries must have printable names and types 0–3).
-- [ ] **[confirmed] 229 of 3,368 real images return no catalog at all**, and the user only sees
+- [ ] **[partly fixed] 229 of 3,368 real images return no catalog at all**, and the user only sees
   "Could not read disk image". Breakdown: 135 × 143360-byte `.dsk` (likely copy-protected, Pascal,
   CP/M or Apple III disks), 51 × DiskCopy 4.2 images saved as `.dsk` (838484 / 819284 bytes —
   84-byte header not handled), 8 × `.2mg` (non-ProDOS contents), 3 × 32 MB `.hdv`, and about 20
   truncated `.po` files (143352–143359 bytes). DiskCopy 4.2 support would recover the largest
   identifiable group.
-- [ ] **[confirmed] 19 real disks open as an empty "DOS 3.3" catalog** — see the
+- [x] **[confirmed] 19 real disks open as an empty "DOS 3.3" catalog** — see the
   `readDOS33CatalogFull` item below.
-- [ ] **[code] Subdirectories are skipped on DOS-ordered ProDOS disks** (`DiskImageReader.swift:3003`,
+- [x] **[code] Subdirectories are skipped on DOS-ordered ProDOS disks** (`DiskImageReader.swift:3003`,
   "Skip subdirectories for now"). Files inside folders on a `.dsk` ProDOS image never appear.
-- [ ] **[code] `convertDOSOrderToProDOSOrder` uses the wrong sector table** (line 2884). It only
+- [x] **[code] `convertDOSOrderToProDOSOrder` uses the wrong sector table** (line 2884). It only
   runs as a last fallback, so it currently never produces a valid disk. The table named
   `prodosToDOSSectorReversed` is the standard mapping; the one named "standard" is not.
-- [ ] **[code] `readDOS33CatalogFull` returns an empty catalog instead of nil**, which stops the
+- [x] **[code] `readDOS33CatalogFull` returns an empty catalog instead of nil**, which stops the
   ProDOS-in-DOS-order fallbacks from running.
-- [ ] **[code] DOS 3.3 filenames are cut at the first space** (lines 510, 1663) — `MY PICTURE` becomes `MY`.
-- [ ] **[code] Sparse blocks are skipped rather than zero-filled** in the DOS-order ProDOS extractors
+- [x] **[code] DOS 3.3 filenames are cut at the first space** (lines 510, 1663) — `MY PICTURE` becomes `MY`.
+- [x] **[code] Sparse blocks are skipped rather than zero-filled** in the DOS-order ProDOS extractors
   (lines 3228, 3336), shifting the rest of the file.
-- [ ] **[code] ProDOS BIN "header" detection is too loose** (line 1527) — an image starting
+- [x] **[code] ProDOS BIN "header" detection is too loose** (line 1527) — an image starting
   `00 20 01 00` loses its first 4 bytes. Require `length == count - 4`.
 - [ ] **[code] `readCPCDSK` (non-catalog path) does not trim files by record count**, so `.SCR` files
   with an AMSDOS header come out 17408 bytes and are not recognised. The catalog path does trim.
-- [ ] **[code] CPC `.SCR` entries are flagged `isImage` even when decoding fails** (line 2407);
+- [x] **[code] CPC `.SCR` entries are flagged `isImage` even when decoding fails** (line 2407);
   importing them then silently yields nothing.
-- [ ] **[code] D71 and D81 are advertised but not implemented.** `readD64` only accepts 174848 /
+- [x] **[code] D71 and D81 are advertised but not implemented.** `readD64` only accepts 174848 /
   175531 bytes. README lines 20, 51, 52, 140 and HelpView lines 124, 551, 552 list `.d71`/`.d81`
   as supported; 40-track D64s are rejected too. Either add readers or remove the claims.
-- [ ] **[code] Catalog "Export Files" fails silently.** `DiskCatalogBrowserView.swift:111-136` — a
+- [x] **[code] Catalog "Export Files" fails silently.** `DiskCatalogBrowserView.swift:111-136` — a
   name containing `/` (ST/MSX subfolder paths, C64 names) makes `write` throw; the empty `catch {}`
   aborts all remaining files with no message. Same-named files in different folders overwrite each other.
 

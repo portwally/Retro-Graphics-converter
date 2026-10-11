@@ -114,25 +114,75 @@ struct DiskCatalogBrowserView: View {
         
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
         let dateFormatter = DateFormatter(); dateFormatter.dateFormat = "yyyy-MM-dd_HHmmss"
-        let exportFolder = downloadsURL.appendingPathComponent("\(catalog.diskName)_export_\(dateFormatter.string(from: Date()))")
+        let safeDiskName = catalog.diskName.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+        let exportFolder = downloadsURL.appendingPathComponent("\(safeDiskName)_export_\(dateFormatter.string(from: Date()))")
         
+        var failures: [String] = []
+        var usedPaths = Set<String>()
+
         do {
             try FileManager.default.createDirectory(at: exportFolder, withIntermediateDirectories: true)
-            for entry in entriesToExport where !entry.isDirectory {
-                var filename = entry.name
-                if !filename.contains(".") {
-                    switch entry.fileType {
-                    case 0x00, 0x01: filename += ".txt"
-                    case 0x02: filename += ".bas"
-                    case 0x04, 0x06: filename += ".bin"
-                    case 0xFA, 0xFC: filename += ".bas"
-                    default: filename += ".dat"
-                    }
-                }
-                try entry.data.write(to: exportFolder.appendingPathComponent(filename))
+        } catch {
+            showExportAlert(title: "Could not create the export folder", text: error.localizedDescription)
+            return
+        }
+
+        for entry in entriesToExport where !entry.isDirectory {
+            // FAT disks report files as "FOLDER/FILE"; keep that structure, but never let a
+            // name climb out of the export folder or contain characters Finder rejects
+            let components = entry.name.split(separator: "/").map { part -> String in
+                let cleaned = part.replacingOccurrences(of: ":", with: "-").trimmingCharacters(in: .whitespaces)
+                return (cleaned.isEmpty || cleaned == "." || cleaned == "..") ? "_" : cleaned
             }
-            NSWorkspace.shared.activateFileViewerSelecting([exportFolder])
-        } catch { }
+            var filename = components.last ?? "_"
+            if !filename.contains(".") {
+                switch entry.fileType {
+                case 0x00, 0x01: filename += ".txt"
+                case 0x02: filename += ".bas"
+                case 0x04, 0x06: filename += ".bin"
+                case 0xFA, 0xFC: filename += ".bas"
+                default: filename += ".dat"
+                }
+            }
+
+            var folder = exportFolder
+            for part in components.dropLast() { folder.appendPathComponent(part) }
+
+            // Two entries can share a name (different user areas, case-insensitive volume)
+            var target = folder.appendingPathComponent(filename)
+            var counter = 2
+            while usedPaths.contains(target.path.lowercased()) {
+                let base = (filename as NSString).deletingPathExtension
+                let ext = (filename as NSString).pathExtension
+                target = folder.appendingPathComponent(ext.isEmpty ? "\(base) \(counter)" : "\(base) \(counter).\(ext)")
+                counter += 1
+            }
+            usedPaths.insert(target.path.lowercased())
+
+            do {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try entry.data.write(to: target)
+            } catch {
+                failures.append("\(entry.name): \(error.localizedDescription)")
+            }
+        }
+
+        NSWorkspace.shared.activateFileViewerSelecting([exportFolder])
+
+        if !failures.isEmpty {
+            let shown = failures.prefix(8).joined(separator: "\n")
+            let more = failures.count > 8 ? "\n…and \(failures.count - 8) more" : ""
+            showExportAlert(title: "\(failures.count) file(s) could not be exported", text: shown + more)
+        }
+    }
+
+    private func showExportAlert(title: String, text: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = text
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 }
 

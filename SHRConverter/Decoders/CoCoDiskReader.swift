@@ -59,7 +59,9 @@ class CoCoDiskReader {
         // Some emulators pad to 160KB or 180KB (up to 360KB)
 
         // Accept sizes within reasonable range for CoCo disks
-        let minSize = 140000  // ~137KB minimum
+        // The smallest RS-DOS disk is 35 tracks x 18 sectors x 256 bytes = 161,280 bytes.
+        // (A lower limit lets 143,360-byte Apple II disks through to the FAT heuristics below.)
+        let minSize = 161280
         let maxSize = 380000  // ~370KB maximum
         guard data.count >= minSize && data.count <= maxSize else { return false }
 

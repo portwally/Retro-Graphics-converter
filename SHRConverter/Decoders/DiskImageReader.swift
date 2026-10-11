@@ -481,15 +481,14 @@ class DiskImageReader {
             return nil
         }
         
-        let catalogTrack = Int(data[vtocOffset + 1])
-        guard catalogTrack == 17 else {
+        guard let catalogStart = dos33CatalogStart(data: data, vtocOffset: vtocOffset) else {
             return nil
         }
-        
+
         var files: [DiskImageFile] = []
-        
-        var currentTrack = 17
-        var currentSector = 15
+
+        var currentTrack = catalogStart.track
+        var currentSector = catalogStart.sector
         
         for _ in 0..<100 {
             let catalogOffset = (currentTrack * sectorsPerTrack + currentSector) * sectorSize
@@ -504,15 +503,7 @@ class DiskImageReader {
                 
                 if trackList == 0 || trackList == 0xFF { continue }
                 
-                var fileName = ""
-                for i in 0..<30 {
-                    let char = data[entryOffset + 3 + i] & 0x7F
-                    if char == 0 || char == 0x20 { break }
-                    if char > 0 {
-                        fileName.append(Character(UnicodeScalar(char)))
-                    }
-                }
-                fileName = fileName.trimmingCharacters(in: .whitespaces)
+                let fileName = dos33FileName(data: data, offset: entryOffset + 3)
                 
                 let fileType = data[entryOffset + 2]
                 let fileTypeUnlocked = fileType & 0x7F
@@ -538,6 +529,37 @@ class DiskImageReader {
         return files.isEmpty ? nil : files
     }
     
+    /// Validates the VTOC and returns where the catalog starts.
+    /// Checking only "catalog track == 17" accepts one in 256 random files.
+    static func dos33CatalogStart(data: Data, vtocOffset: Int) -> (track: Int, sector: Int)? {
+        let catalogTrack = Int(data[vtocOffset + 1])
+        let catalogSector = Int(data[vtocOffset + 2])
+        let pairsPerList = Int(data[vtocOffset + 0x27])
+        let tracksPerDisk = Int(data[vtocOffset + 0x34])
+        let sectorsPerTrack = Int(data[vtocOffset + 0x35])
+
+        guard catalogTrack == 17,
+              catalogSector < 16,
+              pairsPerList == 122,
+              (35...50).contains(tracksPerDisk),
+              sectorsPerTrack == 16 || sectorsPerTrack == 13 else {
+            return nil
+        }
+        return (catalogTrack, catalogSector)
+    }
+
+    /// DOS 3.3 names are 30 high-ASCII characters padded with trailing spaces; spaces inside a name are legal
+    static func dos33FileName(data: Data, offset: Int) -> String {
+        var name = ""
+        for i in 0..<30 {
+            let char = data[offset + i] & 0x7F
+            if char >= 0x20 && char < 0x7F {
+                name.append(Character(UnicodeScalar(char)))
+            }
+        }
+        return name.trimmingCharacters(in: .whitespaces)
+    }
+
     static func extractDOS33File(data: Data, trackList: Int, sectorList: Int, sectorsPerTrack: Int, sectorSize: Int, stripHeader: Bool = true) -> Data? {
         var fileData = Data()
         var currentTrack = trackList
@@ -1079,16 +1101,14 @@ class DiskImageReader {
     static func readD64(data: Data) -> [DiskImageFile]? {
         // D64 sizes: 174848 (with error bytes) or 174848-683 = 174165 (without)
         // Standard: 35 tracks, 683 sectors total
-        let validSizes = [174848, 175531] // with/without error info
-        
-        guard validSizes.contains(data.count) else {
+        guard let kind = cbmDiskKind(data: data) else {
             return nil
         }
-        
+
         var files: [DiskImageFile] = []
-        
-        // Track 18, Sector 0 = BAM (Block Availability Map) and Directory header
-        let dirTrack = 18
+
+        // Header sector: BAM + directory link (track 18 on 1541/1571, track 40 on 1581)
+        let dirTrack = kind.headerTrack
         let dirSector = 0
         
         guard let bamData = readD64Sector(data: data, track: dirTrack, sector: dirSector) else {
@@ -1192,34 +1212,80 @@ class DiskImageReader {
         return files.isEmpty ? nil : files
     }
     
+    // MARK: Commodore disk geometry (1541 / 1571 / 1581)
+
+    enum CBMDiskKind {
+        case d64   // 1541: 35 or 40 tracks, 17-21 sectors per track
+        case d71   // 1571: two 35-track sides
+        case d81   // 1581: 80 tracks x 40 sectors
+
+        var formatName: String {
+            switch self {
+            case .d64: return "C64 D64"
+            case .d71: return "C64/C128 D71"
+            case .d81: return "C64/C128 D81"
+            }
+        }
+        /// Track holding the header sector (sector 0), whose first two bytes link to the directory
+        var headerTrack: Int { self == .d81 ? 40 : 18 }
+        /// Offset of the 16-character disk name inside the header sector
+        var diskNameOffset: Int { self == .d81 ? 0x04 : 0x90 }
+        var trackCount: Int {
+            switch self {
+            case .d64: return 40
+            case .d71: return 70
+            case .d81: return 80
+            }
+        }
+    }
+
+    /// Identifies a Commodore disk image by size (with or without the trailing error-info bytes)
+    static func cbmDiskKind(data: Data) -> CBMDiskKind? {
+        switch data.count {
+        case 174848, 175531, 196608, 197376:
+            return .d64
+        case 349696, 351062:
+            return .d71
+        case 819200, 822400:
+            // 819200 is also an 800K ProDOS volume: require the 1581 header (dir link 40/3, DOS version 'D')
+            let header = 39 * 40 * 256
+            guard data[header] == 40, data[header + 1] == 3, data[header + 2] == 0x44 else { return nil }
+            return .d81
+        default:
+            return nil
+        }
+    }
+
+    private static func cbmSectorsPerTrack(kind: CBMDiskKind, track: Int) -> Int {
+        if kind == .d81 { return 40 }
+        // 1571 side 2 (tracks 36-70) repeats the zone layout of tracks 1-35
+        let t = (kind == .d71 && track > 35) ? track - 35 : track
+        switch t {
+        case 1...17: return 21
+        case 18...24: return 19
+        case 25...30: return 18
+        default: return 17   // 31-35, and 36-40 on extended D64 images
+        }
+    }
+
     private static func readD64Sector(data: Data, track: Int, sector: Int) -> Data? {
-        // C64 1541 disk geometry
-        let sectorsPerTrack: [Int] = [
-            // Tracks 1-17: 21 sectors
-            21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
-            // Tracks 18-24: 19 sectors
-            19, 19, 19, 19, 19, 19, 19,
-            // Tracks 25-30: 18 sectors
-            18, 18, 18, 18, 18, 18,
-            // Tracks 31-35: 17 sectors
-            17, 17, 17, 17, 17
-        ]
-        
-        guard track >= 1 && track <= 35 else { return nil }
-        guard sector >= 0 && sector < sectorsPerTrack[track - 1] else { return nil }
-        
+        guard let kind = cbmDiskKind(data: data) else { return nil }
+
+        guard track >= 1 && track <= kind.trackCount else { return nil }
+        guard sector >= 0 && sector < cbmSectorsPerTrack(kind: kind, track: track) else { return nil }
+
         // Calculate offset
         var offset = 0
         for t in 1..<track {
-            offset += sectorsPerTrack[t - 1] * 256
+            offset += cbmSectorsPerTrack(kind: kind, track: t) * 256
         }
         offset += sector * 256
-        
+
         guard offset + 256 <= data.count else { return nil }
-        
+
         return data.subdata(in: offset..<(offset + 256))
     }
-    
+
     private static func extractD64File(data: Data, startTrack: Int, startSector: Int) -> Data? {
         var fileData = Data()
         var currentTrack = startTrack
@@ -1266,7 +1332,7 @@ class DiskImageReader {
             }
             
             // Safety check: limit iterations
-            if visited.count > 1000 {
+            if visited.count > 4000 {
                 break
             }
         }
@@ -1326,6 +1392,11 @@ class DiskImageReader {
 
 extension DiskImageReader {
     static func readDiskCatalog(data: Data, filename: String = "Unknown") -> DiskCatalog? {
+        // Formats are tried from strongest to weakest evidence: explicit signatures first,
+        // then exact sizes, then validated Apple II volume headers, and only then the
+        // formats that can be recognised by heuristics alone (BBC DFS, CoCo RS-DOS, TR-DOS).
+        // Running the heuristic formats earlier makes ordinary Apple II disks show up as CoCo disks.
+
         // 2IMG Format
         if let catalog = read2IMGCatalogFull(data: data, filename: filename) {
             return catalog
@@ -1356,6 +1427,22 @@ extension DiskImageReader {
             return catalog
         }
 
+        // Commodore D64 / D71 / D81
+        if let catalog = readD64CatalogFull(data: data, filename: filename) {
+            return catalog
+        }
+
+        // Apple DiskCopy 4.2 wrapper around a ProDOS or DOS 3.3 volume
+        if let payload = diskCopy42Payload(data: data),
+           let catalog = readDiskCatalogWithOrderDetection(data: payload, filename: filename) {
+            return catalog
+        }
+
+        // Apple II ProDOS / DOS 3.3 (both sector orders)
+        if let catalog = readDiskCatalogWithOrderDetection(data: data, filename: filename) {
+            return catalog
+        }
+
         // BBC Micro DFS Disk Image
         if let catalog = readBBCMicroCatalogFull(data: data, filename: filename) {
             return catalog
@@ -1366,22 +1453,23 @@ extension DiskImageReader {
             return catalog
         }
 
-        // C64 D64 Format
-        if let catalog = readD64CatalogFull(data: data, filename: filename) {
-            return catalog
-        }
-
         // ZX Spectrum TR-DOS Format
         if let catalog = readTRDOSCatalogFull(data: data, filename: filename) {
             return catalog
         }
 
-        // Direct Disk Images with Order Detection
-        let result = readDiskCatalogWithOrderDetection(data: data, filename: filename)
-
-        return result
+        return nil
     }
-    
+
+    /// Returns the disk data inside an Apple DiskCopy 4.2 image (84-byte header, magic $0100 at +$52)
+    static func diskCopy42Payload(data: Data) -> Data? {
+        let headerSize = 84
+        guard data.count > headerSize, data[0] <= 63, data[0x52] == 0x01, data[0x53] == 0x00 else { return nil }
+        let dataSize = Int(data[0x40]) << 24 | Int(data[0x41]) << 16 | Int(data[0x42]) << 8 | Int(data[0x43])
+        guard dataSize > 0, dataSize % 512 == 0, headerSize + dataSize <= data.count else { return nil }
+        return data.subdata(in: headerSize..<(headerSize + dataSize))
+    }
+
     static func read2IMGCatalogFull(data: Data, filename: String) -> DiskCatalog? {
         guard data.count >= 64 else { return nil }
         
@@ -1528,7 +1616,7 @@ extension DiskImageReader {
                             // AND the length makes sense for the file size
                             // This prevents false positives from graphics data that happens to look like a header
                             let isKnownGraphicsAddr = (potentialLoadAddr == 0x2000 || potentialLoadAddr == 0x4000)
-                            let lengthMatchesFile = (potentialLength > 0 && potentialLength <= fileData.count - 4)
+                            let lengthMatchesFile = (potentialLength > 0 && potentialLength == fileData.count - 4)
 
                             if isKnownGraphicsAddr && lengthMatchesFile {
                                 loadAddr = potentialLoadAddr
@@ -1638,15 +1726,13 @@ extension DiskImageReader {
             return nil
         }
         
-        let catalogTrack = Int(data[vtocOffset + 1])
-        
-        guard catalogTrack == 17 else {
+        guard let catalogStart = dos33CatalogStart(data: data, vtocOffset: vtocOffset) else {
             return nil
         }
-        
+
         var entries: [DiskCatalogEntry] = []
-        var currentTrack = 17
-        var currentSector = 15
+        var currentTrack = catalogStart.track
+        var currentSector = catalogStart.sector
         
         for _ in 0..<100 {
             let catalogOffset = (currentTrack * sectorsPerTrack + currentSector) * sectorSize
@@ -1661,15 +1747,7 @@ extension DiskImageReader {
                 
                 if trackList == 0 || trackList == 0xFF { continue }
                 
-                var fileName = ""
-                for i in 0..<30 {
-                    let char = data[entryOffset + 3 + i] & 0x7F
-                    if char == 0 || char == 0x20 { break }
-                    if char > 0 {
-                        fileName.append(Character(UnicodeScalar(char)))
-                    }
-                }
-                fileName = fileName.trimmingCharacters(in: .whitespaces)
+                let fileName = dos33FileName(data: data, offset: entryOffset + 3)
                 
                 let fileType = data[entryOffset + 2]
                 let sectorsUsed = Int(data[entryOffset + 33]) | (Int(data[entryOffset + 34]) << 8)
@@ -1767,25 +1845,24 @@ extension DiskImageReader {
     }
     
     static func readD64CatalogFull(data: Data, filename: String) -> DiskCatalog? {
-        let validSizes = [174848, 175531]
-        guard validSizes.contains(data.count) else { return nil }
-        
+        guard let kind = cbmDiskKind(data: data) else { return nil }
+
         var entries: [DiskCatalogEntry] = []
-        
-        // Track 18, Sector 0 = BAM
-        guard let bamData = readD64Sector(data: data, track: 18, sector: 0) else {
+
+        // Header sector (track 18 on 1541/1571, track 40 on 1581)
+        guard let bamData = readD64Sector(data: data, track: kind.headerTrack, sector: 0) else {
             return nil
         }
-        
-        // Ensure BAM has enough data
-        guard bamData.count >= 2 && bamData.count >= 0x90 + 16 else {
+
+        // Ensure the header has enough data
+        guard bamData.count >= kind.diskNameOffset + 16 else {
             return nil
         }
-        
-        // Disk name starts at offset 0x90 (144), 16 bytes
+
+        // Disk name, 16 bytes padded with 0xA0
         var diskName = ""
         for i in 0..<16 {
-            let char = bamData[0x90 + i]
+            let char = bamData[kind.diskNameOffset + i]
             if char == 0xA0 || char == 0 { break }
             diskName.append(Character(UnicodeScalar(char)))
         }
@@ -1879,7 +1956,7 @@ extension DiskImageReader {
         
         return DiskCatalog(
             diskName: diskName,
-            diskFormat: "C64 D64",
+            diskFormat: kind.formatName,
             diskSize: data.count,
             entries: entries
         )
@@ -2410,10 +2487,6 @@ extension DiskImageReader {
                     if cpcResult.image != nil {
                         isImage = true
                         imageType = cpcResult.type
-                    } else {
-                        // Even if decoder fails, mark as CPC so it's recognized
-                        isImage = true
-                        imageType = .AmstradCPC(mode: 1, colors: 4)
                     }
                 } else if fileData.count >= 16000 && fileData.count <= 17000 {
                     // For 16KB files without .SCR extension, try CPC first
@@ -2424,7 +2497,7 @@ extension DiskImageReader {
                     }
                 }
 
-                // Fall back to general decoder only for non-.SCR files
+                // Fall back to the general decoder (other platforms also use .SCR)
                 if !isImage {
                     let result = SHRDecoder.decode(data: fileData, filename: filename)
                     if result.type != .Unknown && result.image != nil {
@@ -2889,9 +2962,11 @@ extension DiskImageReader {
         
         var proDOSData = Data(count: data.count)
         
+        // DOS sector N holds the ProDOS half-block listed here (the mapping is its own inverse):
+        // block 0 = DOS sectors 0+14, block 1 = 13+12, block 2 = 11+10 ... block 7 = 1+15
         let dosToProDOS: [Int] = [
-            0x0, 0x7, 0xE, 0x6, 0xD, 0x5, 0xC, 0x4,
-            0xB, 0x3, 0xA, 0x2, 0x9, 0x1, 0x8, 0xF
+            0x0, 0xE, 0xD, 0xC, 0xB, 0xA, 0x9, 0x8,
+            0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0xF
         ]
         
         let sectorsPerTrack = 16
@@ -2919,26 +2994,37 @@ extension DiskImageReader {
             }
         }
 
-        if let catalog = readDOS33CatalogFull(data: data, filename: filename) {
+        // A DOS 3.3 catalog with no files is kept as a last resort so the other readings get a chance
+        let dos33Catalog = readDOS33CatalogFull(data: data, filename: filename)
+        if let catalog = dos33Catalog, catalog.totalFiles > 0 {
             return catalog
         }
 
         if data.count == 143360 {
-            // Try reading ProDOS catalog from DOS-ordered disk with sequential sector reading FIRST
-            if let catalog = readProDOSCatalogFromDOSOrderSequential(data: data, filename: filename) {
-                return catalog
+            // ProDOS volume stored in DOS sector order (the usual case for .dsk / .do):
+            // reorder the sectors and use the normal ProDOS reader, which also handles subdirectories.
+            var converted: DiskCatalog? = nil
+            if let convertedData = convertDOSOrderToProDOSOrder(data: data),
+               let catalog = readProDOSCatalogFull(data: convertedData, filename: filename),
+               catalog.totalFiles > 0 {
+                converted = DiskCatalog(diskName: catalog.diskName, diskFormat: "ProDOS (DOS order)", diskSize: catalog.diskSize, entries: catalog.entries)
             }
 
-            if let convertedData = convertDOSOrderToProDOSOrder(data: data) {
-                if let catalog = readProDOSCatalogFull(data: convertedData, filename: filename) {
-                    if catalog.totalFiles > 0 {
-                        return catalog
-                    }
+            // Older reader for non-standard disks; only preferred when it finds more pictures
+            let sequential = readProDOSCatalogFromDOSOrderSequential(data: data, filename: filename)
+
+            if let converted = converted {
+                if let sequential = sequential, sequential.imageFiles > converted.imageFiles {
+                    return sequential
                 }
+                return converted
+            }
+            if let sequential = sequential {
+                return sequential
             }
         }
 
-        return nil
+        return dos33Catalog
     }
 
     /// Reads ProDOS catalog from a DOS-ordered disk by reading sequential DOS sectors
@@ -3052,7 +3138,7 @@ extension DiskImageReader {
                         let loadAddr = Int(fileData[0]) | (Int(fileData[1]) << 8)
                         let length = Int(fileData[2]) | (Int(fileData[3]) << 8)
                         // Check for typical HGR/DHGR load addresses
-                        if (loadAddr == 0x2000 || loadAddr == 0x4000) && length > 0 && length <= fileData.count - 4 {
+                        if (loadAddr == 0x2000 || loadAddr == 0x4000) && length > 0 && length == fileData.count - 4 {
                             dataToDecode = fileData.subdata(in: 4..<fileData.count)
                         }
                     }
@@ -3233,7 +3319,12 @@ extension DiskImageReader {
             // Read data blocks
             for i in 0..<256 {
                 let blockNum = Int(indexBlock[i]) | (Int(indexBlock[i + 256]) << 8)
-                if blockNum == 0 { continue }
+                if blockNum == 0 {
+                    // Sparse block: reads back as zeros
+                    fileData.append(Data(count: 512))
+                    if fileData.count >= eof { break }
+                    continue
+                }
                 if blockNum >= 280 { continue }
                 guard let blockData = readBlock(blockNum) else { continue }
                 fileData.append(blockData)
@@ -3252,7 +3343,12 @@ extension DiskImageReader {
 
                 for j in 0..<256 {
                     let blockNum = Int(indexBlock[j]) | (Int(indexBlock[j + 256]) << 8)
-                    if blockNum == 0 { continue }
+                    if blockNum == 0 {
+                        // Sparse block: reads back as zeros
+                        fileData.append(Data(count: 512))
+                        if fileData.count >= eof { break }
+                        continue
+                    }
                     if blockNum >= 280 { continue }
                     guard let blockData = readBlock(blockNum) else { continue }
                     fileData.append(blockData)
@@ -3341,7 +3437,12 @@ extension DiskImageReader {
             // Read data blocks
             for i in 0..<256 {
                 let blockNum = Int(indexBlock[i]) | (Int(indexBlock[i + 256]) << 8)
-                if blockNum == 0 { continue }
+                if blockNum == 0 {
+                    // Sparse block: reads back as zeros
+                    fileData.append(Data(count: 512))
+                    if fileData.count >= eof { break }
+                    continue
+                }
                 if blockNum >= 280 { continue }  // Skip invalid block numbers
                 guard let blockData = readBlock(blockNum) else { continue }
                 fileData.append(blockData)
@@ -3362,7 +3463,12 @@ extension DiskImageReader {
 
                 for j in 0..<256 {
                     let blockNum = Int(indexBlock[j]) | (Int(indexBlock[j + 256]) << 8)
-                    if blockNum == 0 { continue }
+                    if blockNum == 0 {
+                        // Sparse block: reads back as zeros
+                        fileData.append(Data(count: 512))
+                        if fileData.count >= eof { break }
+                        continue
+                    }
                     if blockNum >= 280 { continue }
                     guard let blockData = readBlock(blockNum) else { continue }
                     fileData.append(blockData)
