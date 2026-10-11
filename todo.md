@@ -254,28 +254,42 @@ How each was fixed:
 
 ## 5b. Palette editing and the Original/Modified toggle
 
-Found by comparing each decoder's output with `PaletteRenderer.rerenderWithPalette` on the same
-file, over 12,000 generated inputs.
+**Fixed on 2026-10-11 (branch `audit-fixes`).** Measured on every image in the 3,368 real disks
+(18,031 images that have a palette): re-rendering with the unmodified palette is pixel-identical
+to the decoder for all of them, and a simulated edit of every colour changes the picture for all
+of them. 12,000 decodes hashed before and after confirm no decoder output changed.
 
-- [ ] **[confirmed] Palette edits do nothing for 30 image types, but the app reports success.**
-  `PaletteExtractor` returns an editable palette, `rerenderWithPalette` returns nil, and
-  `handleColorEdit` still stores `modifiedPalette` and shows "Color N modified - live preview".
-  The picture and all exports stay unchanged while the item is flagged as modified. Affected:
-  Amstrad CPC (both modes), Atari 8-bit (GR.8/9/10/11/15), BBC Micro (all modes), C64 hi-res
-  formats, Plus/4, VIC-20, all TRS-80/CoCo types, MSX Screen 1, PCX above 8 bpp. Either add
-  renderers or mark these palettes `.fixed`.
-- [ ] **[confirmed] ZX Spectrum colours shift when re-rendered.** The decoder uses 0xD7 (215) for
-  normal-brightness colours (`RetroDecoder.swift:8`), the palette extractor uses 205
-  (`PaletteExtractor.swift:898`). Any palette edit or Original view changes every non-bright colour.
-- [x] **[confirmed] MSX Screen 1 is re-rendered with the Screen 2 layout** (re-render now returns nil for Screen 1/7; they join the "edits do nothing" list above) (`PaletteRenderer.swift:1041`,
-  "use Screen 2 renderer as fallback") — the result differs from the decode in most cases.
-- [ ] **[code] Headerless `.3201` files re-render shifted by 4 bytes.** The decoder accepts files
-  without the `APP\0` header (`SHRDecoder.swift:376`); `renderSHR3200` always starts at 6404.
-- [ ] **[code] DreamGrafix re-render is always 320x200**, ignoring the footer's width/height that
-  the decoder uses.
-- [ ] Re-render also differed from decode on some generated MSX Screen 2/5/8, PCX 2/3/4/6/8-bpp,
-  BMP 1/4/8-bpp and MacPaint inputs. Part of this is random-data noise (e.g. MacPaint flag byte
-  128, truncated data filled black vs white); each pair still needs a side-by-side read.
+- [x] **[confirmed] Apple Preferred Format could not be palette-edited** (found in this pass; the
+  most common IIgs format - 2,908 real images). The re-render treated the packed APF file as a raw
+  screen: for most files the edit did nothing, for files over 32,000 bytes it drew garbage (242 real
+  files). APF 3200 also showed the wrong palette (MAIN block instead of the per-line MULTIPAL, and
+  read 2 bytes off). Now drawn by the real APF decoder with the edited colours.
+- [x] **[confirmed] 816/Paint and 256-colour DreamGrafix were re-rendered from compressed bytes.**
+  Now unpacked first.
+- [x] **[confirmed] Palette edits did nothing for 30 image types, but the app reported success.**
+  Types without a dedicated renderer are now recoloured from a clean copy of the picture (old
+  colour -> new colour). This also survives rotate/flip/crop. If a colour is not present in the
+  picture the status bar says so, and an edit that cannot be applied is no longer recorded.
+- [x] **[confirmed] ZX Spectrum colours shifted when re-rendered** - extractor and decoder now share one table.
+- [x] **[confirmed] Amstrad CPC showed an invented palette** (none of its colours occurred in the
+  picture). It now shows the inks the decoder used for that file.
+- [x] **[confirmed] MSX Screen 1/2/5/7 and MacPaint re-rendering used separate copies of the
+  layout logic** that disagreed with the decoder. They now call the decoder with the edited
+  colours. MSX Screen 8 (direct RGB, no palette) is shown as a fixed palette.
+- [x] True-colour PCX (more than 8 bits per pixel) no longer offers a palette.
+- [x] Headerless `.3201`: not an issue in practice - no palette is extracted for those files, so
+  the mismatching re-render path is never reached.
+- [ ] **Limits of the recolouring fallback:** two palette entries with the same colour are
+  changed together; Plus/4 pictures only partly match their displayed palette (79-97% of pixels on
+  generated files), so some edits there affect fewer pixels than expected.
+- [ ] **PCX (2/3/4/6/8-bpp) and palettised BMP** still have their own re-render code, which
+  differed from the decoder on 20-80% of *generated* files (random headers). There are no real PCX
+  or BMP files on this Mac to tell whether real files are affected. Same fix would apply: draw
+  through the decoder with a palette override.
+- [ ] **DreamGrafix re-render is always 320x200**, ignoring the footer's width/height. All 32 real
+  DreamGrafix files are 320x200, so this only shows on malformed files.
+- [ ] Not exercised by hand: the palette editor UI itself (clicking a swatch, the reset button).
+  The handlers were tested through the same renderer and recolour functions they call.
 
 ## 5c. More UI items (second pass)
 

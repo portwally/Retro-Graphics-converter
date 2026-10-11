@@ -80,9 +80,11 @@ class RetroDecoder {
         return (cgImage, .ZXSpectrum)
     }
     
-    static func decodeAmstradCPC(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+    /// Works out how a CPC screen file is laid out: where the pixels start, which mode it is,
+    /// and which hardware inks it uses (embedded in the AMSDOS header, or the firmware defaults).
+    private static func amstradCPCLayout(data: Data) -> (screenData: Data, mode: Int, inks: [Int])? {
         // Accept 16KB files (allow some tolerance for headers or slight variations)
-        guard data.count >= 16000 && data.count <= 17000 else { return (nil, .Unknown) }
+        guard data.count >= 16000 && data.count <= 17000 else { return nil }
 
         // Check for and skip 128-byte AMSDOS header if present
         // AMSDOS header: byte 0 = user number (0-15), bytes 1-8 = filename
@@ -103,9 +105,8 @@ class RetroDecoder {
                     // Only 4 palette entries used → Mode 1
                     detectedMode = 1
                     // Trim palette to 4 entries for Mode 1
-                    if var pal = embeddedPalette {
-                        pal = Array(pal.prefix(4))
-                        embeddedPalette = pal
+                    if let pal = embeddedPalette {
+                        embeddedPalette = Array(pal.prefix(4))
                     }
                 } else {
                     detectedMode = 0
@@ -115,11 +116,27 @@ class RetroDecoder {
 
         // Fall back to pixel analysis if no palette-based detection
         let mode = detectedMode ?? detectCPCMode(data: screenData)
+        let inks = embeddedPalette ?? (mode == 0 ? defaultCPCMode0Inks : defaultCPCMode1Inks)
+        return (screenData, mode, inks)
+    }
 
-        if mode == 0 {
-            if let result = decodeAmstradCPCMode0(data: screenData, palette: embeddedPalette) { return result }
+    // Default CPC palettes (standard firmware defaults), as hardware ink numbers
+    private static let defaultCPCMode0Inks: [Int] = [1, 24, 20, 6, 26, 0, 2, 8, 10, 12, 14, 16, 18, 22, 24, 13]
+    private static let defaultCPCMode1Inks: [Int] = [1, 24, 20, 6]
+
+    /// The RGB colors the decoder uses for this file, in palette-index order (for the palette view)
+    static func amstradCPCColors(data: Data) -> [(r: UInt8, g: UInt8, b: UInt8)]? {
+        guard let layout = amstradCPCLayout(data: data) else { return nil }
+        return layout.inks.map { amstradCPCPalette[min(max($0, 0), amstradCPCPalette.count - 1)] }
+    }
+
+    static func decodeAmstradCPC(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+        guard let layout = amstradCPCLayout(data: data) else { return (nil, .Unknown) }
+
+        if layout.mode == 0 {
+            if let result = decodeAmstradCPCMode0(data: layout.screenData, palette: layout.inks) { return result }
         } else {
-            if let result = decodeAmstradCPCMode1(data: screenData, palette: embeddedPalette) { return result }
+            if let result = decodeAmstradCPCMode1(data: layout.screenData, palette: layout.inks) { return result }
         }
         return (nil, .Unknown)
     }
@@ -190,9 +207,7 @@ class RetroDecoder {
     private static func decodeAmstradCPCMode0(data: Data, palette: [Int]? = nil) -> (image: CGImage?, type: AppleIIImageType)? {
         let width = 160, height = 200
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
-        // Default CPC Mode 0 palette (standard firmware defaults)
-        let defaultPalette: [Int] = [1, 24, 20, 6, 26, 0, 2, 8, 10, 12, 14, 16, 18, 22, 24, 13]
-        let usePalette = palette ?? defaultPalette
+        let usePalette = palette ?? defaultCPCMode0Inks
 
         // CPC screen memory: lines 0,8,16.. in block 0; lines 1,9,17.. in block 1, etc.
         // Block = y % 8, line within block = y / 8
@@ -227,9 +242,7 @@ class RetroDecoder {
     private static func decodeAmstradCPCMode1(data: Data, palette: [Int]? = nil) -> (image: CGImage?, type: AppleIIImageType)? {
         let width = 320, height = 200
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
-        // Default CPC Mode 1 palette (standard firmware: blue, yellow, cyan, red)
-        let defaultPalette: [Int] = [1, 24, 20, 6]
-        let usePalette = palette ?? defaultPalette
+        let usePalette = palette ?? defaultCPCMode1Inks
 
         // CPC screen memory: lines 0,8,16.. in block 0; lines 1,9,17.. in block 1, etc.
         for y in 0..<height {
@@ -264,7 +277,10 @@ class RetroDecoder {
         return (cgImage, .AmstradCPC(mode: 1, colors: 4))
     }
     
-    static func decodeMacPaint(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+    /// - Parameter colors: paper and ink colors to draw with (palette editing); default white and black
+    static func decodeMacPaint(data: Data, colors: (paper: (r: UInt8, g: UInt8, b: UInt8), ink: (r: UInt8, g: UInt8, b: UInt8))? = nil) -> (image: CGImage?, type: AppleIIImageType) {
+        let paper = colors?.paper ?? (r: 255, g: 255, b: 255)
+        let ink = colors?.ink ?? (r: 0, g: 0, b: 0)
         guard data.count >= 512 else { return (nil, .Unknown) }
         let width = 576, height = 720, bytesPerRow = 72
         let expectedSize = bytesPerRow * height
@@ -294,10 +310,10 @@ class RetroDecoder {
                 let byteIndex = y * bytesPerRow + (x / 8)
                 if byteIndex < decompressed.count {
                     let bit = (decompressed[byteIndex] >> (7 - (x % 8))) & 1
-                    let color: UInt8 = (bit == 1) ? 0 : 255
+                    let color = (bit == 1) ? ink : paper
                     let bufferIdx = (y * width + x) * 4
-                    rgbaBuffer[bufferIdx] = color; rgbaBuffer[bufferIdx + 1] = color
-                    rgbaBuffer[bufferIdx + 2] = color; rgbaBuffer[bufferIdx + 3] = 255
+                    rgbaBuffer[bufferIdx] = color.r; rgbaBuffer[bufferIdx + 1] = color.g
+                    rgbaBuffer[bufferIdx + 2] = color.b; rgbaBuffer[bufferIdx + 3] = 255
                 }
             }
         }

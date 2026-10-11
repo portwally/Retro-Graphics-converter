@@ -400,28 +400,40 @@ struct ContentView: View {
               let originalPalette = item.paletteInfo,
               let originalData = item.originalData else { return }
 
-        // Create modified palette if not already modified
-        if item.modifiedPalette == nil {
-            item.modifiedPalette = originalPalette
-        }
+        let paletteBeforeEdit = item.modifiedPalette ?? originalPalette
 
-        // Update the color in the modified palette
-        let paletteColor = PaletteColor(nsColor: newColor)
-        item.modifiedPalette?.updateColor(paletteIndex: paletteIndex, colorIndex: colorIndex, newColor: paletteColor)
+        // Update the color in a copy of the palette; it is only kept if the image can be redrawn
+        var editedPalette = paletteBeforeEdit
+        editedPalette.updateColor(paletteIndex: paletteIndex, colorIndex: colorIndex, newColor: PaletteColor(nsColor: newColor))
 
-        // Re-render the image with the modified palette for live preview
-        if let modifiedPalette = item.modifiedPalette,
-           let newImage = PaletteRenderer.rerenderWithPalette(data: originalData, type: item.type, palette: modifiedPalette) {
+        if let newImage = PaletteRenderer.rerenderWithPalette(data: originalData, type: item.type, palette: editedPalette) {
+            // Platforms with a dedicated renderer: redraw from the original file data
             item.image = newImage
+            statusMessage = "Color \(colorIndex) modified - live preview"
+        } else if editedPalette.palettes.count == 1 {
+            // Other single-palette platforms: recolor a clean copy of the picture
+            let base = item.paletteEditBase ?? (image: item.image, palette: paletteBeforeEdit)
+            guard let recolored = PaletteRenderer.remapColors(in: base.image, from: base.palette.primaryPalette, to: editedPalette.primaryPalette) else {
+                statusMessage = "Palette editing is not available for this image"
+                return
+            }
+            item.paletteEditBase = base
+            item.image = recolored.image
+            statusMessage = recolored.changedPixels > 0
+                ? "Color \(colorIndex) modified - live preview"
+                : "Color \(colorIndex) is not used in this image"
+        } else {
+            statusMessage = "Palette editing is not available for this image type"
+            return
         }
+
+        item.modifiedPalette = editedPalette
 
         // Update the image item
         if let index = imageItems.firstIndex(where: { $0.id == item.id }) {
             imageItems[index] = item
             selectedImage = imageItems[index]
         }
-
-        statusMessage = "Color \(colorIndex) modified - live preview"
     }
 
     func resetPaletteModification() {
@@ -435,6 +447,10 @@ struct ContentView: View {
         // Re-render with original palette to restore original appearance
         if let originalImage = PaletteRenderer.rerenderWithPalette(data: originalData, type: item.type, palette: originalPalette) {
             item.image = originalImage
+        } else if let base = item.paletteEditBase,
+                  let restored = PaletteRenderer.remapColors(in: base.image, from: base.palette.primaryPalette, to: originalPalette.primaryPalette) {
+            // Recolored platforms: go back from the clean copy
+            item.image = restored.image
         } else {
             // Fallback: re-decode from original data
             let result = SHRDecoder.decode(data: originalData, filename: item.decodeFilename ?? item.url.lastPathComponent)
@@ -442,6 +458,7 @@ struct ContentView: View {
                 item.image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
             }
         }
+        item.paletteEditBase = nil
 
         if let index = imageItems.firstIndex(where: { $0.id == item.id }) {
             imageItems[index] = item

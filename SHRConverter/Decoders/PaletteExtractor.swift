@@ -11,7 +11,12 @@ struct PaletteExtractor {
     static func extractPalette(from data: Data, type: AppleIIImageType, filename: String = "") -> PaletteInfo? {
         switch type {
         case .SHR(let mode, _, _):
-            if mode.contains("3200") {
+            if mode.contains("APF") {
+                // Apple Preferred Format keeps its colors in its own blocks, whatever the file size
+                return extractAPFPalette(from: data, is3200: mode.contains("3200"))
+            } else if mode.contains("DreamGrafix") {
+                return extractDreamGrafixPalette(from: data, mode: mode)
+            } else if mode.contains("3200") {
                 // Check for 3201 compressed format first
                 if let palette = extract3201Palette(from: data) {
                     return palette
@@ -31,14 +36,11 @@ struct PaletteExtractor {
                 return nil
             } else if mode.contains("DreamGrafix") {
                 return extractDreamGrafixPalette(from: data, mode: mode)
-            } else if mode.contains("APF") || mode.contains("816") {
-                // Apple Preferred Format - palette embedded in MAIN block
-                return extractAPFPalette(from: data, is3200: false)
             } else if mode.contains("Paintworks") {
                 // Paintworks format - palette at offset 0x00-0x1F
                 return extractPaintworksPalette(from: data)
-            } else if mode.contains("Packed") {
-                // Packed SHR - decompress first, then extract palette
+            } else if mode.contains("Packed") || mode.contains("816") {
+                // Packed SHR (including 816/Paint) - decompress first, then extract palette
                 return extractPackedSHRPalette(from: data)
             } else {
                 // Standard SHR - try standard extraction first
@@ -77,6 +79,10 @@ struct PaletteExtractor {
             return createZXSpectrumPalette()
 
         case .AmstradCPC(let mode, _):
+            // Prefer the inks the decoder actually used for this file (embedded or firmware defaults)
+            if let inks = RetroDecoder.amstradCPCColors(data: data), !inks.isEmpty {
+                return PaletteInfo(singlePalette: inks.map { PaletteColor(r: $0.r, g: $0.g, b: $0.b) }, platformName: "Amstrad CPC")
+            }
             return createAmstradCPCPalette(mode: mode)
 
         case .PCX(_, _, let bpp):
@@ -376,7 +382,15 @@ struct PaletteExtractor {
 
     /// Extract palette from Apple Preferred Format (APF) data
     private static func extractAPFPalette(from data: Data, is3200: Bool) -> PaletteInfo? {
-        // Parse APF blocks to find MAIN block with color tables
+        // 3200-color files: the per-scan-line palettes are in MULTIPAL, which usually comes after MAIN
+        if is3200, let multipal = extractAPFBlockPalette(from: data, wantedBlock: "MULTIPAL") {
+            return multipal
+        }
+        return extractAPFBlockPalette(from: data, wantedBlock: "MAIN")
+    }
+
+    private static func extractAPFBlockPalette(from data: Data, wantedBlock: String) -> PaletteInfo? {
+        // Parse APF blocks to find the requested block
         var pos = 0
 
         while pos + 5 <= data.count {
@@ -396,13 +410,13 @@ struct PaletteExtractor {
             let dataOffset = pos + 5 + nameLength
             let dataLength = blockLength - 5 - nameLength
 
-            if blockName == "MAIN" && dataLength > 6 {
+            if blockName == "MAIN" && wantedBlock == "MAIN" && dataLength > 6 {
                 // Parse MAIN block to extract color tables
                 let blockData = data.subdata(in: dataOffset..<(dataOffset + dataLength))
-                return parseAPFMainBlockPalette(from: blockData, is3200: is3200)
+                return parseAPFMainBlockPalette(from: blockData, is3200: false)
             }
 
-            if blockName == "MULTIPAL" && is3200 && dataLength > 0 {
+            if blockName == "MULTIPAL" && wantedBlock == "MULTIPAL" && dataLength > 2 {
                 // Parse MULTIPAL block for 3200-color mode
                 let blockData = data.subdata(in: dataOffset..<(dataOffset + dataLength))
                 return parseMultipalBlock(from: blockData)
@@ -475,17 +489,20 @@ struct PaletteExtractor {
     /// Parse MULTIPAL block for 3200-color mode
     private static func parseMultipalBlock(from data: Data) -> PaletteInfo? {
         // MULTIPAL contains 200 palettes (one per scanline), each with 32 bytes (16 colors x 2 bytes)
-        let numScanLines = 200
+        // Block layout: 2-byte palette count, then 32 bytes per palette (same as PackedSHRDecoder)
+        guard data.count >= 2 else { return nil }
+        let numScanLines = Int(data[0]) | (Int(data[1]) << 8)
+        guard numScanLines > 0 && numScanLines <= 400 else { return nil }
         var palettes: [[PaletteColor]] = []
 
         for y in 0..<numScanLines {
-            let offset = y * 32
+            let offset = 2 + y * 32
             guard offset + 32 <= data.count else { break }
             let palette = readAPFColorTable(from: data, at: offset)
             palettes.append(palette)
         }
 
-        guard palettes.count >= 200 else { return nil }
+        guard palettes.count == numScanLines else { return nil }
 
         return PaletteInfo(
             type: .perScanline,
@@ -896,27 +913,8 @@ struct PaletteExtractor {
     // MARK: - ZX Spectrum Palette
 
     private static func createZXSpectrumPalette() -> PaletteInfo {
-        // ZX Spectrum has 8 colors, each with normal and bright variants
-        let colors: [PaletteColor] = [
-            // Normal colors
-            PaletteColor(r: 0, g: 0, b: 0),       // Black
-            PaletteColor(r: 0, g: 0, b: 205),     // Blue
-            PaletteColor(r: 205, g: 0, b: 0),     // Red
-            PaletteColor(r: 205, g: 0, b: 205),   // Magenta
-            PaletteColor(r: 0, g: 205, b: 0),     // Green
-            PaletteColor(r: 0, g: 205, b: 205),   // Cyan
-            PaletteColor(r: 205, g: 205, b: 0),   // Yellow
-            PaletteColor(r: 205, g: 205, b: 205), // White
-            // Bright colors
-            PaletteColor(r: 0, g: 0, b: 0),       // Black (bright)
-            PaletteColor(r: 0, g: 0, b: 255),     // Blue (bright)
-            PaletteColor(r: 255, g: 0, b: 0),     // Red (bright)
-            PaletteColor(r: 255, g: 0, b: 255),   // Magenta (bright)
-            PaletteColor(r: 0, g: 255, b: 0),     // Green (bright)
-            PaletteColor(r: 0, g: 255, b: 255),   // Cyan (bright)
-            PaletteColor(r: 255, g: 255, b: 0),   // Yellow (bright)
-            PaletteColor(r: 255, g: 255, b: 255)  // White (bright)
-        ]
+        // 8 colors in normal and bright variants - the exact values the decoder draws with
+        let colors = RetroDecoder.zxSpectrumPalette.map { PaletteColor(r: $0.r, g: $0.g, b: $0.b) }
         return PaletteInfo(singlePalette: colors, platformName: "ZX Spectrum")
     }
 
@@ -977,6 +975,7 @@ struct PaletteExtractor {
 
     private static func extractPCXPalette(from data: Data, bitsPerPixel: Int) -> PaletteInfo? {
         guard data.count >= 128, data[0] == 0x0A else { return nil }
+        guard bitsPerPixel <= 8 else { return nil }  // more than 256 colors: no palette to show or edit
 
         // Read header info
         let headerBitsPerPixel = Int(data[3])
@@ -1163,6 +1162,22 @@ struct PaletteExtractor {
     // MARK: - MSX Palette (TMS9918 for MSX1, V9938 for MSX2)
 
     private static func createMSXPalette(mode: Int, data: Data) -> PaletteInfo {
+        // Screen 5 / 7: the palette the decoder actually found in (or defaulted for) this file
+        if mode == 5, let layout = MSXDecoder.screen5Layout(data: data) {
+            return PaletteInfo(singlePalette: layout.palette.map { PaletteColor(r: $0.r, g: $0.g, b: $0.b) }, platformName: "MSX2 Screen 5")
+        }
+        if mode == 7, let layout = MSXDecoder.screen7Layout(data: data) {
+            return PaletteInfo(singlePalette: layout.palette.map { PaletteColor(r: $0.r, g: $0.g, b: $0.b) }, platformName: "MSX2 Screen 7")
+        }
+        // Screen 8 encodes RGB directly in each pixel; there is no palette to edit
+        if mode == 8 {
+            var colors: [PaletteColor] = []
+            for i in 0..<256 {
+                colors.append(PaletteColor(r: UInt8(((i >> 5) & 0x07) * 255 / 7), g: UInt8(((i >> 2) & 0x07) * 255 / 7), b: UInt8((i & 0x03) * 255 / 3)))
+            }
+            return PaletteInfo(fixedPalette: colors, platformName: "MSX2 Screen 8")
+        }
+
         // For MSX2 modes (Screen 5, 7, 8), try to extract embedded palette
         if mode >= 5 {
             // Try multiple palette locations (same logic as MSXDecoder)

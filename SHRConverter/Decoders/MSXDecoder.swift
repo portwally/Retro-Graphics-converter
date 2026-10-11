@@ -30,7 +30,9 @@ class MSXDecoder {
     // Resolution: 256x192, 16 colors
     // Common file sizes: 14343 (with BSAVE header), 14336 (raw), 16384
 
-    static func decodeScreen2(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+    /// - Parameter palette: 16 colors to draw with instead of the TMS9918 defaults (palette editing)
+    static func decodeScreen2(data: Data, palette: [(r: UInt8, g: UInt8, b: UInt8)]? = nil) -> (image: CGImage?, type: AppleIIImageType) {
+        let colors = (palette?.count ?? 0) >= 16 ? palette! : msxPalette
         // MSX Screen 2 layout (VRAM):
         // Pattern Generator Table: 0x0000-0x17FF (6144 bytes - 256 patterns x 8 bytes x 3 banks)
         // Pattern Name Table: 0x1800-0x1AFF (768 bytes - 32x24 tile references)
@@ -143,7 +145,7 @@ class MSXDecoder {
                         let y = tileRow * 8 + line
                         let bufferIdx = (y * width + x) * 4
 
-                        let rgb = msxPalette[actualColor]
+                        let rgb = colors[actualColor]
                         rgbaBuffer[bufferIdx] = rgb.r
                         rgbaBuffer[bufferIdx + 1] = rgb.g
                         rgbaBuffer[bufferIdx + 2] = rgb.b
@@ -164,7 +166,8 @@ class MSXDecoder {
     // Resolution: 256x192 (32x24 tiles of 8x8)
     // Simpler color model: one color pair per 8 patterns
 
-    static func decodeScreen1(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+    static func decodeScreen1(data: Data, palette: [(r: UInt8, g: UInt8, b: UInt8)]? = nil) -> (image: CGImage?, type: AppleIIImageType) {
+        let colors = (palette?.count ?? 0) >= 16 ? palette! : msxPalette
         let width = 256
         let height = 192
 
@@ -230,7 +233,7 @@ class MSXDecoder {
                         let y = tileRow * 8 + line
                         let bufferIdx = (y * width + x) * 4
 
-                        let rgb = msxPalette[actualColor]
+                        let rgb = colors[actualColor]
                         rgbaBuffer[bufferIdx] = rgb.r
                         rgbaBuffer[bufferIdx + 1] = rgb.g
                         rgbaBuffer[bufferIdx + 2] = rgb.b
@@ -251,9 +254,8 @@ class MSXDecoder {
     // Resolution: 256x212, 16 colors from 512 color palette
     // 4 bits per pixel (2 pixels per byte)
 
-    static func decodeScreen5(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
-        let width = 256
-        let height = 212
+    /// Where the Screen 5 pixels start and which 16 colors the file uses (embedded palette or defaults)
+    static func screen5Layout(data: Data) -> (imageOffset: Int, palette: [(r: UInt8, g: UInt8, b: UInt8)])? {
         let imageDataSize = 27136  // 256x212 at 4bpp
         let vramPaletteOffset = 0x7680  // MSX2 VRAM palette location for Screen 5
 
@@ -302,7 +304,7 @@ class MSXDecoder {
             }
 
             if data.count < 7 + imageDataSize {
-                return (nil, .Unknown)
+                return nil
             }
         } else {
             // Raw format without BSAVE header
@@ -332,9 +334,21 @@ class MSXDecoder {
                     }
                 }
             } else if data.count < imageDataSize {
-                return (nil, .Unknown)
+                return nil
             }
         }
+
+        return (imageOffset, palette)
+    }
+
+    /// - Parameter paletteOverride: 16 colors to draw with instead of the file's own (palette editing)
+    static func decodeScreen5(data: Data, paletteOverride: [(r: UInt8, g: UInt8, b: UInt8)]? = nil) -> (image: CGImage?, type: AppleIIImageType) {
+        let width = 256
+        let height = 212
+
+        guard let layout = screen5Layout(data: data) else { return (nil, .Unknown) }
+        let imageOffset = layout.imageOffset
+        let palette = (paletteOverride?.count ?? 0) >= 16 ? paletteOverride! : layout.palette
 
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
 
@@ -376,17 +390,13 @@ class MSXDecoder {
     // Resolution: 512x212, 16 colors, 4 bits per pixel (256 bytes per line = 54272 bytes)
     // In a full VRAM dump the palette table sits at 0xFA80.
 
-    static func decodeScreen7(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
-        let width = 512
-        let height = 212
-        let bytesPerLine = 256
-        let imageDataSize = bytesPerLine * height  // 54272
+    /// Where the Screen 7 pixels start and which 16 colors the file uses
+    static func screen7Layout(data: Data) -> (imageOffset: Int, palette: [(r: UInt8, g: UInt8, b: UInt8)])? {
+        let imageDataSize = 256 * 212  // 54272
         let vramPaletteOffset = 0xFA80
 
         let imageOffset = (data.count >= 7 && data[0] == 0xFE) ? 7 : 0
-        guard data.count >= imageOffset + imageDataSize else {
-            return (nil, .Unknown)
-        }
+        guard data.count >= imageOffset + imageDataSize else { return nil }
 
         var palette = msxPalette
         for candidate in [imageOffset + vramPaletteOffset, imageOffset + imageDataSize] {
@@ -398,6 +408,17 @@ class MSXDecoder {
                 }
             }
         }
+        return (imageOffset, palette)
+    }
+
+    static func decodeScreen7(data: Data, paletteOverride: [(r: UInt8, g: UInt8, b: UInt8)]? = nil) -> (image: CGImage?, type: AppleIIImageType) {
+        let width = 512
+        let height = 212
+        let bytesPerLine = 256
+
+        guard let layout = screen7Layout(data: data) else { return (nil, .Unknown) }
+        let imageOffset = layout.imageOffset
+        let palette = (paletteOverride?.count ?? 0) >= 16 ? paletteOverride! : layout.palette
 
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
 

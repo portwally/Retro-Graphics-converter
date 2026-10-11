@@ -126,6 +126,9 @@ struct ImageItem: Identifiable {
     var hasImageModification: Bool  // Track transforms (rotate, flip, crop, adjustments)
     /// Name the decoder was given when this differs from the URL (ProDOS type-tagged names from disk catalogs)
     var decodeFilename: String? = nil
+    /// Image and palette as they were before the first palette edit; lets edits be re-applied from
+    /// a clean copy for platforms that are recolored rather than re-decoded. Not kept across transforms.
+    var paletteEditBase: (image: NSImage, palette: PaletteInfo)? = nil
 
     // Initializer with optional ID - if no ID is provided, a new one is created
     init(id: UUID = UUID(), url: URL, image: NSImage, type: AppleIIImageType, originalData: Data?, paletteInfo: PaletteInfo? = nil, hasImageModification: Bool = false) {

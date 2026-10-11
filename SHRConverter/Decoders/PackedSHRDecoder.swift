@@ -87,7 +87,9 @@ class PackedSHRDecoder {
     
     // MARK: - PNT/$0002 Apple Preferred Format Decoder
     
-    static func decodePNT0002(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+    /// - Parameter paletteOverride: replaces the file's colors (used for live palette editing):
+    ///   one palette per scan line for 3200-color files, otherwise the MAIN block's color tables.
+    static func decodePNT0002(data: Data, paletteOverride: [[(r: UInt8, g: UInt8, b: UInt8)]]? = nil) -> (image: CGImage?, type: AppleIIImageType) {
         // Parse all blocks
         var blocks: [APFBlock] = []
         var pos = 0
@@ -124,7 +126,7 @@ class PackedSHRDecoder {
             return (nil, .Unknown)
         }
         
-        guard let mainData = parseMAINBlock(mainBlock.data) else {
+        guard var mainData = parseMAINBlock(mainBlock.data) else {
             return (nil, .Unknown)
         }
         
@@ -132,6 +134,17 @@ class PackedSHRDecoder {
         var palettes3200: [[(r: UInt8, g: UInt8, b: UInt8)]]? = nil
         if let multipalBlock = blocks.first(where: { $0.name == "MULTIPAL" }) {
             palettes3200 = parseMULTIPALBlock(multipalBlock.data)
+        }
+
+        if let override = paletteOverride, !override.isEmpty {
+            if let original = palettes3200, original.count >= mainData.numScanLines {
+                // 3200-color file: the override must also cover every scan line
+                if override.count >= mainData.numScanLines {
+                    palettes3200 = override
+                }
+            } else {
+                mainData.colorTables = override
+            }
         }
         
         // Render image
@@ -158,7 +171,7 @@ class PackedSHRDecoder {
     private struct MAINBlockData {
         let masterMode: UInt16
         let pixelsPerScanLine: Int
-        let colorTables: [[(r: UInt8, g: UInt8, b: UInt8)]]
+        var colorTables: [[(r: UInt8, g: UInt8, b: UInt8)]]
         let numScanLines: Int
         let scanLineDirectory: [(packedBytes: Int, mode: UInt16)]
         let pixels: Data

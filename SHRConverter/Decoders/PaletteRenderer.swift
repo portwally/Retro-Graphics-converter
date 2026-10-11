@@ -20,11 +20,24 @@ struct PaletteRenderer {
 
         switch type {
         case .SHR(let mode, _, _):
-            if mode.contains("3200") {
+            if mode.contains("APF") {
+                // Apple Preferred Format: let the real decoder draw it with the edited colors
+                let tables = palette.palettes.map { $0.map { (r: $0.r, g: $0.g, b: $0.b) } }
+                cgImage = PackedSHRDecoder.decodePNT0002(data: data, paletteOverride: tables).image
+            } else if mode.contains("3200") {
                 cgImage = renderSHR3200(data: data, palettes: palette.palettes, mode: mode)
+            } else if mode.contains("DreamGrafix") {
+                // 256-color DreamGrafix: LZW-packed standard SHR layout followed by a 17-byte footer
+                guard data.count > 17 else { return nil }
+                let body = data.subdata(in: 0..<(data.count - 17))
+                if let unpacked = LZWDecompressor.decompressDreamGrafixLZW(data: body), unpacked.count >= 32000 {
+                    cgImage = renderStandardSHR(data: unpacked, palette: palette)
+                } else {
+                    cgImage = renderStandardSHR(data: body, palette: palette)
+                }
             } else if mode.contains("Paintworks") {
                 cgImage = renderPaintworks(data: data, palette: palette)
-            } else if mode.contains("Packed") {
+            } else if mode.contains("Packed") || mode.contains("816") {
                 cgImage = renderPackedSHR(data: data, palette: palette)
             } else {
                 cgImage = renderStandardSHR(data: data, palette: palette)
@@ -72,6 +85,56 @@ struct PaletteRenderer {
             return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
         }
         return nil
+    }
+
+    // MARK: - Generic Color Remap
+
+    /// Recolors an already decoded image by replacing each color of `oldColors` with the color at
+    /// the same position in `newColors`. Used for platforms that have no dedicated re-renderer;
+    /// it also works on images that were rotated, flipped or cropped after decoding.
+    /// - Returns: the recolored image and how many pixels changed, or nil if the image cannot be read.
+    static func remapColors(in image: NSImage, from oldColors: [PaletteColor], to newColors: [PaletteColor]) -> (image: NSImage, changedPixels: Int)? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let width = cgImage.width, height = cgImage.height
+        guard width > 0, height > 0 else { return nil }
+
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn: Bool = pixels.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(data: buffer.baseAddress, width: width, height: height,
+                                          bitsPerComponent: 8, bytesPerRow: width * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return false }
+            context.interpolationQuality = .none
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return nil }
+
+        // First palette entry wins when two entries share a color
+        var mapping: [UInt32: (r: UInt8, g: UInt8, b: UInt8)] = [:]
+        for (index, old) in oldColors.enumerated() where index < newColors.count {
+            let key = UInt32(old.r) << 16 | UInt32(old.g) << 8 | UInt32(old.b)
+            let new = newColors[index]
+            if mapping[key] == nil && (old.r != new.r || old.g != new.g || old.b != new.b) {
+                mapping[key] = (new.r, new.g, new.b)
+            }
+        }
+
+        var changed = 0
+        if !mapping.isEmpty {
+            for i in stride(from: 0, to: pixels.count, by: 4) {
+                let key = UInt32(pixels[i]) << 16 | UInt32(pixels[i + 1]) << 8 | UInt32(pixels[i + 2])
+                if let new = mapping[key] {
+                    pixels[i] = new.r
+                    pixels[i + 1] = new.g
+                    pixels[i + 2] = new.b
+                    changed += 1
+                }
+            }
+        }
+
+        guard let result = ImageHelpers.createCGImage(from: pixels, width: width, height: height) else { return nil }
+        return (NSImage(cgImage: result, size: NSSize(width: width, height: height)), changed)
     }
 
     // MARK: - SHR Standard Renderer
@@ -825,278 +888,35 @@ struct PaletteRenderer {
     // MARK: - MacPaint Renderer
 
     private static func renderMacPaint(data: Data, palette: PaletteInfo) -> CGImage? {
-        let width = 576
-        let height = 720
-        let bytesPerRow = 72  // 576 pixels / 8 bits per byte
-
         let primaryPalette = palette.primaryPalette
         guard primaryPalette.count >= 2 else { return nil }
 
-        // MacPaint palette: index 0 = background (white), index 1 = foreground (black)
-        let color0 = (r: primaryPalette[0].r, g: primaryPalette[0].g, b: primaryPalette[0].b)
-        let color1 = (r: primaryPalette[1].r, g: primaryPalette[1].g, b: primaryPalette[1].b)
-
-        var rgbaBuffer = [UInt8](repeating: 255, count: width * height * 4)
-
-        // Skip 512-byte header
-        let headerSize = 512
-        guard data.count > headerSize else { return nil }
-
-        // Decompress PackBits data
-        var decompressedData: [UInt8] = []
-        let expectedSize = bytesPerRow * height  // 51,840 bytes
-        var offset = headerSize
-
-        while offset < data.count && decompressedData.count < expectedSize {
-            let cmd = Int8(bitPattern: data[offset])
-            offset += 1
-
-            if cmd >= 0 {
-                // Literal run: copy next (cmd + 1) bytes
-                let count = Int(cmd) + 1
-                for _ in 0..<count {
-                    if offset < data.count && decompressedData.count < expectedSize {
-                        decompressedData.append(data[offset])
-                        offset += 1
-                    }
-                }
-            } else if cmd != -128 {
-                // Repeat run: repeat next byte (-cmd + 1) times
-                let count = Int(-cmd) + 1
-                if offset < data.count {
-                    let repeatByte = data[offset]
-                    offset += 1
-                    for _ in 0..<count {
-                        if decompressedData.count < expectedSize {
-                            decompressedData.append(repeatByte)
-                        }
-                    }
-                }
-            }
-            // cmd == -128 is a no-op
-        }
-
-        // Render the 1-bit image
-        for y in 0..<height {
-            for x in 0..<width {
-                let byteIndex = y * bytesPerRow + (x / 8)
-                let bitIndex = 7 - (x % 8)  // MSB first
-
-                let bufferIdx = (y * width + x) * 4
-
-                if byteIndex < decompressedData.count {
-                    let bit = (decompressedData[byteIndex] >> bitIndex) & 1
-                    // bit 0 = white (palette[0]), bit 1 = black (palette[1])
-                    let color = bit == 0 ? color0 : color1
-                    rgbaBuffer[bufferIdx] = color.r
-                    rgbaBuffer[bufferIdx + 1] = color.g
-                    rgbaBuffer[bufferIdx + 2] = color.b
-                } else {
-                    // Default to white if data runs out
-                    rgbaBuffer[bufferIdx] = color0.r
-                    rgbaBuffer[bufferIdx + 1] = color0.g
-                    rgbaBuffer[bufferIdx + 2] = color0.b
-                }
-                rgbaBuffer[bufferIdx + 3] = 255
-            }
-        }
-
-        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+        // MacPaint palette: index 0 = paper (white), index 1 = ink (black). Drawn by the real decoder.
+        let paper = (r: primaryPalette[0].r, g: primaryPalette[0].g, b: primaryPalette[0].b)
+        let ink = (r: primaryPalette[1].r, g: primaryPalette[1].g, b: primaryPalette[1].b)
+        return RetroDecoder.decodeMacPaint(data: data, colors: (paper: paper, ink: ink)).image
     }
 
     // MARK: - MSX Renderer
 
     private static func renderMSX(data: Data, palette: PaletteInfo, mode: Int) -> CGImage? {
+        // Drawn by the real decoders so file-layout detection can never differ from the original image
+        let colors: [(r: UInt8, g: UInt8, b: UInt8)] = palette.primaryPalette.map { ($0.r, $0.g, $0.b) }
+        guard colors.count >= 16 else { return nil }
+
         switch mode {
-        case 5:
-            return renderMSXScreen5(data: data, palette: palette)
-        case 8:
-            return renderMSXScreen8(data: data, palette: palette)
+        case 1:
+            return MSXDecoder.decodeScreen1(data: data, palette: colors).image
         case 2:
-            return renderMSXScreen2(data: data, palette: palette)
+            return MSXDecoder.decodeScreen2(data: data, palette: colors).image
+        case 5:
+            return MSXDecoder.decodeScreen5(data: data, paletteOverride: colors).image
+        case 7:
+            return MSXDecoder.decodeScreen7(data: data, paletteOverride: colors).image
         default:
-            // Screen 1 and Screen 7 have their own layouts; no palette re-render for them yet
+            // Screen 8 has a fixed 256-color RGB encoding and no palette
             return nil
         }
-    }
-
-    private static func renderMSXScreen5(data: Data, palette: PaletteInfo) -> CGImage? {
-        let width = 256
-        let height = 212
-
-        var offset = 0
-
-        // Check for BSAVE header
-        if data.count >= 7 && data[0] == 0xFE {
-            offset = 7
-        }
-
-        let dataSize = data.count - offset
-        guard dataSize >= 27136 else { return nil }
-
-        let primaryPalette = palette.primaryPalette
-        guard primaryPalette.count >= 16 else { return nil }
-
-        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
-
-        for y in 0..<height {
-            for x in 0..<(width / 2) {
-                let byteOffset = offset + y * 128 + x
-                guard byteOffset < data.count else { continue }
-
-                let byte = data[byteOffset]
-                let pixel1 = Int((byte >> 4) & 0x0F)
-                let pixel2 = Int(byte & 0x0F)
-
-                // First pixel
-                let bufferIdx1 = (y * width + x * 2) * 4
-                let color1 = pixel1 < primaryPalette.count ? primaryPalette[pixel1] : primaryPalette[0]
-                rgbaBuffer[bufferIdx1] = color1.r
-                rgbaBuffer[bufferIdx1 + 1] = color1.g
-                rgbaBuffer[bufferIdx1 + 2] = color1.b
-                rgbaBuffer[bufferIdx1 + 3] = 255
-
-                // Second pixel
-                let bufferIdx2 = (y * width + x * 2 + 1) * 4
-                let color2 = pixel2 < primaryPalette.count ? primaryPalette[pixel2] : primaryPalette[0]
-                rgbaBuffer[bufferIdx2] = color2.r
-                rgbaBuffer[bufferIdx2 + 1] = color2.g
-                rgbaBuffer[bufferIdx2 + 2] = color2.b
-                rgbaBuffer[bufferIdx2 + 3] = 255
-            }
-        }
-
-        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
-    }
-
-    private static func renderMSXScreen8(data: Data, palette: PaletteInfo) -> CGImage? {
-        // Screen 8 is 256 colors, fixed palette (GGGRRRBB format)
-        // Palette editing doesn't apply since colors are direct
-        let width = 256
-        let height = 212
-
-        var offset = 0
-
-        if data.count >= 7 && data[0] == 0xFE {
-            offset = 7
-        }
-
-        let dataSize = data.count - offset
-        guard dataSize >= 54272 else { return nil }
-
-        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
-
-        for y in 0..<height {
-            for x in 0..<width {
-                let byteOffset = offset + y * width + x
-                guard byteOffset < data.count else { continue }
-
-                let colorByte = data[byteOffset]
-                // MSX2 Screen 8: GGGRRRBB format
-                let g = UInt8((Int((colorByte >> 5) & 0x07) * 255) / 7)
-                let r = UInt8((Int((colorByte >> 2) & 0x07) * 255) / 7)
-                let b = UInt8((Int(colorByte & 0x03) * 255) / 3)
-
-                let bufferIdx = (y * width + x) * 4
-                rgbaBuffer[bufferIdx] = r
-                rgbaBuffer[bufferIdx + 1] = g
-                rgbaBuffer[bufferIdx + 2] = b
-                rgbaBuffer[bufferIdx + 3] = 255
-            }
-        }
-
-        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
-    }
-
-    private static func renderMSXScreen2(data: Data, palette: PaletteInfo) -> CGImage? {
-        let width = 256
-        let height = 192
-
-        var offset = 0
-
-        if data.count >= 7 && data[0] == 0xFE {
-            offset = 7
-        }
-
-        let dataSize = data.count - offset
-        guard dataSize >= 6912 else { return nil }
-
-        let primaryPalette = palette.primaryPalette
-        guard primaryPalette.count >= 16 else { return nil }
-
-        // Determine layout based on file size
-        let patternNameTableOffset: Int
-        let patternGeneratorOffset: Int
-        let colorTableOffset: Int
-
-        if dataSize >= 16384 {
-            patternNameTableOffset = offset + 0x1800
-            patternGeneratorOffset = offset + 0x0000
-            colorTableOffset = offset + 0x2000
-        } else if dataSize >= 14336 {
-            patternNameTableOffset = offset
-            patternGeneratorOffset = offset + 768
-            colorTableOffset = offset + 768 + 6144
-        } else {
-            patternNameTableOffset = offset
-            patternGeneratorOffset = offset
-            colorTableOffset = offset + 6144
-        }
-
-        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
-
-        for tileRow in 0..<24 {
-            for tileCol in 0..<32 {
-                let tileIndex = tileRow * 32 + tileCol
-
-                let patternNum: Int
-                if patternNameTableOffset + tileIndex < data.count {
-                    patternNum = Int(data[patternNameTableOffset + tileIndex])
-                } else {
-                    patternNum = tileIndex % 256
-                }
-
-                let bank = tileRow / 8
-                let patternOffset = patternGeneratorOffset + (bank * 2048) + (patternNum * 8)
-                let colorOffset = colorTableOffset + (bank * 2048) + (patternNum * 8)
-
-                for line in 0..<8 {
-                    let patternByteOffset = patternOffset + line
-                    let colorByteOffset = colorOffset + line
-
-                    var patternByte: UInt8 = 0
-                    var colorByte: UInt8 = 0
-
-                    if patternByteOffset < data.count {
-                        patternByte = data[patternByteOffset]
-                    }
-                    if colorByteOffset < data.count {
-                        colorByte = data[colorByteOffset]
-                    }
-
-                    let fgColorIdx = Int((colorByte >> 4) & 0x0F)
-                    let bgColorIdx = Int(colorByte & 0x0F)
-
-                    for pixel in 0..<8 {
-                        let bit = (patternByte >> (7 - pixel)) & 1
-                        let colorIdx = bit == 1 ? fgColorIdx : bgColorIdx
-                        let actualColorIdx = colorIdx == 0 ? 1 : colorIdx
-
-                        let x = tileCol * 8 + pixel
-                        let y = tileRow * 8 + line
-                        let bufferIdx = (y * width + x) * 4
-
-                        let color = actualColorIdx < primaryPalette.count ? primaryPalette[actualColorIdx] : primaryPalette[0]
-                        rgbaBuffer[bufferIdx] = color.r
-                        rgbaBuffer[bufferIdx + 1] = color.g
-                        rgbaBuffer[bufferIdx + 2] = color.b
-                        rgbaBuffer[bufferIdx + 3] = 255
-                    }
-                }
-            }
-        }
-
-        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
     }
 
     // MARK: - Paintworks Renderer
