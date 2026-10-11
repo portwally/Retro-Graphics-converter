@@ -93,6 +93,7 @@ struct MainToolbarView: View {
                 LabeledToolbarButton(
                     icon: "square.and.arrow.up",
                     label: "Export",
+                    isDisabled: !hasImages,
                     action: onExport
                 )
 
@@ -124,7 +125,7 @@ struct MainToolbarView: View {
 
                 // Zoom percentage display
                 VStack(spacing: 2) {
-                    Text("\(zoomPercentage)%")
+                    Text(isFitMode ? "Fit" : "\(zoomPercentage)%")
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
                         .frame(width: 50, height: 36)
                         .foregroundColor(Color(NSColor.labelColor))
@@ -257,6 +258,7 @@ struct MainToolbarView: View {
                     icon: "crop",
                     label: "Crop",
                     isActive: cropMode,
+                    isDisabled: !hasImage,
                     action: { cropMode.toggle() }
                 )
 
@@ -291,10 +293,6 @@ struct MainToolbarView: View {
         zoomScale = -1.0
     }
 }
-
-// MARK: - Zoom Controls (Legacy - kept for compatibility)
-
-// MARK: - Crop Tools (Legacy - kept for compatibility)
 
 // MARK: - Preview
 

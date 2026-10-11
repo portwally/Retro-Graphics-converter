@@ -90,7 +90,7 @@ struct HelpView: View {
 
             BulletPoint(text: "**Toolbar** - Import/Export, zoom, rotate, flip, crop, and undo tools")
             BulletPoint(text: "**Sidebar** - Thumbnail browser with selection controls")
-            BulletPoint(text: "**Preview Area** - Large view of selected image with checkerboard background")
+            BulletPoint(text: "**Preview Area** - Large view of the selected image")
             BulletPoint(text: "**Info Bar** - File information and palette display")
             BulletPoint(text: "**Status Bar** - Counts for imported, selected, removed, and exported files")
         }
@@ -113,7 +113,7 @@ struct HelpView: View {
 
             BulletPoint(text: "**Import Button** - Click to open a file picker dialog")
             BulletPoint(text: "**Drag & Drop** - Drag files directly onto the window")
-            BulletPoint(text: "**Keyboard** - Press Cmd+O to open the import dialog")
+            BulletPoint(text: "**Folders** - Open or drop a folder to scan everything inside it")
 
             Divider()
 
@@ -137,9 +137,9 @@ struct HelpView: View {
             Text("When you open a disk image, a catalog browser appears showing all recognized graphics files. You can:")
                 .font(.body)
 
-            BulletPoint(text: "Double-click files to import them individually")
-            BulletPoint(text: "Use Select All to select all images")
-            BulletPoint(text: "Import selected files with the Import button")
+            BulletPoint(text: "Click a row or its checkbox to select files")
+            BulletPoint(text: "Use Select All Images to select every recognized picture")
+            BulletPoint(text: "Import the selection with Import Selected, or save the raw files with Export Files")
         }
     }
 
@@ -158,16 +158,15 @@ struct HelpView: View {
             Text("The sidebar shows thumbnails of all imported images with file names and format information.")
                 .font(.body)
 
-            BulletPoint(text: "**Click** - Select a single image")
-            BulletPoint(text: "**Cmd+Click** - Add/remove from selection")
-            BulletPoint(text: "**Shift+Click** - Select a range")
-            BulletPoint(text: "**Select All** - Select all images in the browser")
+            BulletPoint(text: "**Click a thumbnail** - Show that image in the preview")
+            BulletPoint(text: "**Click its checkbox** - Add it to or remove it from the selection")
+            BulletPoint(text: "**Select All button** - Select or deselect all images shown by the current filter")
 
             Divider()
 
             HelpSectionHeader(title: "Preview Controls", icon: "magnifyingglass")
 
-            BulletPoint(text: "**Zoom In/Out** - Use the + and - buttons or scroll wheel")
+            BulletPoint(text: "**Zoom In/Out** - Use the + and - buttons in the toolbar")
             BulletPoint(text: "**Fit to Window** - Auto-scale image to fit the preview area")
             BulletPoint(text: "**Zoom Percentage** - Shows current zoom level")
 
@@ -187,7 +186,7 @@ struct HelpView: View {
 
             HelpSectionHeader(title: "Removing Images", icon: "trash")
 
-            BulletPoint(text: "Select images and press Delete to remove them from the browser")
+            BulletPoint(text: "Select images and click the trash button above the browser to remove them")
             BulletPoint(text: "This does not delete the original files")
         }
     }
@@ -283,15 +282,15 @@ struct HelpView: View {
             Text("The palette display in the info bar shows the colors used by the current image. For editable palettes, you can modify colors to create custom color schemes.")
                 .font(.body)
 
-            BulletPoint(text: "**Click a color swatch** to open the macOS color picker")
+            BulletPoint(text: "**Click a color swatch** (or Edit) to open the palette editor, then click a color there to open the macOS color picker")
             BulletPoint(text: "**Choose a new color** and the preview updates instantly")
-            BulletPoint(text: "**Hover over colors** to see the color index and hex value")
+            BulletPoint(text: "**Select a color in the editor** to see its index, hex and RGB values")
 
             Divider()
 
             HelpSectionHeader(title: "Palette Types", icon: "square.grid.3x3")
 
-            BulletPoint(text: "**Fixed** - Non-editable system palettes (C64, ZX Spectrum)")
+            BulletPoint(text: "**Fixed** - Palettes that cannot be edited (for example HAM images and MSX Screen 8)")
             BulletPoint(text: "**Single** - One palette for the entire image (standard SHR, IFF)")
             BulletPoint(text: "**Multiple** - Multiple palettes selectable per scanline (SHR)")
             BulletPoint(text: "**Per-Scanline** - Unique palette for each line (3200-color mode)")
@@ -328,8 +327,8 @@ struct HelpView: View {
             Text("Click the Export button to open the export dialog. You can configure:")
                 .font(.body)
 
-            BulletPoint(text: "**Output formats** - PNG, JPEG, TIFF, BMP, GIF")
-            BulletPoint(text: "**Scale factor** - 1x (original), 2x, or 4x")
+            BulletPoint(text: "**Output formats** - PNG, JPEG, TIFF, GIF, HEIC, or Original (the unchanged retro file)")
+            BulletPoint(text: "**Scale factor** - 1x (original), 2x, 4x, or 8x")
             BulletPoint(text: "**Output location** - Choose where to save files")
 
             Divider()
@@ -340,7 +339,7 @@ struct HelpView: View {
             BulletPoint(text: "**JPEG** - Good for photos, smaller file size")
             BulletPoint(text: "**TIFF** - Professional use, maximum quality")
             BulletPoint(text: "**GIF** - Limited to 256 colors, good for simple graphics")
-            BulletPoint(text: "**BMP** - Universal compatibility, uncompressed")
+            BulletPoint(text: "**HEIC** - Modern format with efficient compression")
 
             Divider()
 
@@ -498,7 +497,7 @@ struct HelpView: View {
             HelpSectionHeader(title: "PC Formats", icon: "pc")
 
             FormatRow(format: "PCX", description: "PC Paintbrush (1-24 bit)")
-            FormatRow(format: "BMP", description: "Windows Bitmap (1-24 bit)")
+            FormatRow(format: "BMP", description: "Windows Bitmap (1-32 bit)")
 
             Divider()
 
@@ -527,7 +526,7 @@ struct HelpView: View {
             HelpSectionHeader(title: "TRS-80 / CoCo", icon: "display")
 
             FormatRow(format: "Model I/III", description: "Block graphics (128x48)")
-            FormatRow(format: "PMODE 3/4", description: "CoCo graphics (128x192, 256x192)")
+            FormatRow(format: "PMODE 1/3/4", description: "CoCo graphics (128x96, 128x192, 256x192)")
             FormatRow(format: "CoCo 3", description: "Enhanced modes (320x200, 16 colors)")
 
             Divider()
@@ -570,34 +569,26 @@ struct HelpView: View {
 
             Divider()
 
-            HelpSectionHeader(title: "File Operations", icon: "doc")
-
-            ShortcutRow(keys: "Cmd + O", action: "Import files")
-            ShortcutRow(keys: "Cmd + E", action: "Export selected images")
-            ShortcutRow(keys: "Cmd + A", action: "Select all images")
-
-            Divider()
-
             HelpSectionHeader(title: "Editing", icon: "pencil")
 
             ShortcutRow(keys: "Cmd + Z", action: "Undo last action")
-            ShortcutRow(keys: "Delete", action: "Remove selected images")
 
             Divider()
 
-            HelpSectionHeader(title: "View", icon: "eye")
+            HelpSectionHeader(title: "Dialogs", icon: "rectangle.on.rectangle")
 
-            ShortcutRow(keys: "Cmd + +", action: "Zoom in")
-            ShortcutRow(keys: "Cmd + -", action: "Zoom out")
-            ShortcutRow(keys: "Cmd + 0", action: "Fit to window")
+            ShortcutRow(keys: "Return", action: "Confirm (Export, Import Selected, Done)")
+            ShortcutRow(keys: "Esc", action: "Cancel")
 
             Divider()
 
-            HelpSectionHeader(title: "Navigation", icon: "arrow.left.arrow.right")
+            HelpSectionHeader(title: "Help", icon: "questionmark.circle")
 
-            ShortcutRow(keys: "Up/Down Arrow", action: "Previous/Next image")
-            ShortcutRow(keys: "Home", action: "First image")
-            ShortcutRow(keys: "End", action: "Last image")
+            ShortcutRow(keys: "Cmd + ?", action: "Open this help window")
+
+            Text("Importing, exporting, zooming and removing images are done with the toolbar and browser buttons; they have no keyboard shortcuts yet.")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
     }
 
@@ -615,7 +606,7 @@ struct HelpView: View {
 
             BulletPoint(text: "Verify the file is a supported format")
             BulletPoint(text: "Check that the file isn't corrupted")
-            BulletPoint(text: "For disk images, ensure the disk format is DOS 3.3 or ProDOS")
+            BulletPoint(text: "For disk images, check that the format is listed under Supported Formats")
             BulletPoint(text: "Some non-standard formats may not be recognized")
 
             Divider()

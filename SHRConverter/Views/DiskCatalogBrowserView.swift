@@ -136,13 +136,7 @@ struct DiskCatalogBrowserView: View {
             }
             var filename = components.last ?? "_"
             if !filename.contains(".") {
-                switch entry.fileType {
-                case 0x00, 0x01: filename += ".txt"
-                case 0x02: filename += ".bas"
-                case 0x04, 0x06: filename += ".bin"
-                case 0xFA, 0xFC: filename += ".bas"
-                default: filename += ".dat"
-                }
+                filename += "." + entry.defaultExportExtension
             }
 
             var folder = exportFolder

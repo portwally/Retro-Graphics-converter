@@ -700,7 +700,8 @@ extension DiskImageReader {
                         isImage: false,
                         imageType: .Unknown,
                         isDirectory: true,
-                        children: subEntries
+                        children: subEntries,
+                        fileSystem: .prodos
                     )
                     entries.append(dirEntry)
                 } else {
@@ -793,7 +794,8 @@ extension DiskImageReader {
                             isImage: isImage,
                             imageType: result.type,
                             isDirectory: false,
-                            children: nil
+                            children: nil,
+                            fileSystem: .prodos
                         )
                         entries.append(entry)
                     }
@@ -921,7 +923,8 @@ extension DiskImageReader {
                         isImage: isImage,
                         imageType: result.type,
                         isDirectory: false,
-                        children: nil
+                        children: nil,
+                        fileSystem: .dos33
                     )
                     entries.append(entry)
                 }
@@ -2260,7 +2263,8 @@ extension DiskImageReader {
                     isImage: isImage,
                     imageType: result.type,
                     isDirectory: false,
-                    children: nil
+                    children: nil,
+                    fileSystem: .prodos
                 )
                 entries.append(entry)
             }

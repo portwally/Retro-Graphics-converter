@@ -19,6 +19,7 @@ struct ImageThumbnailView: View {
                 Image(nsImage: item.image)
                     .resizable()
                     .interpolation(.none)
+                    .aspectRatio(contentMode: .fit)  // tall or rotated pictures are not stretched to 4:3
                     .frame(width: thumbnailWidth, height: thumbnailHeight)
                     .background(Color.black.opacity(0.1))
                     .cornerRadius(8)

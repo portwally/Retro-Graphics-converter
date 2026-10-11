@@ -346,6 +346,45 @@ clean build without warnings, app launches, the 3,368 real disks give identical 
 - [ ] `AppleIIImageType.colorDepth` is never displayed anywhere. (The label corrections made to
   it in section 5 therefore have no visible effect; either show it in the info bar or remove it.)
 
+## 6c. Remaining views and models (third reading pass, 2026-10-11)
+
+Read: `PaletteView`, `ToolbarView`, `InfoBarView`, `HelpView`, `ProDOSFileTypes`,
+`StatusBarView`, `ImageThumbnailView`. Fixed on branch `audit-fixes`; builds without warnings,
+launches, real-disk results and palette re-render results unchanged. **None of the UI changes
+below were clicked through.**
+
+- [x] **[code] Disk browser Type column was wrong for every disk that is not ProDOS.** The row
+  showed a ProDOS interpretation of the type number: on DOS 3.3 disks binary files appeared as
+  "TXT" and Applesoft programs as "PCD" (Pascal code); C64 PRG files as "PCD"; every file on
+  Atari, MSX, CPC, BBC, CoCo, Amiga and TR-DOS disks as "NON". The readable type each reader
+  already computed (`fileTypeString`) was never displayed. Entries now carry their file system.
+  Checked on real disks: DOS 3.3 shows BAS / BIN, C64 shows PRG, ProDOS unchanged.
+- [x] **[code] "Export Files" picked extensions with mixed-up type numbers** (ProDOS text files
+  got `.bin`). Now per file system; C64 files get `.prg` / `.seq`.
+- [x] **[code] Palette shown for the wrong scan line.** Mouse tracking clamped the line number to
+  the number of palettes, so for ordinary SHR pictures (16 palettes, 200 lines) only lines 0-15
+  could ever be reported. Now clamped to the image height.
+- [x] **[code] Palette editor Reset re-rendered once per colour** - 3,200 full re-renders for a
+  3200-colour picture - and left the image flagged as modified. Paste did 16. Both now replace the
+  palettes in one step; restoring the file's own colours clears the modified flag.
+- [x] **[code] Palette editor opened on the wrong palette** for multi-palette pictures (it used
+  the line number as a palette index).
+- [x] **[code] Thumbnails were stretched to 4:3** whatever the picture's shape (MacPaint, rotated images).
+- [x] **[code] Export and Crop buttons were enabled with nothing loaded**; the zoom readout said
+  "100%" in fit mode (now "Fit").
+- [x] **[doc] Help described features the app does not have.** Corrected: of eleven listed
+  keyboard shortcuts only Cmd+Z exists; also Cmd/Shift-click selection, scroll-wheel zoom,
+  double-click import, BMP export and a checkerboard background. Export formats and scales now
+  match the export sheet.
+- [ ] **Decision for you:** implement the shortcuts Help used to promise (Cmd+O, Cmd+E, Cmd+A,
+  Delete, Cmd +/-/0, arrow keys)? Not done - it is new behaviour, and Cmd+A / arrow keys need care
+  not to break text fields.
+- [ ] The info bar shows the format's nominal size (e.g. 160x200 for Plus/4 multicolor that is
+  drawn 320x200, and unchanged after a crop or rotate); the details popover shows the real size.
+- Not a bug after testing: I expected `PaletteColor(nsColor:)` to crash on wide-gamut colours and
+  to drift by one on round trips. A test showed neither happens (macOS clamps on conversion). The
+  clamp-and-round I added there is harmless hardening only.
+
 ## 7. Audit work still to do
 
 - [x] Run the disk readers over the real disk images on this Mac — 3,368 images, no crashes or
@@ -359,9 +398,9 @@ clean build without warnings, app launches, the 3,368 real disks give identical 
 - [x] README/HelpView claims checked (D71/D81 finding in section 4; Degas Elite `.PC1`–`.PC3`
   are not claimed in the README, but the ST catalog flags them as images that then fail to import).
 - [ ] Find sample files to settle the four **[likely]** items (`.ocp`, `.trd`, genuine RS-DOS `.dsk`, `.dsd`).
-- [ ] Still unread: `PaletteView.swift`, `ToolbarView.swift`, `InfoBarView.swift`, `HelpView.swift`,
-  `ProDOSFileTypes.swift`, `StatusBarView.swift`, `ImageThumbnailView.swift`, and the bodies of
-  `PaletteExtractor.swift` / `PaletteRenderer.swift` beyond the functions cited above.
+- [x] All source files have now been read (section 6c), except that `PaletteExtractor.swift` and
+  `PaletteRenderer.swift` were checked by measurement (decode vs re-render on 18,000 real images)
+  rather than line by line.
 - [ ] Work out why 135 plain 143360-byte `.dsk` files and three 32 MB `.hdv` files return no
   catalog (expected for protected/non-DOS disks, but not verified per file).
 - [ ] Decide whether to add a test target; the harness cases from these sessions would make a good start.

@@ -8,6 +8,7 @@ struct InfoBarView: View {
     @Binding var currentScanline: Int?
     let onColorEdit: ((Int, Int, NSColor) -> Void)?
     let onResetPalette: (() -> Void)?
+    var onPalettesReplace: (([[PaletteColor]]) -> Void)? = nil
 
     @State private var showInfoPopover = false
 
@@ -198,7 +199,8 @@ struct InfoBarView: View {
             PaletteView(
                 paletteInfo: selectedImage?.activePalette,
                 currentScanline: $currentScanline,
-                onColorEdit: onColorEdit
+                onColorEdit: onColorEdit,
+                onPalettesReplace: onPalettesReplace
             )
         }
     }

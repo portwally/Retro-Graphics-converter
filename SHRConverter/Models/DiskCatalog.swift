@@ -17,7 +17,10 @@ struct DiskCatalogEntry: Identifiable {
     let imageType: AppleIIImageType
     let isDirectory: Bool
     let children: [DiskCatalogEntry]?
-    
+    /// Which file system `fileType` belongs to. The numbers mean different things on each:
+    /// $04 is a text file on ProDOS but a binary on DOS 3.3, and 2 is PRG on a Commodore disk.
+    var fileSystem: CatalogFileSystem = .other
+
     var sizeString: String {
         if size < 1024 {
             return "\(size) B"
@@ -36,19 +39,83 @@ struct DiskCatalogEntry: Identifiable {
     }
 }
 
+enum CatalogFileSystem {
+    case prodos   // fileType / loadAddress are a ProDOS file type and aux type
+    case dos33    // fileTypeString holds the DOS 3.3 type byte as "$xx"
+    case other    // fileTypeString is already a readable type (PRG, Degas, GR.8 ...)
+}
+
 extension DiskCatalogEntry {
     var fileTypeInfo: ProDOSFileTypeInfo {
         return ProDOSFileTypeInfo.getFileTypeInfo(fileType: fileType, auxType: loadAddress)
     }
-    
+
+    /// DOS 3.3 type byte (lock bit removed), parsed back from fileTypeString
+    private var dos33Type: UInt8? {
+        guard fileSystem == .dos33, fileTypeString.hasPrefix("$") else { return nil }
+        return UInt8(fileTypeString.dropFirst(), radix: 16)
+    }
+
+    private var dos33TypeName: String {
+        switch dos33Type {
+        case 0x00: return "TXT"
+        case 0x01: return "INT"   // Integer BASIC
+        case 0x02: return "BAS"   // Applesoft BASIC
+        case 0x04: return "BIN"
+        case 0x08: return "S"
+        case 0x10: return "REL"
+        case 0x20: return "A"
+        case 0x40: return "B"
+        default: return fileTypeString
+        }
+    }
+
     var icon: String {
         if isDirectory { return "📁" }
-        return fileTypeInfo.icon
+        switch fileSystem {
+        case .prodos:
+            return fileTypeInfo.icon
+        case .dos33, .other:
+            return isImage ? "🖼️" : "📄"
+        }
     }
-    
+
     var typeDescription: String {
         if isDirectory { return "Folder" }
-        return fileTypeInfo.shortName
+        switch fileSystem {
+        case .prodos:
+            return fileTypeInfo.shortName
+        case .dos33:
+            return isImage ? "\(dos33TypeName) (image)" : dos33TypeName
+        case .other:
+            return fileTypeString
+        }
+    }
+
+    /// Extension to add when exporting a file whose name has none
+    var defaultExportExtension: String {
+        switch fileSystem {
+        case .prodos:
+            switch fileType {
+            case 0x04: return "txt"
+            case 0x06: return "bin"
+            case 0xFA, 0xFC: return "bas"
+            case 0xFF: return "sys"
+            default: return "dat"
+            }
+        case .dos33:
+            switch dos33Type {
+            case 0x00: return "txt"
+            case 0x01, 0x02: return "bas"
+            case 0x04: return "bin"
+            default: return "dat"
+            }
+        case .other:
+            // Short readable types double as extensions (PRG, SEQ, BAS ...)
+            let type = fileTypeString.lowercased()
+            let isPlainType = (1...4).contains(type.count) && type.allSatisfy { $0.isLetter || $0.isNumber }
+            return isPlainType ? type : "dat"
+        }
     }
 }
 

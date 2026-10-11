@@ -152,6 +152,9 @@ struct ContentView: View {
                 },
                 onResetPalette: {
                     resetPaletteModification()
+                },
+                onPalettesReplace: { palettes in
+                    handlePalettesReplace(palettes)
                 }
             )
 
@@ -422,20 +425,43 @@ struct ContentView: View {
     // MARK: - Palette Handling
 
     func handleColorEdit(paletteIndex: Int, colorIndex: Int, newColor: NSColor) {
+        guard let item = selectedImage, let originalPalette = item.paletteInfo else { return }
+
+        var editedPalette = item.modifiedPalette ?? originalPalette
+        editedPalette.updateColor(paletteIndex: paletteIndex, colorIndex: colorIndex, newColor: PaletteColor(nsColor: newColor))
+        applyEditedPalette(editedPalette, successMessage: "Color \(colorIndex) modified - live preview",
+                           unusedMessage: "Color \(colorIndex) is not used in this image")
+    }
+
+    /// Replaces all palettes at once and redraws once (palette paste and the editor's Reset button)
+    func handlePalettesReplace(_ palettes: [[PaletteColor]]) {
+        guard let item = selectedImage, let originalPalette = item.paletteInfo else { return }
+        guard palettes.count == originalPalette.palettes.count else { return }
+
+        if palettes == originalPalette.palettes {
+            // Back to the file's own colors: this is a full reset, not a modification
+            if item.modifiedPalette != nil { resetPaletteModification() }
+            return
+        }
+
+        var editedPalette = item.modifiedPalette ?? originalPalette
+        editedPalette.palettes = palettes
+        applyEditedPalette(editedPalette, successMessage: "Palette updated - live preview",
+                           unusedMessage: "None of the changed colors are used in this image")
+    }
+
+    /// Redraws the selected image with an edited palette and stores the palette if that worked
+    private func applyEditedPalette(_ editedPalette: PaletteInfo, successMessage: String, unusedMessage: String) {
         guard var item = selectedImage,
               let originalPalette = item.paletteInfo,
               let originalData = item.originalData else { return }
 
         let paletteBeforeEdit = item.modifiedPalette ?? originalPalette
 
-        // Update the color in a copy of the palette; it is only kept if the image can be redrawn
-        var editedPalette = paletteBeforeEdit
-        editedPalette.updateColor(paletteIndex: paletteIndex, colorIndex: colorIndex, newColor: PaletteColor(nsColor: newColor))
-
         if let newImage = PaletteRenderer.rerenderWithPalette(data: originalData, type: item.type, palette: editedPalette) {
             // Platforms with a dedicated renderer: redraw from the original file data
             item.image = newImage
-            statusMessage = "Color \(colorIndex) modified - live preview"
+            statusMessage = successMessage
         } else if editedPalette.palettes.count == 1 {
             // Other single-palette platforms: recolor a clean copy of the picture
             let base = item.paletteEditBase ?? (image: item.image, palette: paletteBeforeEdit)
@@ -445,9 +471,7 @@ struct ContentView: View {
             }
             item.paletteEditBase = base
             item.image = recolored.image
-            statusMessage = recolored.changedPixels > 0
-                ? "Color \(colorIndex) modified - live preview"
-                : "Color \(colorIndex) is not used in this image"
+            statusMessage = recolored.changedPixels > 0 ? successMessage : unusedMessage
         } else {
             statusMessage = "Palette editing is not available for this image type"
             return
@@ -1963,8 +1987,10 @@ class ScanlineTrackingNSView: NSView {
         let flippedY = bounds.height - location.y
         let imageY = flippedY / imageScale
 
-        // Clamp to valid range
-        let scanline = max(0, min(paletteCount - 1, Int(imageY)))
+        // Clamp to the image's rows. (Clamping to the palette count is wrong for pictures with
+        // 16 palettes shared by 200 lines: only the top 16 lines could ever be reported.)
+        let lastRow = max(0, Int(imageSize.height) - 1)
+        let scanline = max(0, min(lastRow, Int(imageY)))
 
         if scanline != currentLine {
             currentLine = scanline

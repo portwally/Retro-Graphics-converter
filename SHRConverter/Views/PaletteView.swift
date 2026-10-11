@@ -7,6 +7,8 @@ struct PaletteView: View {
     let paletteInfo: PaletteInfo?
     @Binding var currentScanline: Int?
     let onColorEdit: ((Int, Int, NSColor) -> Void)?
+    /// Replaces every palette in one step (paste / reset), so the image is redrawn once
+    var onPalettesReplace: (([[PaletteColor]]) -> Void)? = nil
 
     @State private var hoveredColorIndex: Int? = nil
     @State private var showAllPalettes: Bool = false
@@ -56,6 +58,7 @@ struct PaletteView: View {
                     paletteInfo: info,
                     currentScanline: currentScanline,
                     onColorEdit: onColorEdit,
+                    onPalettesReplace: onPalettesReplace,
                     isPresented: $showAllPalettes
                 )
             }
@@ -213,6 +216,7 @@ struct AllPalettesView: View {
     let paletteInfo: PaletteInfo
     let currentScanline: Int?
     let onColorEdit: ((Int, Int, NSColor) -> Void)?
+    let onPalettesReplace: (([[PaletteColor]]) -> Void)?
     @Binding var isPresented: Bool
 
     @State private var selectedPaletteIndex: Int = 0
@@ -230,10 +234,11 @@ struct AllPalettesView: View {
         return paletteInfo.palettes != originalPalettes
     }
 
-    init(paletteInfo: PaletteInfo, currentScanline: Int?, onColorEdit: ((Int, Int, NSColor) -> Void)?, isPresented: Binding<Bool>) {
+    init(paletteInfo: PaletteInfo, currentScanline: Int?, onColorEdit: ((Int, Int, NSColor) -> Void)?, onPalettesReplace: (([[PaletteColor]]) -> Void)? = nil, isPresented: Binding<Bool>) {
         self.paletteInfo = paletteInfo
         self.currentScanline = currentScanline
         self.onColorEdit = onColorEdit
+        self.onPalettesReplace = onPalettesReplace
         self._isPresented = isPresented
         self.is3200Mode = paletteInfo.type == .perScanline
         self.hasLargePalette = paletteInfo.colorsPerPalette > 64
@@ -267,8 +272,15 @@ struct AllPalettesView: View {
         }
         .frame(minWidth: hasLargePalette ? 500 : 650, minHeight: hasLargePalette ? 550 : 500)
         .onAppear {
-            if let line = currentScanline, line < paletteInfo.paletteCount {
-                selectedPaletteIndex = line
+            // Start on the palette used by the line under the mouse
+            if let line = currentScanline {
+                if paletteInfo.type == .multiPalette {
+                    if let scb = paletteInfo.scbMapping, line < scb.count, scb[line] < paletteInfo.paletteCount {
+                        selectedPaletteIndex = scb[line]
+                    }
+                } else if line < paletteInfo.paletteCount {
+                    selectedPaletteIndex = line
+                }
             }
             // Store original palettes for reset functionality
             originalPalettes = paletteInfo.palettes
@@ -334,9 +346,7 @@ struct AllPalettesView: View {
                 }
                 .listStyle(.sidebar)
                 .onAppear {
-                    if let line = currentScanline {
-                        proxy.scrollTo(line, anchor: .center)
-                    }
+                    proxy.scrollTo(selectedPaletteIndex, anchor: .center)
                 }
             }
         }
@@ -465,19 +475,34 @@ struct AllPalettesView: View {
     }
 
     private func pastePalette() {
-        guard let copied = copiedPalette, paletteInfo.isEditable else { return }
-        for (colorIndex, color) in copied.enumerated() {
-            onColorEdit?(selectedPaletteIndex, colorIndex, color.nsColor)
+        guard let copied = copiedPalette, paletteInfo.isEditable,
+              selectedPaletteIndex < paletteInfo.palettes.count else { return }
+
+        // One update for the whole palette instead of one re-render per color
+        var palettes = paletteInfo.palettes
+        let target = palettes[selectedPaletteIndex]
+        palettes[selectedPaletteIndex] = target.indices.map { $0 < copied.count ? copied[$0] : target[$0] }
+        if let replace = onPalettesReplace {
+            replace(palettes)
+        } else {
+            for (colorIndex, color) in copied.enumerated() {
+                onColorEdit?(selectedPaletteIndex, colorIndex, color.nsColor)
+            }
         }
     }
 
     // MARK: - Reset
 
     private func resetPalettes() {
-        // Restore all original colors
-        for (paletteIndex, palette) in originalPalettes.enumerated() {
-            for (colorIndex, color) in palette.enumerated() {
-                onColorEdit?(paletteIndex, colorIndex, color.nsColor)
+        // Restore the colors the editor opened with - in one step. (A 3200-color picture has
+        // 3,200 entries; restoring them one by one meant 3,200 full re-renders.)
+        if let replace = onPalettesReplace {
+            replace(originalPalettes)
+        } else {
+            for (paletteIndex, palette) in originalPalettes.enumerated() {
+                for (colorIndex, color) in palette.enumerated() {
+                    onColorEdit?(paletteIndex, colorIndex, color.nsColor)
+                }
             }
         }
     }
@@ -504,7 +529,8 @@ struct AllPalettesView: View {
         colorPanel.setTarget(handler)
         colorPanel.setAction(#selector(AllPalettesColorHandler.colorChanged(_:)))
 
-        objc_setAssociatedObject(colorPanel, "colorHandler", handler, .OBJC_ASSOCIATION_RETAIN)
+        // The panel does not retain its target; park the handler on it under a stable key
+        objc_setAssociatedObject(colorPanel, &AllPalettesColorHandler.associationKey, handler, .OBJC_ASSOCIATION_RETAIN)
         colorPanel.orderFront(nil)
     }
 
@@ -515,8 +541,6 @@ struct AllPalettesView: View {
         colorPanel.close()
     }
 }
-
-// MARK: - Palette Color Cell
 
 // MARK: - Compact Palette Color Cell (for large palettes)
 
@@ -552,6 +576,7 @@ struct PaletteColorCellCompact: View {
 // MARK: - All Palettes Color Handler
 
 class AllPalettesColorHandler: NSObject {
+    static var associationKey: UInt8 = 0
     let lineIndex: Int
     let colorIndex: Int
     let originalColor: NSColor

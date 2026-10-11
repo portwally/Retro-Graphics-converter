@@ -22,10 +22,17 @@ struct PaletteColor: Identifiable, Equatable {
     }
 
     init(nsColor: NSColor) {
-        let color = nsColor.usingColorSpace(.sRGB) ?? nsColor
-        self.r = UInt8(color.redComponent * 255)
-        self.g = UInt8(color.greenComponent * 255)
-        self.b = UInt8(color.blueComponent * 255)
+        // Wide-gamut colors (e.g. Display P3 picked in the color panel) have sRGB components
+        // outside 0...1, and converting those straight to UInt8 traps. Clamp, and round so that
+        // a color survives the trip PaletteColor -> NSColor -> PaletteColor unchanged.
+        let color = nsColor.usingColorSpace(.sRGB) ?? nsColor.usingColorSpace(.deviceRGB)
+        func component(_ value: CGFloat?) -> UInt8 {
+            guard let value = value, value.isFinite else { return 0 }
+            return UInt8((min(max(value, 0), 1) * 255).rounded())
+        }
+        self.r = component(color?.redComponent)
+        self.g = component(color?.greenComponent)
+        self.b = component(color?.blueComponent)
     }
 
     var nsColor: NSColor {
