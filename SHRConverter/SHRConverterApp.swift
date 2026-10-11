@@ -45,6 +45,19 @@ enum HelpSection: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Menu Commands
+
+/// Commands sent from the menu bar (and their keyboard shortcuts) to the main window
+enum MenuCommand: Equatable {
+    case importFiles
+    case export
+    case selectAll
+    case removeSelected
+    case zoomIn
+    case zoomOut
+    case zoomToFit
+}
+
 // MARK: - App State
 
 class AppState: ObservableObject {
@@ -54,6 +67,11 @@ class AppState: ObservableObject {
     @Published var selectedHelpSection: HelpSection = .gettingStarted
     @Published var recentFolders: [URL] = []
     @Published var openFolderRequest: URL? = nil
+    /// Set by a menu item; the main window performs it and sets it back to nil
+    @Published var pendingCommand: MenuCommand? = nil
+    /// Mirrors the main window so menu items can be enabled and disabled
+    @Published var hasImages = false
+    @Published var hasCurrentImage = false
 
     private let recentFoldersKey = "RecentFolders"
     private let maxRecentFolders = 10
@@ -131,7 +149,21 @@ struct SHRConverterApp: App {
                 .disabled(!appState.canUndo)
             }
 
-            CommandGroup(after: .newItem) {
+            // File menu (this is a single-window app, so there is no New Window item to keep)
+            CommandGroup(replacing: .newItem) {
+                Button("Import…") {
+                    appState.pendingCommand = .importFiles
+                }
+                .keyboardShortcut("o", modifiers: .command)
+
+                Button("Export…") {
+                    appState.pendingCommand = .export
+                }
+                .keyboardShortcut("e", modifiers: .command)
+                .disabled(!appState.hasImages)
+
+                Divider()
+
                 Menu("Recent Folders") {
                     if appState.recentFolders.isEmpty {
                         Text("No Recent Folders")
@@ -150,6 +182,44 @@ struct SHRConverterApp: App {
                         }
                     }
                 }
+            }
+
+            // Cmd+A is shared with Edit > Select All: while a text field is being edited that
+            // item is enabled and takes the key; otherwise it falls through to this one.
+            CommandMenu("Image") {
+                Button("Select All Images") {
+                    appState.pendingCommand = .selectAll
+                }
+                .keyboardShortcut("a", modifiers: .command)
+                .disabled(!appState.hasImages)
+
+                Button("Remove Selected Images") {
+                    appState.pendingCommand = .removeSelected
+                }
+                .keyboardShortcut(.delete, modifiers: .command)
+                .disabled(!appState.hasCurrentImage)
+            }
+
+            CommandGroup(before: .toolbar) {
+                Button("Zoom In") {
+                    appState.pendingCommand = .zoomIn
+                }
+                .keyboardShortcut("+", modifiers: .command)
+                .disabled(!appState.hasCurrentImage)
+
+                Button("Zoom Out") {
+                    appState.pendingCommand = .zoomOut
+                }
+                .keyboardShortcut("-", modifiers: .command)
+                .disabled(!appState.hasCurrentImage)
+
+                Button("Fit to Window") {
+                    appState.pendingCommand = .zoomToFit
+                }
+                .keyboardShortcut("0", modifiers: .command)
+                .disabled(!appState.hasCurrentImage)
+
+                Divider()
             }
 
             CommandGroup(replacing: .help) {

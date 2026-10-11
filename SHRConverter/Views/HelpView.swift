@@ -114,6 +114,7 @@ struct HelpView: View {
             BulletPoint(text: "**Import Button** - Click to open a file picker dialog")
             BulletPoint(text: "**Drag & Drop** - Drag files directly onto the window")
             BulletPoint(text: "**Folders** - Open or drop a folder to scan everything inside it")
+            BulletPoint(text: "**Keyboard** - Press Cmd+O to open the import dialog")
 
             Divider()
 
@@ -186,7 +187,7 @@ struct HelpView: View {
 
             HelpSectionHeader(title: "Removing Images", icon: "trash")
 
-            BulletPoint(text: "Select images and click the trash button above the browser to remove them")
+            BulletPoint(text: "Select images and press Delete (or click the trash button above the browser) to remove them")
             BulletPoint(text: "This does not delete the original files")
         }
     }
@@ -569,9 +570,34 @@ struct HelpView: View {
 
             Divider()
 
+            HelpSectionHeader(title: "File Operations", icon: "doc")
+
+            ShortcutRow(keys: "Cmd + O", action: "Import files or folders")
+            ShortcutRow(keys: "Cmd + E", action: "Export (selected images, or the current one)")
+            ShortcutRow(keys: "Cmd + A", action: "Select all images shown in the browser")
+
+            Divider()
+
             HelpSectionHeader(title: "Editing", icon: "pencil")
 
             ShortcutRow(keys: "Cmd + Z", action: "Undo last action")
+            ShortcutRow(keys: "Delete", action: "Remove the selected images (or the current one)")
+
+            Divider()
+
+            HelpSectionHeader(title: "View", icon: "eye")
+
+            ShortcutRow(keys: "Cmd + +", action: "Zoom in")
+            ShortcutRow(keys: "Cmd + -", action: "Zoom out")
+            ShortcutRow(keys: "Cmd + 0", action: "Fit to window")
+
+            Divider()
+
+            HelpSectionHeader(title: "Navigation", icon: "arrow.left.arrow.right")
+
+            ShortcutRow(keys: "Arrow keys", action: "Previous / next image")
+            ShortcutRow(keys: "Home", action: "First image")
+            ShortcutRow(keys: "End", action: "Last image")
 
             Divider()
 
@@ -579,14 +605,9 @@ struct HelpView: View {
 
             ShortcutRow(keys: "Return", action: "Confirm (Export, Import Selected, Done)")
             ShortcutRow(keys: "Esc", action: "Cancel")
-
-            Divider()
-
-            HelpSectionHeader(title: "Help", icon: "questionmark.circle")
-
             ShortcutRow(keys: "Cmd + ?", action: "Open this help window")
 
-            Text("Importing, exporting, zooming and removing images are done with the toolbar and browser buttons; they have no keyboard shortcuts yet.")
+            Text("Arrow keys, Home, End and Delete act on the main window; click a thumbnail or the preview first if they do not respond. The same commands are in the File, Image and View menus.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }

@@ -376,9 +376,20 @@ below were clicked through.**
   keyboard shortcuts only Cmd+Z exists; also Cmd/Shift-click selection, scroll-wheel zoom,
   double-click import, BMP export and a checkerboard background. Export formats and scales now
   match the export sheet.
-- [ ] **Decision for you:** implement the shortcuts Help used to promise (Cmd+O, Cmd+E, Cmd+A,
-  Delete, Cmd +/-/0, arrow keys)? Not done - it is new behaviour, and Cmd+A / arrow keys need care
-  not to break text fields.
+- [x] **Keyboard shortcuts implemented (2026-10-11), NOT yet tried in the running app.**
+  Menu commands: File > Import (Cmd+O), File > Export (Cmd+E), Image > Select All Images (Cmd+A),
+  Image > Remove Selected Images (Cmd+Delete), View > Zoom In / Zoom Out / Fit to Window
+  (Cmd +, Cmd -, Cmd 0). Plain keys in the main window: arrow keys (previous / next image),
+  Home, End, Delete. The browser scrolls to keep the current image visible. Help lists them again.
+  - [ ] **Needs a manual check** - I could not drive the app to test these. In particular:
+    1. Cmd+A with nothing focused selects all images, and inside a text field (disk browser
+       search, screensaver name) still selects the text. This relies on Edit > Select All taking
+       the key only while a text field is active.
+    2. Arrow keys / Home / End / Delete respond right after launch and after closing a sheet
+       (the main view takes keyboard focus; click a thumbnail if they do not respond).
+    3. Delete in a text field inside a sheet deletes text, not images (commands are ignored
+       while any sheet is open).
+    4. Cmd + works on your keyboard layout.
 - [ ] The info bar shows the format's nominal size (e.g. 160x200 for Plus/4 multicolor that is
   drawn 320x200, and unchanged after a crop or rotate); the details popover shows the real size.
 - Not a bug after testing: I expected `PaletteColor(nsColor:)` to crash on wide-gamut colours and

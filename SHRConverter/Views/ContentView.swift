@@ -44,6 +44,8 @@ struct ContentView: View {
     @State private var currentAdjustments = ImageAdjustments()
     @State private var previewAdjustments: ImageAdjustments?
     @State private var displayCache = DisplayImageCache()
+    /// Keyboard focus for the main window, so arrow keys / Home / End / Delete reach it
+    @FocusState private var keyboardFocused: Bool
     @State private var thumbnailSize: CGFloat = 80
     
     // The image to display (handles Before/After toggle and adjustments preview).
@@ -200,6 +202,27 @@ struct ContentView: View {
                 }
             )
         }
+        .focusable()
+        .focusEffectDisabled()
+        .focused($keyboardFocused)
+        .onKeyPress(keys: [.upArrow, .downArrow, .leftArrow, .rightArrow, .home, .end, .delete, .deleteForward]) { press in
+            handleKeyPress(press.key) ? .handled : .ignored
+        }
+        .onAppear {
+            keyboardFocused = true
+            syncMenuState()
+        }
+        .onChange(of: appState.pendingCommand) { _, command in
+            guard let command = command else { return }
+            appState.pendingCommand = nil
+            perform(command)
+        }
+        .onChange(of: imageItems.count) { _, _ in syncMenuState() }
+        .onChange(of: selectedImage?.id) { _, _ in syncMenuState() }
+        .onChange(of: isAnySheetShowing) { _, showing in
+            // Take the keyboard back when a sheet closes
+            if !showing { keyboardFocused = true }
+        }
         .onChange(of: appState.undoTrigger) { oldValue, newValue in
             undoLastAction()
         }
@@ -256,14 +279,21 @@ struct ContentView: View {
                 Spacer()
             }
             Divider()
+            ScrollViewReader { scrollProxy in
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: thumbnailSize + 40), spacing: 10)], spacing: 10) {
                     ForEach(filteredImages) { item in
                         ImageThumbnailView(item: item, isSelected: selectedImage?.id == item.id, isChecked: selectedImages.contains(item.id), thumbnailSize: thumbnailSize,
-                            onSelect: { selectedImage = item },
+                            onSelect: { selectedImage = item; keyboardFocused = true },
                             onToggleCheck: { if selectedImages.contains(item.id) { selectedImages.remove(item.id) } else { selectedImages.insert(item.id) } })
+                            .id(item.id)
                     }
                 }.padding(.horizontal, 5)
+            }
+            .onChange(of: selectedImage?.id) { _, newID in
+                // Keep the current image visible when stepping through with the keyboard
+                if let newID = newID { scrollProxy.scrollTo(newID) }
+            }
             }
             .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc, .adf, .st, .atr, .ssd, .dsd], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
 
@@ -420,6 +450,83 @@ struct ContentView: View {
             }
         }
         .padding(4)
+    }
+
+    // MARK: - Keyboard and Menu Commands
+
+    private var isAnySheetShowing: Bool {
+        showExportSheet || showScreensaverSheet || showMovieSheet || showCatalogBrowser || appState.showHelp
+    }
+
+    private func syncMenuState() {
+        appState.hasImages = !imageItems.isEmpty
+        appState.hasCurrentImage = selectedImage != nil
+    }
+
+    /// Menu bar commands (Cmd+O, Cmd+E, Cmd+A, Cmd+Delete, Cmd +/-/0)
+    private func perform(_ command: MenuCommand) {
+        guard !isAnySheetShowing, !isProcessing || command == .zoomIn || command == .zoomOut || command == .zoomToFit else { return }
+
+        switch command {
+        case .importFiles:
+            openFiles()
+        case .export:
+            if !imageItems.isEmpty { showExportSheet = true }
+        case .selectAll:
+            selectedImages = Set(filteredImages.map { $0.id })
+        case .removeSelected:
+            deleteSelectedImages()
+        case .zoomIn:
+            guard selectedImage != nil else { return }
+            if zoomScale < 0 { zoomScale = 1.0 }
+            zoomScale = min(8.0, zoomScale + 0.25)
+        case .zoomOut:
+            guard selectedImage != nil else { return }
+            if zoomScale < 0 { zoomScale = 1.0 }
+            zoomScale = max(0.25, zoomScale - 0.25)
+        case .zoomToFit:
+            zoomScale = -1.0
+        }
+    }
+
+    /// Unmodified keys in the main window: arrows / Home / End move through the browser, Delete removes
+    private func handleKeyPress(_ key: KeyEquivalent) -> Bool {
+        guard !isAnySheetShowing, !isProcessing else { return false }
+
+        switch key {
+        case .upArrow, .leftArrow:
+            return selectImage(offset: -1)
+        case .downArrow, .rightArrow:
+            return selectImage(offset: 1)
+        case .home:
+            guard let first = filteredImages.first else { return false }
+            selectedImage = first
+            return true
+        case .end:
+            guard let last = filteredImages.last else { return false }
+            selectedImage = last
+            return true
+        case .delete, .deleteForward:
+            guard selectedImage != nil || !selectedImages.isEmpty else { return false }
+            deleteSelectedImages()
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Moves the current image by `offset` positions within the visible (filtered) list
+    private func selectImage(offset: Int) -> Bool {
+        let visible = filteredImages
+        guard !visible.isEmpty else { return false }
+
+        guard let current = selectedImage, let index = visible.firstIndex(where: { $0.id == current.id }) else {
+            selectedImage = offset > 0 ? visible.first : visible.last
+            return true
+        }
+        let newIndex = min(max(index + offset, 0), visible.count - 1)
+        if newIndex != index { selectedImage = visible[newIndex] }
+        return true
     }
 
     // MARK: - Palette Handling
