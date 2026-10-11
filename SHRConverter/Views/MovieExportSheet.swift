@@ -21,21 +21,33 @@ struct MovieExportSheet: View {
         VStack(spacing: 16) {
             headerSection
             Divider()
-            nameSection
+            // The options scroll so the sheet still fits on small screens; the buttons stay visible
+            ScrollView {
+                VStack(spacing: 16) {
+                    nameSection
+                    Divider()
+                    formatSection
+                    Divider()
+                    codecSection
+                    Divider()
+                    timingSection
+                    Divider()
+                    scaleSection
+                    infoSection
+                }
+                .padding(.trailing, 4)
+            }
             Divider()
-            formatSection
-            Divider()
-            codecSection
-            Divider()
-            timingSection
-            Divider()
-            scaleSection
-            Spacer()
-            infoSection
             buttonSection
         }
         .padding(20)
-        .frame(width: 550, height: 850)
+        .frame(width: 550, height: Self.sheetHeight)
+    }
+
+    /// 850 points where the screen allows it, otherwise as tall as fits (13-inch screens)
+    private static var sheetHeight: CGFloat {
+        let available = (NSScreen.main?.visibleFrame.height ?? 900) - 140
+        return max(480, min(850, available))
     }
 
     // MARK: - Header Section

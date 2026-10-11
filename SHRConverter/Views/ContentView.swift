@@ -43,36 +43,55 @@ struct ContentView: View {
     @State private var showAdjustments = false
     @State private var currentAdjustments = ImageAdjustments()
     @State private var previewAdjustments: ImageAdjustments?
+    @State private var displayCache = DisplayImageCache()
     @State private var thumbnailSize: CGFloat = 80
     
-    // Computed property for the image to display (handles Before/After toggle and adjustments preview)
+    // The image to display (handles Before/After toggle and adjustments preview).
+    // SwiftUI evaluates this on every view update, so the expensive variants are cached
+    // until the selected image, the toggle or the slider values actually change.
     var displayImage: NSImage? {
         guard let selected = selectedImage else { return nil }
 
-        // If showing original and we have original data, re-decode it
-        if showOriginal, let originalData = selected.originalData {
-            // Re-decode with original palette
-            if let originalPalette = selected.paletteInfo,
-               let originalImage = PaletteRenderer.rerenderWithPalette(data: originalData, type: selected.type, palette: originalPalette) {
+        let needsOriginal = showOriginal && selected.originalData != nil
+        let adjustments = (previewAdjustments?.isIdentity == false) ? previewAdjustments : nil
+        guard needsOriginal || adjustments != nil else {
+            return selected.image  // the current (possibly modified) image, nothing to compute
+        }
+
+        let key = DisplayImageCache.Key(itemID: selected.id, source: ObjectIdentifier(selected.image),
+                                        showOriginal: needsOriginal, adjustments: needsOriginal ? nil : adjustments)
+        if displayCache.key == key, let cached = displayCache.image {
+            return cached
+        }
+
+        let computed = needsOriginal ? originalImage(for: selected)
+                                     : selected.image.adjustedImage(brightness: adjustments!.brightness, contrast: adjustments!.contrast)
+        displayCache.key = key
+        displayCache.image = computed
+        return computed ?? selected.image
+    }
+
+    /// The picture as it was first decoded, without palette edits or transforms
+    private func originalImage(for selected: ImageItem) -> NSImage? {
+        guard let originalData = selected.originalData else { return nil }
+
+        // Re-decode with original palette
+        if let originalPalette = selected.paletteInfo {
+            if let originalImage = PaletteRenderer.rerenderWithPalette(data: originalData, type: selected.type, palette: originalPalette) {
                 return originalImage
             }
-            // Fallback: re-decode from scratch
-            let result = SHRDecoder.decode(data: originalData, filename: selected.decodeFilename ?? selected.url.lastPathComponent)
-            if let cgImage = result.image {
-                return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+            // Recolored platforms: undo the palette edits on the clean copy (only valid if not transformed since)
+            if !selected.hasImageModification, let base = selected.paletteEditBase,
+               let restored = PaletteRenderer.remapColors(in: base.image, from: base.palette.primaryPalette, to: originalPalette.primaryPalette) {
+                return restored.image
             }
         }
-
-        // Apply preview adjustments if any
-        if let adjustments = previewAdjustments, !adjustments.isIdentity {
-            return selected.image.adjustedImage(
-                brightness: adjustments.brightness,
-                contrast: adjustments.contrast
-            )
+        // Fallback: re-decode from scratch
+        let result = SHRDecoder.decode(data: originalData, filename: selected.decodeFilename ?? selected.url.lastPathComponent)
+        if let cgImage = result.image {
+            return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
         }
-
-        // Return the current (possibly modified) image
-        return selected.image
+        return nil
     }
 
     var filteredImages: [ImageItem] {
@@ -180,6 +199,13 @@ struct ContentView: View {
         }
         .onChange(of: appState.undoTrigger) { oldValue, newValue in
             undoLastAction()
+        }
+        .onChange(of: showAdjustments) { _, isShowing in
+            // Closing the popover without Apply or Reset must not leave the preview on screen
+            if !isShowing {
+                previewAdjustments = nil
+                currentAdjustments = ImageAdjustments()
+            }
         }
         .onChange(of: filterFormat) { _, _ in
             // Keep the selection to what is visible, so Delete/Export never touch hidden images
@@ -572,10 +598,17 @@ struct ContentView: View {
         }
 
         // Create the destination folder
+        // The name becomes a folder: keep it to a single safe path component
+        var folderName = name.replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        while folderName.hasPrefix(".") { folderName.removeFirst() }
+        if folderName.isEmpty { folderName = "Retro Graphics" }
+
         let picturesFolder = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Pictures")
             .appendingPathComponent("Retro Screensavers")
-            .appendingPathComponent(name)
+            .appendingPathComponent(folderName)
 
         do {
             try FileManager.default.createDirectory(at: picturesFolder, withIntermediateDirectories: true)
@@ -607,7 +640,7 @@ struct ContentView: View {
             DispatchQueue.main.async {
                 self.isProcessing = false
                 self.exportedCount += totalExported
-                self.statusMessage = "Created screensaver '\(name)' with \(totalExported) images"
+                self.statusMessage = "Created screensaver '\(folderName)' with \(totalExported) images"
                 self.progressString = ""
 
                 // Open System Settings if requested
@@ -1773,6 +1806,21 @@ struct ContentView: View {
             height: croppedCGImage.height
         ))
     }
+}
+
+// MARK: - Display Image Cache
+
+/// Holds the last computed preview/original image. A class so the view body can update it
+/// without triggering another view update.
+final class DisplayImageCache {
+    struct Key: Equatable {
+        let itemID: UUID
+        let source: ObjectIdentifier   // the item's current NSImage; changes when the image is edited
+        let showOriginal: Bool
+        let adjustments: ImageAdjustments?
+    }
+    var key: Key?
+    var image: NSImage?
 }
 
 // MARK: - Crop Overlay View

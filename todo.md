@@ -293,16 +293,29 @@ of them. 12,000 decodes hashed before and after confirm no decoder output change
 
 ## 5c. More UI items (second pass)
 
-- [ ] **[code] Brightness/contrast preview sticks after the popover is dismissed.**
+**All fixed on 2026-10-11 (branch `audit-fixes`).** Builds without warnings and launches. These
+are interactive changes and were **not clicked through**: closing the adjustments popover, the
+Original toggle on a recoloured image, and the movie sheet on a small screen.
+- Closing the adjustments popover (any way) clears the preview and resets the sliders.
+- The preview / Original image is computed once and cached until the image, the toggle or the
+  slider values change, instead of on every view update.
+- For recoloured image types the Original view now undoes palette edits from the clean copy
+  rather than re-decoding by filename.
+- The screensaver name is reduced to one safe folder name ("/" and ":" replaced, leading dots
+  removed, empty -> "Retro Graphics"). The sheet's path preview text still shows the raw input.
+- The movie sheet is as tall as the screen allows (max 850 points); its options scroll and the
+  buttons stay visible.
+
+- [x] **[code] Brightness/contrast preview sticks after the popover is dismissed.**
   `previewAdjustments` is only cleared by Apply or Reset (`ContentView.swift:1924-1968`). Clicking
   outside the popover leaves the preview on screen, applies it to whichever image is selected next,
   and it is not part of what gets exported. Clear it when `showAdjustments` becomes false.
-- [ ] **[code] Adjustment preview and Original view are recomputed inside `body`.** `displayImage`
+- [x] **[code] Adjustment preview and Original view are recomputed inside `body`.** `displayImage`
   (`ContentView.swift:48`) runs a full per-pixel pass or a full re-decode on every view update.
-- [ ] **[code] Screensaver name is used as a path component unchecked**
+- [x] **[code] Screensaver name is used as a path component unchecked**
   (`ContentView.swift:536-539`) — a name containing `/` or `..` writes outside
   `~/Pictures/Retro Screensavers`.
-- [ ] **[code] Movie export sheet is a fixed 550x850 points** (`MovieExportSheet.swift`), taller
+- [x] **[code] Movie export sheet is a fixed 550x850 points** (`MovieExportSheet.swift`), taller
   than the usable screen on 13-inch MacBooks; the buttons can end up off-screen.
 
 ## 6. Notes on the earlier AUDIT-REPORT.md (April)
