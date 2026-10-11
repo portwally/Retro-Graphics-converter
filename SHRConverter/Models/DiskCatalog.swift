@@ -105,14 +105,6 @@ struct DiskCatalog {
     }
 }
 
-// MARK: - Disk Image File
-
-struct DiskImageFile {
-    let name: String
-    let data: Data
-    let type: AppleIIImageType
-}
-
 // MARK: - Image Item Model
 
 struct ImageItem: Identifiable {

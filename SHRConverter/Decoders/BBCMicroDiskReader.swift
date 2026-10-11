@@ -16,7 +16,6 @@ class BBCMicroDiskReader {
         let sides: Int
         let totalSectors: Int
 
-        var totalSize: Int { totalSectors * bytesPerSector }
     }
 
     struct DirectoryEntry {

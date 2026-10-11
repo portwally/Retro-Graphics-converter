@@ -118,40 +118,5 @@ class ImageHelpers {
         return palette
     }
     
-    // MARK: - Raw Palette Conversion
     
-    static func convertRawPalettes(_ data: Data) -> [[(r: UInt8, g: UInt8, b: UInt8)]] {
-        var result: [[(r: UInt8, g: UInt8, b: UInt8)]] = []
-        var pos = 0
-        
-        while pos + 32 <= data.count {
-            var currentPalette: [(r: UInt8, g: UInt8, b: UInt8)] = []
-            
-            for _ in 0..<16 {
-                if pos + 2 > data.count { break }
-                
-                let low = data[pos]
-                let high = data[pos + 1]
-                pos += 2
-                
-                let blue = low & 0x0F
-                let green = (low >> 4) & 0x0F
-                let red = high & 0x0F
-                
-                currentPalette.append((
-                    r: red * 17,
-                    g: green * 17,
-                    b: blue * 17
-                ))
-            }
-            
-            if currentPalette.count == 16 {
-                result.append(currentPalette)
-            } else {
-                break
-            }
-        }
-        
-        return result
-    }
 }

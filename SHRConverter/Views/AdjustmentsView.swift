@@ -7,8 +7,6 @@ struct ImageAdjustments: Equatable {
     var brightness: Double = 0.0  // Range: -1.0 to 1.0
     var contrast: Double = 0.0    // Range: -1.0 to 1.0
 
-    static let identity = ImageAdjustments()
-
     var isIdentity: Bool {
         brightness == 0.0 && contrast == 0.0
     }
@@ -133,50 +131,6 @@ struct AdjustmentsView: View {
 
 // MARK: - Adjustments Button
 
-struct AdjustmentsButton: View {
-    let hasImage: Bool
-    @Binding var showAdjustments: Bool
-    @Binding var adjustments: ImageAdjustments
-    let onApply: () -> Void
-    let onReset: () -> Void
-    let onPreview: (ImageAdjustments) -> Void
-
-    var body: some View {
-        Button(action: { showAdjustments.toggle() }) {
-            VStack(spacing: 2) {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 18))
-                    .frame(width: 36, height: 36)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(showAdjustments ? Color.accentColor.opacity(0.2) : Color.clear)
-                    )
-                    .foregroundColor(!hasImage ? Color(NSColor.tertiaryLabelColor) :
-                                    (showAdjustments ? .accentColor : Color(NSColor.labelColor)))
-
-                Text("Adjust")
-                    .font(.system(size: 9))
-                    .foregroundColor(!hasImage ? Color(NSColor.tertiaryLabelColor) :
-                                    (showAdjustments ? .accentColor : Color(NSColor.secondaryLabelColor)))
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(!hasImage)
-        .help("Brightness/Contrast Adjustments")
-        .popover(isPresented: $showAdjustments, arrowEdge: .bottom) {
-            AdjustmentsView(
-                adjustments: $adjustments,
-                onApply: {
-                    showAdjustments = false
-                    onApply()
-                },
-                onReset: onReset,
-                onPreview: onPreview
-            )
-        }
-    }
-}
-
 // MARK: - Image Processing
 
 extension NSImage {
@@ -243,22 +197,11 @@ extension NSImage {
 // MARK: - Preview
 
 #Preview {
-    VStack {
-        AdjustmentsView(
-            adjustments: .constant(ImageAdjustments()),
-            onApply: {},
-            onReset: {},
-            onPreview: { _ in }
-        )
-
-        AdjustmentsButton(
-            hasImage: true,
-            showAdjustments: .constant(false),
-            adjustments: .constant(ImageAdjustments()),
-            onApply: {},
-            onReset: {},
-            onPreview: { _ in }
-        )
-    }
+    AdjustmentsView(
+        adjustments: .constant(ImageAdjustments()),
+        onApply: {},
+        onReset: {},
+        onPreview: { _ in }
+    )
     .padding()
 }

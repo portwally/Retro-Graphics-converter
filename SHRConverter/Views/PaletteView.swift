@@ -115,22 +115,6 @@ struct PaletteView: View {
         }
     }
 
-    private var currentPaletteIndex: Int {
-        guard let info = paletteInfo else { return 0 }
-
-        switch info.type {
-        case .perScanline:
-            return currentScanline ?? 100
-        case .multiPalette:
-            if let scb = info.scbMapping, let line = currentScanline, line < scb.count {
-                return scb[line]
-            }
-            return 0
-        case .single, .fixed:
-            return 0
-        }
-    }
-
     // MARK: - Palette Colors View
 
     private func paletteColorsView(colors: [PaletteColor]) -> some View {
@@ -533,31 +517,6 @@ struct AllPalettesView: View {
 }
 
 // MARK: - Palette Color Cell
-
-struct PaletteColorCell: View {
-    let color: PaletteColor
-    let index: Int
-    let isSelected: Bool
-    let isEditable: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        VStack(spacing: 2) {
-            Rectangle()
-                .fill(Color(color.nsColor))
-                .frame(width: 50, height: 50)
-                .border(isSelected ? Color.accentColor : Color.gray.opacity(0.5), width: isSelected ? 3 : 1)
-                .onTapGesture {
-                    onTap()
-                }
-
-            Text("\(index)")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary)
-        }
-        .help(isEditable ? "Click to edit color \(index)" : "Color \(index): \(color.hexString)")
-    }
-}
 
 // MARK: - Compact Palette Color Cell (for large palettes)
 

@@ -13,7 +13,6 @@ class CoCoDiskReader {
     private let directoryTrack = 17
     private let directoryStartSector = 2  // Sectors 2-10 contain directory (0-indexed)
     private let fatSector = 1  // Sector 1 contains FAT (0-indexed)
-    private let maxDirectoryEntries = 72  // 9 sectors * 8 entries per sector
 
     // MARK: - Types
 

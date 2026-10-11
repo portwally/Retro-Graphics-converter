@@ -149,14 +149,6 @@ class TRS80Decoder {
         gime64Palette[7]    // 15: Sky Blue (R0G1B3)
     ]
 
-    // CoCo artifact colors (for PMODE 4)
-    static let cocoArtifactColors: [(r: UInt8, g: UInt8, b: UInt8)] = [
-        (0x00, 0x00, 0x00),  // Black
-        (0x00, 0x80, 0xFF),  // Blue artifact
-        (0xFF, 0x80, 0x00),  // Orange artifact
-        (0xFF, 0xFF, 0xFF)   // White
-    ]
-
     // MARK: - CoCo PMODE 3 Decoder (128x192, 4 colors)
     // Common format: 6144 bytes
     // Output: 256x192 to correct aspect ratio (CoCo pixels were ~2:1 wide)
@@ -306,56 +298,7 @@ class TRS80Decoder {
         return (cgImage, .TRS80(model: "CoCo", resolution: "256x192, 2 colors"))
     }
 
-    // MARK: - CoCo PMODE 4 with Artifact Colors
     // Simulates the NTSC artifact coloring
-
-    static func decodePMode4Artifact(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
-        let width = 256
-        let height = 192
-        let bytesPerLine = 32
-        let expectedSize = bytesPerLine * height
-
-        guard data.count >= expectedSize else {
-            return (nil, .Unknown)
-        }
-
-        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
-
-        for y in 0..<height {
-            for byteX in 0..<bytesPerLine {
-                let offset = y * bytesPerLine + byteX
-                guard offset < data.count else { continue }
-
-                let byte = data[offset]
-
-                // Process pairs of bits for artifact colors
-                for bitPair in 0..<4 {
-                    let shift = (3 - bitPair) * 2
-                    let bits = (byte >> shift) & 0x03
-
-                    let x = byteX * 8 + bitPair * 2
-
-                    // Artifact color mapping
-                    let rgb = cocoArtifactColors[Int(bits)]
-
-                    // Two pixels per artifact color
-                    for px in 0..<2 {
-                        let bufferIdx = (y * width + x + px) * 4
-                        rgbaBuffer[bufferIdx] = rgb.r
-                        rgbaBuffer[bufferIdx + 1] = rgb.g
-                        rgbaBuffer[bufferIdx + 2] = rgb.b
-                        rgbaBuffer[bufferIdx + 3] = 255
-                    }
-                }
-            }
-        }
-
-        guard let cgImage = ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height) else {
-            return (nil, .Unknown)
-        }
-
-        return (cgImage, .TRS80(model: "CoCo", resolution: "256x192, Artifact"))
-    }
 
     // MARK: - CoCo 3 320x200 16-color mode
     // Screen memory: 32000 bytes (4 bits per pixel)

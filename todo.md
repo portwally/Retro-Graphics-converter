@@ -161,8 +161,7 @@ Things that changed which you may notice:
 Still open in this section:
 - 201 real images still return no catalog (mostly 140K `.dsk` files that are copy-protected or
   use Pascal/CP/M/Apple III formats; not examined one by one).
-- `readCPCDSK` in the legacy `readDiskImage` path still does not trim by record count. That
-  path only runs when the catalog reader fails, which it does not for CPC disks.
+- (resolved: the legacy `readDiskImage` path, including `readCPCDSK`, has been removed.)
 
 - [x] **[confirmed] 11% of real Apple II disks open as "CoCo RS-DOS" with garbage contents.**
   Of 3,368 Apple II disk images on this Mac, 373 (344 `.dsk`, 20 `.po`, 9 `.do`) were claimed by
@@ -192,7 +191,7 @@ Still open in this section:
   (lines 3228, 3336), shifting the rest of the file.
 - [x] **[code] ProDOS BIN "header" detection is too loose** (line 1527) — an image starting
   `00 20 01 00` loses its first 4 bytes. Require `length == count - 4`.
-- [ ] **[code] `readCPCDSK` (non-catalog path) does not trim files by record count**, so `.SCR` files
+- [x] (code removed) **[code] `readCPCDSK` (non-catalog path) does not trim files by record count**, so `.SCR` files
   with an AMSDOS header come out 17408 bytes and are not recognised. The catalog path does trim.
 - [x] **[code] CPC `.SCR` entries are flagged `isImage` even when decoding fails** (line 2407);
   importing them then silently yields nothing.
@@ -326,14 +325,26 @@ Original toggle on a recoloured image, and the movie sheet on a small screen.
 
 ## 6b. Dead code (compiled, never called)
 
-- [ ] `ImageCropView.swift` (298 lines, at the repo root outside `SHRConverter/`) — only referenced by its own `#Preview`.
-- [x] (removed 2026-10-11) `ContentView`: `exportSelectedImages`, `exportSingleImage`, `exportAllImages`, `showBatchRename`,
-  `batchExportWithRename`, `rotateSelectedImage`, `flipSelectedImage`, `toggleCropMode`,
-  `clearAllImages`, `blendImages`, `createPixelBuffer(from:size:)`, and the `filesToConvert` state.
-- [ ] Decoders: `TRS80Decoder.decodePMode4Artifact`, `PackedSHRDecoder.decompressPackBytes` /
-  `decompressPackBytesSafe`, `ImageHelpers.convertRawPalettes`, `AtariSTDiskReader.DiskGeometry.totalClusters`.
-- [ ] `DiskImageReader.readDiskImage` and its per-format `read…` functions are only a fallback for
-  when `readDiskCatalog` returns nil, and duplicate the catalog readers with older logic.
+**Removed on 2026-10-11 (branch `audit-fixes`)** - about 1,650 lines. Verified after removal:
+clean build without warnings, app launches, the 3,368 real disks give identical results,
+12,000 decode hashes identical, 5,000 fuzz cases clean.
+
+- [x] `ImageCropView.swift` (deleted, and removed from the Xcode project).
+- [x] `ContentView`: the eleven unused export / rotate / flip / blend functions and three unused state variables.
+- [x] The legacy `DiskImageReader.readDiskImage` path: 15 `read...` functions, `readCPCDirectory`,
+  two unused interleave helpers and the `DiskImageFile` type. Checked first on the real disks: it
+  never returned anything for a disk the catalog reader could not read. A disk that cannot be
+  read now shows "Could not read disk image: <name>" in both the Open and the drag-and-drop path.
+- [x] Decoders: `TRS80Decoder.decodePMode4Artifact` and its colour table, `Atari8bitDecoder.decodeGR7`,
+  `PackedSHRDecoder.decompressPackBytes` / `decompressPackBytesSafe`, `ImageHelpers.convertRawPalettes`,
+  TR-DOS `parseDiskInfo` / `DiskInfo`, and unused constants and geometry properties.
+- [x] Views: `ZoomControlsView`, `CropToolsView`, `PaletteColorCell`, `AdjustmentsButton`,
+  `HistogramButton`, unused state in `ScreensaverExportSheet`, `AppState.showHelpSection`.
+- [ ] Left in place on purpose - small unused properties that describe parsed data and cost
+  nothing: `isLocked`, `isReadOnly`, `fileTypeDescription`, `diskTypeDescription` on the disk
+  readers; `swiftUIColor`, `totalColors`, `totalUniqueColors`, `withUpdatedColor` on the palette model.
+- [ ] `AppleIIImageType.colorDepth` is never displayed anywhere. (The label corrections made to
+  it in section 5 therefore have no visible effect; either show it in the info bar or remove it.)
 
 ## 7. Audit work still to do
 

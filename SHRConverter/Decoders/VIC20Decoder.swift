@@ -10,7 +10,6 @@ class VIC20Decoder {
     static let screenHeight = 184  // 23 characters × 8 pixels
     static let charsX = 22
     static let charsY = 23
-    static let cellCount = 506     // 22 × 23
 
     // VIC-20 palette (16 colors)
     // First 8 colors can be foreground, all 16 can be background

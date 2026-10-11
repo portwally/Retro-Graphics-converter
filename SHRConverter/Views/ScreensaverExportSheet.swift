@@ -11,19 +11,6 @@ struct ScreensaverExportSheet: View {
     @State private var screensaverName: String = "Retro Graphics"
     @State private var upscaleFactor: Int = 4
     @State private var openSystemSettings: Bool = true
-    @State private var useScreensaversFolder: Bool = true
-
-    private let defaultFolder = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Pictures")
-        .appendingPathComponent("Retro Screensavers")
-
-    private var screensaversFolder: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Pictures")
-            .appendingPathComponent("Retro Screensavers")
-            .appendingPathComponent(screensaverName.isEmpty ? "Retro Graphics" : screensaverName)
-    }
-
     var body: some View {
         VStack(spacing: 16) {
             // Header

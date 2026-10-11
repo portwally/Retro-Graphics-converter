@@ -247,45 +247,9 @@ struct HistogramView: View {
 
 // MARK: - Histogram Popover Button
 
-struct HistogramButton: View {
-    let image: NSImage?
-    @State private var showHistogram = false
-
-    var body: some View {
-        Button(action: { showHistogram.toggle() }) {
-            VStack(spacing: 2) {
-                Image(systemName: "chart.bar.fill")
-                    .font(.system(size: 18))
-                    .frame(width: 36, height: 36)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(showHistogram ? Color.accentColor.opacity(0.2) : Color.clear)
-                    )
-                    .foregroundColor(image == nil ? Color(NSColor.tertiaryLabelColor) :
-                                    (showHistogram ? .accentColor : Color(NSColor.labelColor)))
-
-                Text("Histogram")
-                    .font(.system(size: 9))
-                    .foregroundColor(image == nil ? Color(NSColor.tertiaryLabelColor) :
-                                    (showHistogram ? .accentColor : Color(NSColor.secondaryLabelColor)))
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(image == nil)
-        .help("Show Color Histogram")
-        .popover(isPresented: $showHistogram, arrowEdge: .bottom) {
-            HistogramView(image: image)
-        }
-    }
-}
-
 // MARK: - Preview
 
 #Preview {
-    VStack {
-        HistogramView(image: nil)
-
-        HistogramButton(image: nil)
-    }
-    .padding()
+    HistogramView(image: nil)
+        .padding()
 }

@@ -70,11 +70,6 @@ class AppState: ObservableObject {
         canUndo = value
     }
 
-    func showHelpSection(_ section: HelpSection) {
-        selectedHelpSection = section
-        showHelp = true
-    }
-
     // MARK: - Recent Folders
 
     func addRecentFolder(_ url: URL) {

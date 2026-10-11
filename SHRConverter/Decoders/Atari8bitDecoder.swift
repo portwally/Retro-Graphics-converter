@@ -261,16 +261,7 @@ class Atari8bitDecoder {
         return (cgImage, .Atari8bit(mode: "GR.15", colors: 4))
     }
 
-    // MARK: - Graphics 7 Decoder (alias for GR.15 with different aspect)
     // Same format as GR.15 but often used with different palettes
-
-    static func decodeGR7(data: Data, palette: [Int]? = nil) -> (image: CGImage?, type: AppleIIImageType) {
-        let result = decodeGR15(data: data, palette: palette)
-        if result.image != nil {
-            return (result.image, .Atari8bit(mode: "GR.7", colors: 4))
-        }
-        return result
-    }
 
     // MARK: - MicroIllustrator Decoder (.MIC)
     // Koala-style format for Atari: 7680 bytes bitmap + 40 bytes color info

@@ -714,13 +714,4 @@ class PackedSHRDecoder {
         return tryDecodePNT0001(data: data) ?? (nil, .Unknown)
     }
     
-    // Legacy compatibility
-    static func decompressPackBytes(data: Data, expectedSize: Int? = nil) -> Data? {
-        let result = unpackBytes(data: data, maxOutputSize: expectedSize ?? 65536)
-        return result.isEmpty ? nil : result
-    }
-    
-    static func decompressPackBytesSafe(data: Data, expectedSize: Int? = nil) -> Data? {
-        return decompressPackBytes(data: data, expectedSize: expectedSize)
-    }
 }

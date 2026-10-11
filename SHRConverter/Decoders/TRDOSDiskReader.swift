@@ -12,9 +12,7 @@ class TRDOSDiskReader {
     private let sectorsPerTrackDS = 32  // Double-sided: 16 sectors per side × 2 sides
     private let directoryTrack = 0
     private let directorySectors = 8  // Sectors 0-7 contain directory
-    private let maxDirectoryEntries = 128
     private let directoryEntrySize = 16
-    private let diskInfoSector = 8  // Track 0, sector 8 contains disk info
 
     // MARK: - Types
 
@@ -62,30 +60,6 @@ class TRDOSDiskReader {
             case "D": return "Data"
             case "#": return "Sequential"
             default: return extension_
-            }
-        }
-    }
-
-    struct DiskInfo {
-        let firstFreeSector: UInt8
-        let firstFreeTrack: UInt8
-        let diskType: UInt8
-        let fileCount: UInt8
-        let freeSectors: UInt16
-        let trdosId: UInt8
-        let diskLabel: String
-
-        var isValid: Bool {
-            trdosId == 0x10
-        }
-
-        var diskTypeDescription: String {
-            switch diskType {
-            case 0x16: return "80 track DS"
-            case 0x17: return "40 track DS"
-            case 0x18: return "80 track SS"
-            case 0x19: return "40 track SS"
-            default: return "Unknown (\(String(format: "0x%02X", diskType)))"
             }
         }
     }
@@ -167,38 +141,6 @@ class TRDOSDiskReader {
     }
 
     // MARK: - Directory Parsing
-
-    /// Parse disk info from track 0, sector 8
-    private func parseDiskInfo(data: Data) -> DiskInfo? {
-        let infoOffset = getSectorOffset(track: 0, sector: 8)
-        guard infoOffset + 256 <= data.count else { return nil }
-
-        let firstFreeSector = data[infoOffset + 225]
-        let firstFreeTrack = data[infoOffset + 226]
-        let diskType = data[infoOffset + 227]
-        let fileCount = data[infoOffset + 228]
-        let freeSectors = UInt16(data[infoOffset + 229]) | (UInt16(data[infoOffset + 230]) << 8)
-        let trdosId = data[infoOffset + 231]
-
-        // Read disk label (8 characters at offset 245)
-        var labelBytes = [UInt8]()
-        for i in 0..<8 {
-            labelBytes.append(data[infoOffset + 245 + i])
-        }
-        let diskLabel = String(bytes: labelBytes, encoding: .ascii)?
-            .trimmingCharacters(in: .whitespaces)
-            .trimmingCharacters(in: .controlCharacters) ?? ""
-
-        return DiskInfo(
-            firstFreeSector: firstFreeSector,
-            firstFreeTrack: firstFreeTrack,
-            diskType: diskType,
-            fileCount: fileCount,
-            freeSectors: freeSectors,
-            trdosId: trdosId,
-            diskLabel: diskLabel
-        )
-    }
 
     /// Parse the directory from track 0, sectors 0-7
     private func parseDirectory(data: Data) -> [DirectoryEntry]? {

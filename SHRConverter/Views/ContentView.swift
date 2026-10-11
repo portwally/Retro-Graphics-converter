@@ -1293,14 +1293,7 @@ struct ContentView: View {
                         DispatchQueue.main.async { self.presentCatalog(catalog); self.isProcessing = false }
                         continue
                     }
-                    for diskFile in DiskImageReader.readDiskImage(data: data) {
-                        if let cgImage = SHRDecoder.decode(data: diskFile.data, filename: diskFile.name).image {
-                            let virtualURL = url.appendingPathComponent(diskFile.name)
-                            let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-                            let paletteInfo = PaletteExtractor.extractPalette(from: diskFile.data, type: diskFile.type, filename: diskFile.name)
-                            newItems.append(ImageItem(url: virtualURL, image: nsImage, type: diskFile.type, originalData: diskFile.data, paletteInfo: paletteInfo)); successCount += 1
-                        }
-                    }
+                    DispatchQueue.main.async { self.statusMessage = "Could not read disk image: \(url.lastPathComponent)" }
                 } else {
                     let result = SHRDecoder.decode(data: data, filename: url.lastPathComponent)
                     if let cgImage = result.image, result.type.isKnown {

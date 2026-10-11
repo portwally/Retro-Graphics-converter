@@ -32,13 +32,6 @@ class AtariSTDiskReader {
             reservedSectors + (numberOfFATs * sectorsPerFAT) + rootDirSectors
         }
 
-        var dataSectors: Int {
-            totalSectors - firstDataSector
-        }
-
-        var totalClusters: Int {
-            dataSectors / sectorsPerCluster
-        }
     }
 
     // MARK: - Directory Entry
