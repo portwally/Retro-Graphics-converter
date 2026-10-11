@@ -463,6 +463,18 @@ class PackedSHRDecoder {
         return true
     }
     
+    /// Stricter check for files that arrive with no extension or ProDOS type: the palette
+    /// words must be valid AND contain at least two different colors (an all-zero header
+    /// passes isPaintworksFormat but is never a real picture).
+    static func isLikelyPaintworks(_ data: Data) -> Bool {
+        guard isPaintworksFormat(data) else { return false }
+        var colors = Set<UInt16>()
+        for i in 0..<16 {
+            colors.insert(UInt16(data[i * 2]) | (UInt16(data[i * 2 + 1]) << 8))
+        }
+        return colors.count >= 2
+    }
+
     // MARK: - PNT/$0000 (Paintworks)
     // Paintworks can use different compression methods or even store uncompressed data
     

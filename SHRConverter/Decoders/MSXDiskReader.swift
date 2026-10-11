@@ -268,8 +268,12 @@ class MSXDiskReader {
 
     // MARK: - Subdirectory Reading
 
-    private func readSubdirectory(data: Data, entry: DirectoryEntry, geometry: DiskGeometry, fat: [UInt16], path: String) -> [DiskCatalogEntry] {
+    private func readSubdirectory(data: Data, entry: DirectoryEntry, geometry: DiskGeometry, fat: [UInt16], path: String, visited: Set<UInt16> = []) -> [DiskCatalogEntry] {
         guard entry.isDirectory else { return [] }
+
+        // A corrupt disk can have a subdirectory pointing back at one of its parents
+        guard !visited.contains(entry.firstCluster) else { return [] }
+        let visited = visited.union([entry.firstCluster])
 
         // Get cluster chain for directory
         let clusters = getClusterChain(startCluster: entry.firstCluster, fat: fat)
@@ -303,7 +307,7 @@ class MSXDiskReader {
             let fullPath = "\(path)/\(subEntry.fullName)"
 
             if subEntry.isDirectory {
-                let nested = readSubdirectory(data: data, entry: subEntry, geometry: geometry, fat: fat, path: fullPath)
+                let nested = readSubdirectory(data: data, entry: subEntry, geometry: geometry, fat: fat, path: fullPath, visited: visited)
                 catalogEntries.append(contentsOf: nested)
             } else if let fileData = extractFile(data: data, entry: subEntry, geometry: geometry, fat: fat) {
                 let fileTypeStr = detectFileType(name: subEntry.fullName, data: fileData)

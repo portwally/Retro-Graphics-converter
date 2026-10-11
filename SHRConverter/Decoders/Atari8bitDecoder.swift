@@ -434,7 +434,7 @@ class Atari8bitDecoder {
     // MARK: - Auto-detect and decode
 
     static func decode(data: Data, filename: String? = nil) -> (image: CGImage?, type: AppleIIImageType) {
-        let ext = filename?.split(separator: ".").last?.lowercased() ?? ""
+        let ext = ImageHelpers.fileExtension(of: filename)
 
         // Try by extension first
         switch ext {

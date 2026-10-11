@@ -372,6 +372,58 @@ class MSXDecoder {
         return (cgImage, .MSX(mode: 5, colors: 16))
     }
 
+    // MARK: - Screen 7 Decoder (MSX2 Graphics Mode 6)
+    // Resolution: 512x212, 16 colors, 4 bits per pixel (256 bytes per line = 54272 bytes)
+    // In a full VRAM dump the palette table sits at 0xFA80.
+
+    static func decodeScreen7(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+        let width = 512
+        let height = 212
+        let bytesPerLine = 256
+        let imageDataSize = bytesPerLine * height  // 54272
+        let vramPaletteOffset = 0xFA80
+
+        let imageOffset = (data.count >= 7 && data[0] == 0xFE) ? 7 : 0
+        guard data.count >= imageOffset + imageDataSize else {
+            return (nil, .Unknown)
+        }
+
+        var palette = msxPalette
+        for candidate in [imageOffset + vramPaletteOffset, imageOffset + imageDataSize] {
+            if data.count >= candidate + 32 {
+                let filePalette = extractMSX2Palette(data: data, offset: candidate)
+                if isValidMSX2Palette(filePalette) {
+                    palette = filePalette
+                    break
+                }
+            }
+        }
+
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        for y in 0..<height {
+            for xByte in 0..<bytesPerLine {
+                let byte = data[imageOffset + y * bytesPerLine + xByte]
+                let pixels = [Int((byte >> 4) & 0x0F), Int(byte & 0x0F)]
+
+                for (i, pixel) in pixels.enumerated() {
+                    let rgb = palette[pixel]
+                    let bufferIdx = (y * width + xByte * 2 + i) * 4
+                    rgbaBuffer[bufferIdx] = rgb.r
+                    rgbaBuffer[bufferIdx + 1] = rgb.g
+                    rgbaBuffer[bufferIdx + 2] = rgb.b
+                    rgbaBuffer[bufferIdx + 3] = 255
+                }
+            }
+        }
+
+        guard let cgImage = ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height) else {
+            return (nil, .Unknown)
+        }
+
+        return (cgImage, .MSX(mode: 7, colors: 16))
+    }
+
     // Helper to extract MSX2 palette from data
     private static func extractMSX2Palette(data: Data, offset: Int) -> [(r: UInt8, g: UInt8, b: UInt8)] {
         var palette: [(r: UInt8, g: UInt8, b: UInt8)] = []
@@ -470,7 +522,7 @@ class MSXDecoder {
 
         // Try to determine format by file extension
         // SC* = Screen, SR* = Screen Raw, GE* = Graphics Editor, GR* = Graphics
-        let ext = filename?.split(separator: ".").last?.lowercased() ?? ""
+        let ext = ImageHelpers.fileExtension(of: filename)
 
         switch ext {
         case "sc1", "ge1":
@@ -479,8 +531,11 @@ class MSXDecoder {
             return decodeScreen2(data: data)
         case "sc5", "sr5", "ge5", "gr5":
             return decodeScreen5(data: data)
-        case "sc7", "ge7":
-            // Screen 7 is 512x212 at 16 colors - use Screen 5 decoder as fallback
+        case "sc7", "sr7", "ge7":
+            // Screen 7 is 512x212 at 16 colors; files too short for that fall back to Screen 5
+            if dataSize >= 54272 {
+                return decodeScreen7(data: data)
+            }
             return decodeScreen5(data: data)
         case "sc8", "sr8", "ge8", "pic":
             if dataSize >= 54272 {

@@ -533,9 +533,10 @@ class BBCMicroDiskReader {
         let numEntriesRaw = data[256 + 5]
         let numEntries = Int(numEntriesRaw) / 8
 
-        let bootOption = Int(data[256 + 6]) & 0x03
+        // Byte 6 of sector 1: bits 0-1 = sector count high bits, bits 4-5 = boot option
+        let bootOption = Int(data[256 + 6] >> 4) & 0x03
 
-        let sectorsHigh = (data[256 + 6] >> 4) & 0x03
+        let sectorsHigh = data[256 + 6] & 0x03
         let sectorsLow = data[256 + 7]
         let totalSectors = (Int(sectorsHigh) << 8) | Int(sectorsLow)
 

@@ -275,7 +275,9 @@ class RetroDecoder {
         
         while offset < compressed.count && decompressed.count < expectedSize {
             let byte = compressed[offset]; offset += 1
-            if byte >= 128 {
+            if byte == 128 {
+                continue  // PackBits no-op
+            } else if byte > 128 {
                 let count = 257 - Int(byte)
                 if offset < compressed.count { let value = compressed[offset]; offset += 1; for _ in 0..<count { decompressed.append(value) } }
             } else {

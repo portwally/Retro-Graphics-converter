@@ -213,6 +213,51 @@ class TRS80Decoder {
         return (cgImage, .TRS80(model: "CoCo", resolution: "128x192, 4 colors"))
     }
 
+    // MARK: - CoCo PMODE 1 Decoder (128x96, 4 colors)
+    // 3072 bytes: same pixel encoding as PMODE 3 at half the vertical resolution.
+    // Output: 256x192 (each pixel doubled in both directions) to match PMODE 3 output.
+
+    static func decodePMode1(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+        let outputWidth = 256
+        let outputHeight = 192
+        let sourceHeight = 96
+        let bytesPerLine = 32
+
+        guard data.count >= bytesPerLine * sourceHeight else {
+            return (nil, .Unknown)
+        }
+
+        var rgbaBuffer = [UInt8](repeating: 0, count: outputWidth * outputHeight * 4)
+
+        for y in 0..<sourceHeight {
+            for byteX in 0..<bytesPerLine {
+                let byte = data[y * bytesPerLine + byteX]
+
+                for pixel in 0..<4 {
+                    let shift = (3 - pixel) * 2
+                    let rgb = cocoPalette[Int((byte >> shift) & 0x03)]
+                    let outputX = (byteX * 4 + pixel) * 2
+
+                    for dy in 0..<2 {
+                        for dx in 0..<2 {
+                            let bufferIdx = ((y * 2 + dy) * outputWidth + outputX + dx) * 4
+                            rgbaBuffer[bufferIdx] = rgb.r
+                            rgbaBuffer[bufferIdx + 1] = rgb.g
+                            rgbaBuffer[bufferIdx + 2] = rgb.b
+                            rgbaBuffer[bufferIdx + 3] = 255
+                        }
+                    }
+                }
+            }
+        }
+
+        guard let cgImage = ImageHelpers.createCGImage(from: rgbaBuffer, width: outputWidth, height: outputHeight) else {
+            return (nil, .Unknown)
+        }
+
+        return (cgImage, .TRS80(model: "CoCo", resolution: "128x96, 4 colors"))
+    }
+
     // MARK: - CoCo PMODE 4 Decoder (256x192, 2 colors with artifacts)
     // Common format: 6144 bytes
 
@@ -731,7 +776,7 @@ class TRS80Decoder {
         let dataSize = data.count
 
         // Try to determine format by file extension
-        let ext = filename?.split(separator: ".").last?.lowercased() ?? ""
+        let ext = ImageHelpers.fileExtension(of: filename)
 
         if (ext == "bin" || ext == "cas") && dataSize == 1024 {
             return decodeBlockGraphics(data: data)
@@ -763,8 +808,9 @@ class TRS80Decoder {
                 return decodePMode4(data: data)
             }
         } else if dataSize == 3072 {
-            // CoCo PMODE 0/1/2 (128x96 or 128x192, less memory)
-            return decodePMode3(data: data)
+            // CoCo PMODE 1 (128x96, 4 colors). PMODE 2 (128x192, 2 colors) has the same
+            // size and cannot be told apart; PMODE 1 is assumed, as PMODE 3 is for 6144 bytes.
+            return decodePMode1(data: data)
         } else if dataSize >= 24000 && dataSize <= 33000 {
             // CoCo 3 modes - check for 640x200 vs 320x200
             if dataSize == 32000 && detectCoCo3Mode(data: data) {

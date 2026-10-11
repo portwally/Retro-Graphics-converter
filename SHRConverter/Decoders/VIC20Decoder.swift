@@ -420,26 +420,6 @@ class VIC20Decoder {
     // MARK: - Image Creation Helper
 
     private static func createImage(from pixels: [UInt8], width: Int, height: Int) -> CGImage? {
-        var mutablePixels = pixels
-
-        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else {
-            return nil
-        }
-
-        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
-
-        guard let context = CGContext(
-            data: &mutablePixels,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: colorSpace,
-            bitmapInfo: bitmapInfo
-        ) else {
-            return nil
-        }
-
-        return context.makeImage()
+        return ImageHelpers.createCGImage(from: pixels, width: width, height: height)
     }
 }

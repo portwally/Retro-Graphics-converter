@@ -1,0 +1,291 @@
+# Audit TODO — Retro Graphics Converter
+
+Audit sessions of 2026-10-10/11 (two passes). Build is clean (Debug, zero warnings). Nothing in
+the project was changed; this file is the only output.
+
+Status legend: **[confirmed]** = reproduced with a test harness built from the project's
+decoder sources · **[code]** = found by reading the code, not yet reproduced ·
+**[likely]** = depends on format knowledge I could not check against a real sample file.
+
+---
+
+## 1. Crashes and hangs
+
+**All fixed on 2026-10-11 (uncommitted).** Verified: app builds with no warnings; the crafted
+crash inputs now return cleanly; 8,000 fresh fuzz cases and a 3,072-variant IFF plane sweep run
+without a crash; the 3,368 real disk images give identical results before and after. Not
+verified by running: the drag-and-drop lock and the movie-export abort (both need the UI), and the
+ADF / Atari ST / MSX directory-cycle guards (only the ProDOS one was exercised with a crafted image).
+
+- [x] **[confirmed] Atari ST disk reader divides by zero.**
+  `AtariSTDiskReader.swift:202` — `totalSectors / (sectorsPerTrack * max(1, sides))` traps when the
+  boot sector has `sectorsPerTrack == 0`. Reached for any ~360K/400K/720K/800K/1.44M image whose
+  bytes 11–13 look like a BPB. Fix: guard `sectorsPerTrack > 0` (the `tracks` value is unused anyway).
+- [x] **[confirmed] DreamGrafix LZW crashes on a double clear code.**
+  `LZWDecompressor.swift:127` — a stream starting with codes 256, 256, 258 leaves `prevCode == 256`,
+  whose dictionary entry is empty, so `prevSequence[0]` is out of range. Fix: treat a non-literal
+  code after a clear as invalid (return nil) and guard `!prevSequence.isEmpty`.
+- [x] **[confirmed] IFF decoder crashes or hangs on bad plane counts.** `AmigaIFFDecoder.swift`
+  - HAM flag with fewer than 2 planes and no CMAP → `finalPalette[0]` out of range (line 452).
+  - `numPlanes` ≥ 64 → `1 << numPlanes` is 0 → `finalPalette[-1]` (line 360).
+  - `numPlanes` 30–62 → tries to build a palette with billions of entries (hang, multi-GB memory).
+  - HAM with more than 8 planes → `UInt8(...)` overflow trap (lines 491–513).
+  Fix: after parsing BMHD, accept only planes 1…8 (plus 24/25/32), and for HAM only 5…8.
+- [x] **[code] Dropping several files at once races on a shared array.**
+  `ContentView.swift:1175-1190` — `filesToProcess.append` is called from concurrent
+  `loadFileRepresentation` callbacks. Can crash or lose files. Fix: serialise appends (serial queue or lock).
+- [x] **[code] Latent force-unwrap in dead code.** `ContentView.swift:1331` —
+  `UTType(filenameExtension:)!` returns nil for extensions containing a space or slash (confirmed),
+  but `exportSingleImage` is only called from `exportSelectedImages`, which has no callers. Not
+  reachable today; fix or delete together with the dead code in section 6.
+- [x] **[code] Recursive directory walkers have no cycle/depth guard** → stack overflow on a corrupt
+  image whose subdirectory points back to itself: ProDOS (`DiskImageReader.swift:1498`), ADF
+  (`:2105`), Atari ST FAT12 (`AtariSTDiskReader.swift:341`), MSX FAT12 (`MSXDiskReader.swift:306`).
+- [x] **[code] Movie export can hang forever.** `ContentView.swift:731, 753` —
+  `while !writerInput.isReadyForMoreMediaData { sleep }` never exits if the asset writer has failed.
+  Check `assetWriter.status == .writing` in the loop.
+- [x] **[code] VIC-20 image creation keeps a pointer to a temporary array.**
+  `VIC20Decoder.swift:422-443` — `CGContext(data: &mutablePixels, …)` then `makeImage()` after the
+  pointer's lifetime has ended. Undefined behaviour in optimised builds. Use
+  `ImageHelpers.createCGImage` like every other decoder.
+
+## 2. Wrong results (file-type routing in `SHRDecoder.decode`)
+
+All of these were reproduced.
+
+**All fixed on 2026-10-11 (uncommitted).** Extension matches are now hints that fall through when
+the platform decoder rejects the file; extensions come from a shared `ImageHelpers.fileExtension`.
+Verified with crafted files for every item below, 8,000 fuzz cases, and the 3,368 real disks:
+- 52 real HGR files on DOS 3.3 disks that were previously rejected are now recognised.
+- 173 IIgs PaintWorks animation files (`$C2`) now show their first frame correctly (new rule;
+  two checked by eye). Before, they were decoded as "SHR 3200" with wrong colours.
+- About 250 false "images" on real disks are gone (MOD music files as SHR 3200, binaries as
+  MacPaint / Paintworks / PCX).
+- Choices made that you may want to revisit: SHR 3200 by size is limited to 38400–38656 bytes;
+  extension-less MacPaint needs a version word of 0–3; 3072-byte CoCo files are decoded as PMODE 1
+  (new decoder, not checked against a real file); CoCo catalog entries are decoded by
+  `TRS80Decoder` directly on import.
+- Still open: `.pic`/`.bin` files of 24000–33000 bytes are still claimed by the CoCo 3 decoder
+  first (so a IIgs `FOO.PIC` of 32768 bytes opens as CoCo 3) — unchanged from before.
+
+- [x] **[confirmed] Atari ST `.PI3` files decode as CoCo 3 garbage.** `pi3` is in `trs80Extensions`
+  (line 36), which is checked before the Degas list (line 42). A 32034-byte hi-res Degas file comes
+  back as "TRS-80 CoCo 3 (320x200)".
+- [x] **[confirmed] NEOchrome `.NEO` files decode as CoCo 3 garbage.** There is no `neo` route in
+  `SHRDecoder`; the 32128-byte file falls into the 24000–33000 CoCo 3 fallback (line 345). This also
+  affects NEO files imported from an `.st` disk catalog, because `importCatalogEntries` re-decodes
+  through `SHRDecoder`.
+- [x] **[confirmed] Any `.bin` file that is not a TRS-80 size returns Unknown.** An 8192-byte HGR
+  file named `PIC.BIN` fails, while `PIC.HGR` works. Extension routes for `bin`/`pic`/`pix`/`max`
+  should fall through to magic/size detection when the TRS-80 decoder returns nil.
+- [x] **[confirmed] A filename with no dot is treated as its own extension.**
+  `filename.split(separator: ".").last` returns the whole name, so an extension-less file called
+  `PIC`, `BIN`, `MAX`, `BBC` … is routed by name. 8192-byte `PIC` → Unknown. Use
+  `(name as NSString).pathExtension`. Same pattern in TRS80/MSX/BBC/Atari8bit/Plus4 decoders.
+- [x] **[confirmed] Atari 8-bit `.PIC` (7680 bytes) → Unknown** — `pic` is claimed by the TRS-80
+  list first. Also breaks import of `.PIC` files from ATR catalogs.
+- [x] **[confirmed] Atari `.GR10` with embedded palette (7689 bytes) → Unknown** — `gr10` is
+  missing from `atari8bitExtensions` (line 48).
+- [x] **[confirmed] Atari `.GR5` → Unknown** — `gr5` is in the MSX list (line 24) and shadows the Atari entry.
+- [x] **[confirmed] CoCo `.PIC` of 3072 bytes → Unknown** — `TRS80Decoder.decode` sends it to
+  `decodePMode3`, which requires 6144 bytes.
+- [x] **[confirmed] CoCo 3 640x200 images import from a disk as 320x200.** Catalog entries with a
+  non-zero `fileType` are decoded under the name `X.CM3#020000`, so the extension no longer matches
+  and the 32000-byte size rule goes straight to `decodeCoCo3_320`, skipping mode detection.
+- [x] **[confirmed] Any unknown file ≥ 38400 bytes is "decoded" as SHR 3200.**
+  `decodeAppleIIBySize` has `case 38400...` (line 329). A random 50000-byte `.dat` file comes back as
+  a 320x200 image. It also makes the MacPaint fallback unreachable above 38400 bytes. Should be `== 38400`.
+- [x] **[confirmed] Files that start with 32 zero-ish bytes are "decoded" as Paintworks.**
+  `isPaintworksFormat` only checks 16 nibbles. A 5000-byte text-like file returned a 320x396 image.
+- [x] **[confirmed] Any file ≥ 128 bytes starting with 0x0A is treated as PCX**, with no fallback.
+  An HGR image whose first byte is 0x0A returned a "1x1 PCX, 16129-bit". Validate version/encoding
+  bytes and fall through on failure.
+
+## 3. Wrong results (decoders)
+
+**Fixed on 2026-10-11 (uncommitted):** the seven ticked items. Each was checked with a crafted
+file (pixel values compared), plus 8,000 fuzz cases. The IFF row reader was merged from four
+copies into one; 1,201 generated IFF files decode identically before and after except the 267
+with a mask plane. Palette re-render for IFF now calls the real decoder, so it can no longer
+drift from it. Not checked against real files: mask-plane IFF, EHB, and MSX Screen 7 (no samples
+on this Mac). The four **[likely]** items are untouched — they need sample files first.
+
+- [x] **[confirmed] Top-down BMPs fail to load.** `PCImageDecoder.swift:15-16` assembles height as
+  an unsigned value, so `height < 0` is never true and the size check rejects the file.
+- [x] **[confirmed] 32-bit (and 16-bit) BMPs load as an all-black image** — the pixel switch at
+  line 46 only handles 1/4/8/24 bpp. Simplest fix: add `bmp` to the modern formats and let ImageIO decode it.
+- [x] **[confirmed] IFF images lose their palette when the CMAP is shorter than 2^planes.**
+  `AmigaIFFDecoder.swift:291` replaces the whole palette with grayscale. This breaks every
+  Extra-Half-Brite image (32-colour CMAP, 6 planes) — the EHB flag is parsed but the half-bright
+  colours are never generated. Pad the palette instead, and build entries 32–63 for EHB.
+- [x] **[code] IFF images with a mask plane (masking == 1) are garbled** — the extra plane per row is not skipped.
+- [ ] **[likely] C64 Advanced Art Studio (10018 bytes) uses the Koala layout.**
+  `C64Decoder.decodeArtStudio` reads colour RAM at 9002 and background at 10002; the format has
+  border/background at 9002/9003 and colour RAM at 9018. Needs a real `.ocp` file to confirm.
+- [ ] **[likely] TR-DOS file offsets are doubled.** `TRDOSDiskReader.swift:156` uses 32 sectors per
+  logical track; TR-DOS directory entries store a logical track with 16 sectors each. Needs a real `.trd`.
+- [ ] **[likely] CoCo RS-DOS granule mapping is off by one track past the directory.**
+  `CoCoDiskReader.swift:322` maps granules 34+ to track `n/2`; genuine RS-DOS skips track 17
+  (`n/2 + 1`). The current mapping only matches BitPast-made disks.
+- [ ] **[likely] BBC `.dsd` images are read as if linear.** `BBCMicroDiskReader.extractFile` ignores
+  side interleaving and never reads side 2's catalog.
+- [x] **[code] BBC `getDiskInfo` swaps the boot-option and sector-count bit fields** (lines 536–538;
+  `canRead` has them right). Values are currently unused.
+- [x] **[code] MSX Screen 7 is rendered with the Screen 5 decoder** (512-wide data shown as 256).
+- [x] **[code] MacPaint treats flag byte 128 as a 129-byte run** instead of a no-op (`RetroDecoder.swift:278`).
+
+## 4. Disk images
+
+- [ ] **[confirmed] 11% of real Apple II disks open as "CoCo RS-DOS" with garbage contents.**
+  Of 3,368 Apple II disk images on this Mac, 373 (344 `.dsk`, 20 `.po`, 9 `.do`) were claimed by
+  `CoCoDiskReader.canRead`, which runs before the Apple readers in `readDiskCatalog` and accepts
+  any 140–380 KB file whose 68 bytes at offset 78592 are ≤ 0x8F. Calling the Apple readers directly
+  on those 373 gives a valid catalog for 346 of them (260 DOS 3.3, 61 ProDOS in DOS order,
+  25 ProDOS). Examples: `Tanks.dsk`, `Kaboom/graphics.dsk`, `Foxxivision demo.dsk`.
+  Fix: try 2IMG/D64/ProDOS/DOS 3.3 before CoCo, BBC and TR-DOS, and tighten the CoCo check
+  (size must be a known RS-DOS size; directory entries must have printable names and types 0–3).
+- [ ] **[confirmed] 229 of 3,368 real images return no catalog at all**, and the user only sees
+  "Could not read disk image". Breakdown: 135 × 143360-byte `.dsk` (likely copy-protected, Pascal,
+  CP/M or Apple III disks), 51 × DiskCopy 4.2 images saved as `.dsk` (838484 / 819284 bytes —
+  84-byte header not handled), 8 × `.2mg` (non-ProDOS contents), 3 × 32 MB `.hdv`, and about 20
+  truncated `.po` files (143352–143359 bytes). DiskCopy 4.2 support would recover the largest
+  identifiable group.
+- [ ] **[confirmed] 19 real disks open as an empty "DOS 3.3" catalog** — see the
+  `readDOS33CatalogFull` item below.
+- [ ] **[code] Subdirectories are skipped on DOS-ordered ProDOS disks** (`DiskImageReader.swift:3003`,
+  "Skip subdirectories for now"). Files inside folders on a `.dsk` ProDOS image never appear.
+- [ ] **[code] `convertDOSOrderToProDOSOrder` uses the wrong sector table** (line 2884). It only
+  runs as a last fallback, so it currently never produces a valid disk. The table named
+  `prodosToDOSSectorReversed` is the standard mapping; the one named "standard" is not.
+- [ ] **[code] `readDOS33CatalogFull` returns an empty catalog instead of nil**, which stops the
+  ProDOS-in-DOS-order fallbacks from running.
+- [ ] **[code] DOS 3.3 filenames are cut at the first space** (lines 510, 1663) — `MY PICTURE` becomes `MY`.
+- [ ] **[code] Sparse blocks are skipped rather than zero-filled** in the DOS-order ProDOS extractors
+  (lines 3228, 3336), shifting the rest of the file.
+- [ ] **[code] ProDOS BIN "header" detection is too loose** (line 1527) — an image starting
+  `00 20 01 00` loses its first 4 bytes. Require `length == count - 4`.
+- [ ] **[code] `readCPCDSK` (non-catalog path) does not trim files by record count**, so `.SCR` files
+  with an AMSDOS header come out 17408 bytes and are not recognised. The catalog path does trim.
+- [ ] **[code] CPC `.SCR` entries are flagged `isImage` even when decoding fails** (line 2407);
+  importing them then silently yields nothing.
+- [ ] **[code] D71 and D81 are advertised but not implemented.** `readD64` only accepts 174848 /
+  175531 bytes. README lines 20, 51, 52, 140 and HelpView lines 124, 551, 552 list `.d71`/`.d81`
+  as supported; 40-track D64s are rejected too. Either add readers or remove the claims.
+- [ ] **[code] Catalog "Export Files" fails silently.** `DiskCatalogBrowserView.swift:111-136` — a
+  name containing `/` (ST/MSX subfolder paths, C64 names) makes `write` throw; the empty `catch {}`
+  aborts all remaining files with no message. Same-named files in different folders overwrite each other.
+
+## 5. UI and export
+
+- [ ] **[code] "Atari ST" filter never matches.** `ContentView.swift:85` looks for `"DEGAS"`, the
+  display name is `"Degas (…)"`; NEOchrome is not included either.
+- [ ] **[code] "Modern" filter misses `.jpg`, `.tif`, `.heif`** — the type name is the upper-cased
+  extension (`JPG`), the filter looks for `JPEG`/`TIFF`/`HEIC` (line 90).
+- [ ] **[code] No filter entries for MSX, BBC, TRS-80, Atari 8-bit, Plus/4, VIC-20.**
+- [ ] **[code] `@State` is written from a background thread** — `self.selectedExportFormat = format`
+  at `ContentView.swift:480`; it is also never restored, so a batch export silently changes the
+  format used by later exports. `imageItems` is read off the main thread at lines 1144 and 1383.
+- [ ] **[code] Exports overwrite without warning.** Two images with the same base name (common for
+  disk files) overwrite each other, as do existing files in the target folder.
+- [ ] **[code] Upscale, rotate, flip and movie scaling silently do nothing for some images.**
+  `scaleCGImage`/`rotateImage`/`flipImage` reuse the source `bitmapInfo`; indexed, grayscale or
+  16-bit PNG/GIF sources make `CGContext` creation fail. Export then writes 1x, and movies drop the image.
+- [ ] **[code] Only the last disk image opens when several are loaded at once** — each one
+  overwrites `currentCatalog` (lines 1230, 1298).
+- [ ] **[code] "Original" toggle / palette reset can re-decode differently for catalog items** —
+  the fallback at lines 59 and 435 uses the plain filename, not the `#c0xxxx` type-tagged name used on import.
+- [ ] **[code] Undo issues:** failed transforms still push an undo entry (line 1798); a batch
+  transform of more than 10 images can only be partly undone; `clearAllImages` leaves the undo stack
+  and menu state; the menu item always says "Undo Crop".
+- [ ] **[code] Selection survives filter changes**, so Delete/Export can act on images hidden by the filter.
+- [ ] **[code] Multiple windows share one `AppState`** — ⌘Z and "Open Recent" fire in every window.
+- [ ] **[code] One modal alert per image** when batch-exporting "Original" without original data (line 1399).
+- [ ] **[code] Cosmetic type info:** Koala reports "1-bit (2 colors)", every TRS-80/CoCo type
+  reports "1-bit (2 colors)", DHGR reports 560x192 for a 280x192 image (`ImageTypes.swift`).
+
+## 5b. Palette editing and the Original/Modified toggle
+
+Found by comparing each decoder's output with `PaletteRenderer.rerenderWithPalette` on the same
+file, over 12,000 generated inputs.
+
+- [ ] **[confirmed] Palette edits do nothing for 30 image types, but the app reports success.**
+  `PaletteExtractor` returns an editable palette, `rerenderWithPalette` returns nil, and
+  `handleColorEdit` still stores `modifiedPalette` and shows "Color N modified - live preview".
+  The picture and all exports stay unchanged while the item is flagged as modified. Affected:
+  Amstrad CPC (both modes), Atari 8-bit (GR.8/9/10/11/15), BBC Micro (all modes), C64 hi-res
+  formats, Plus/4, VIC-20, all TRS-80/CoCo types, MSX Screen 1, PCX above 8 bpp. Either add
+  renderers or mark these palettes `.fixed`.
+- [ ] **[confirmed] ZX Spectrum colours shift when re-rendered.** The decoder uses 0xD7 (215) for
+  normal-brightness colours (`RetroDecoder.swift:8`), the palette extractor uses 205
+  (`PaletteExtractor.swift:898`). Any palette edit or Original view changes every non-bright colour.
+- [x] **[confirmed] MSX Screen 1 is re-rendered with the Screen 2 layout** (re-render now returns nil for Screen 1/7; they join the "edits do nothing" list above) (`PaletteRenderer.swift:1041`,
+  "use Screen 2 renderer as fallback") — the result differs from the decode in most cases.
+- [ ] **[code] Headerless `.3201` files re-render shifted by 4 bytes.** The decoder accepts files
+  without the `APP\0` header (`SHRDecoder.swift:376`); `renderSHR3200` always starts at 6404.
+- [ ] **[code] DreamGrafix re-render is always 320x200**, ignoring the footer's width/height that
+  the decoder uses.
+- [ ] Re-render also differed from decode on some generated MSX Screen 2/5/8, PCX 2/3/4/6/8-bpp,
+  BMP 1/4/8-bpp and MacPaint inputs. Part of this is random-data noise (e.g. MacPaint flag byte
+  128, truncated data filled black vs white); each pair still needs a side-by-side read.
+
+## 5c. More UI items (second pass)
+
+- [ ] **[code] Brightness/contrast preview sticks after the popover is dismissed.**
+  `previewAdjustments` is only cleared by Apply or Reset (`ContentView.swift:1924-1968`). Clicking
+  outside the popover leaves the preview on screen, applies it to whichever image is selected next,
+  and it is not part of what gets exported. Clear it when `showAdjustments` becomes false.
+- [ ] **[code] Adjustment preview and Original view are recomputed inside `body`.** `displayImage`
+  (`ContentView.swift:48`) runs a full per-pixel pass or a full re-decode on every view update.
+- [ ] **[code] Screensaver name is used as a path component unchecked**
+  (`ContentView.swift:536-539`) — a name containing `/` or `..` writes outside
+  `~/Pictures/Retro Screensavers`.
+- [ ] **[code] Movie export sheet is a fixed 550x850 points** (`MovieExportSheet.swift`), taller
+  than the usable screen on 13-inch MacBooks; the buttons can end up off-screen.
+
+## 6. Notes on the earlier AUDIT-REPORT.md (April)
+
+- Item 2.1 ("add `[weak self]` everywhere") does not apply: `ContentView` is a struct.
+- Items 1.2/1.5 (T/S-list bounds) are not bugs: the max offset is +255 inside a checked 256-byte sector.
+- Item 1.1 (zero-size image divide) is not reachable from any decoder I read.
+
+## 6b. Dead code (compiled, never called)
+
+- [ ] `ImageCropView.swift` (298 lines, at the repo root outside `SHRConverter/`) — only referenced by its own `#Preview`.
+- [ ] `ContentView`: `exportSelectedImages`, `exportSingleImage`, `exportAllImages`, `showBatchRename`,
+  `batchExportWithRename`, `rotateSelectedImage`, `flipSelectedImage`, `toggleCropMode`,
+  `clearAllImages`, `blendImages`, `createPixelBuffer(from:size:)`, and the `filesToConvert` state.
+- [ ] Decoders: `TRS80Decoder.decodePMode4Artifact`, `PackedSHRDecoder.decompressPackBytes` /
+  `decompressPackBytesSafe`, `ImageHelpers.convertRawPalettes`, `AtariSTDiskReader.DiskGeometry.totalClusters`.
+- [ ] `DiskImageReader.readDiskImage` and its per-format `read…` functions are only a fallback for
+  when `readDiskCatalog` returns nil, and duplicate the catalog readers with older logic.
+
+## 7. Audit work still to do
+
+- [x] Run the disk readers over the real disk images on this Mac — 3,368 images, no crashes or
+  hangs; results folded into section 4.
+- [x] Fuzz the disk readers — 7,650 mutated copies of six real images (ProDOS `.po`/`.2mg`/`.hdv`,
+  DOS 3.3, ProDOS-in-DOS-order, D64): no crashes or hangs. The Atari ST, MSX, ATR, BBC, CoCo,
+  TR-DOS, ADF and CPC readers were **not** fuzzed or run on real disks — there are no sample
+  images of those formats on this Mac.
+- [x] Remaining views read: Adjustments, Histogram, DiskCatalogBrowser, ExportSheet, and the
+  logic parts of ScreensaverExportSheet and MovieExportSheet.
+- [x] README/HelpView claims checked (D71/D81 finding in section 4; Degas Elite `.PC1`–`.PC3`
+  are not claimed in the README, but the ST catalog flags them as images that then fail to import).
+- [ ] Find sample files to settle the four **[likely]** items (`.ocp`, `.trd`, genuine RS-DOS `.dsk`, `.dsd`).
+- [ ] Still unread: `PaletteView.swift`, `ToolbarView.swift`, `InfoBarView.swift`, `HelpView.swift`,
+  `ProDOSFileTypes.swift`, `StatusBarView.swift`, `ImageThumbnailView.swift`, and the bodies of
+  `PaletteExtractor.swift` / `PaletteRenderer.swift` beyond the functions cited above.
+- [ ] Work out why 135 plain 143360-byte `.dsk` files and three 32 MB `.hdv` files return no
+  catalog (expected for protected/non-DOS disks, but not verified per file).
+- [ ] Decide whether to add a test target; the harness cases from these sessions would make a good start.
+
+## How the confirmed items were reproduced
+
+A command-line harness was compiled from `Decoders/*.swift`, `Utilities/*.swift` and
+`Models/*.swift` plus a small driver, then run with hand-built inputs for each case and
+a random-input fuzzer (about 18,000 cases across image decode, palette extraction and
+palette re-render). The only fuzz crashes were the IFF plane-count cases in section 1.
+The second pass added a run over 3,368 real disk images, 7,650 mutated disk images, and a
+decode-versus-re-render pixel comparison over 12,000 generated files.
+The harness lives in the session scratch folder and is not part of the repo; it would
+need to be rebuilt to re-run.

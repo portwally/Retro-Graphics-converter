@@ -6,7 +6,9 @@ import AppKit
 
 class AmigaIFFDecoder {
     
-    static func decode(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+    /// - Parameter paletteOverride: replaces the file's CMAP (used for live palette editing).
+    ///   Ignored for HAM and 24-bit images, whose colors do not come straight from the CMAP.
+    static func decode(data: Data, paletteOverride: [(r: UInt8, g: UInt8, b: UInt8)]? = nil) -> (image: CGImage?, type: AppleIIImageType) {
         guard data.count >= 12 else {
             return (nil, .Unknown)
         }
@@ -95,6 +97,23 @@ class AmigaIFFDecoder {
         
         let is24Bit = (numPlanes == 24 || numPlanes == 25 || numPlanes == 32)
 
+        // Indexed images have at most 8 bitplanes; anything else is corrupt
+        guard is24Bit || numPlanes <= 8 else {
+            return (nil, .Unknown)
+        }
+
+        // HAM needs 2 control bits plus data bits (HAM5-HAM8)
+        if numPlanes < 5 {
+            isHAM = false
+        }
+
+        if let override = paletteOverride, !isHAM, !is24Bit {
+            palette = override
+        }
+
+        // masking == 1: every row carries one extra bitplane (the mask) after the image planes
+        let hasMaskPlane = (masking == 1)
+
         let cgImage: CGImage?
         if is24Bit {
             cgImage = decodeILBM24Body(
@@ -105,7 +124,7 @@ class AmigaIFFDecoder {
                 height: height,
                 numPlanes: numPlanes,
                 compression: compression,
-                masking: masking
+                hasMaskPlane: hasMaskPlane
             )
         } else if isHAM {
             cgImage = decodeHAMBody(
@@ -116,6 +135,7 @@ class AmigaIFFDecoder {
                 height: height,
                 numPlanes: numPlanes,
                 compression: compression,
+                hasMaskPlane: hasMaskPlane,
                 palette: palette
             )
         } else {
@@ -127,6 +147,8 @@ class AmigaIFFDecoder {
                 height: height,
                 numPlanes: numPlanes,
                 compression: compression,
+                hasMaskPlane: hasMaskPlane,
+                isEHB: isEHB,
                 palette: palette
             )
         }
@@ -184,58 +206,70 @@ class AmigaIFFDecoder {
         return (correctedImage, .IFF(width: width, height: height, colors: colorDescription))
     }
     
-    private static func decodeILBM24Body(data: Data, bodyOffset: Int, bodySize: Int, width: Int, height: Int, numPlanes: Int, compression: UInt8, masking: UInt8) -> CGImage? {
+    // MARK: - Bitplane Row Reader
+
+    /// Reads one bitplane row (uncompressed or ByteRun1/PackBits) and advances srcOffset.
+    private static func readPlaneRow(data: Data, srcOffset: inout Int, bodyEnd: Int, bytesPerRow: Int, compression: UInt8) -> [UInt8] {
+        var rowData: [UInt8] = []
+        rowData.reserveCapacity(bytesPerRow)
+
+        if compression == 1 {
+            var bytesRead = 0
+            while bytesRead < bytesPerRow && srcOffset < bodyEnd {
+                let cmd = Int8(bitPattern: data[srcOffset])
+                srcOffset += 1
+
+                if cmd >= 0 {
+                    let count = Int(cmd) + 1
+                    for _ in 0..<count {
+                        if srcOffset < bodyEnd && bytesRead < bytesPerRow {
+                            rowData.append(data[srcOffset])
+                            srcOffset += 1
+                            bytesRead += 1
+                        }
+                    }
+                } else if cmd != -128 {
+                    let count = Int(-cmd) + 1
+                    if srcOffset < bodyEnd {
+                        let repeatByte = data[srcOffset]
+                        srcOffset += 1
+                        for _ in 0..<count {
+                            if bytesRead < bytesPerRow {
+                                rowData.append(repeatByte)
+                                bytesRead += 1
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            for _ in 0..<bytesPerRow {
+                if srcOffset < bodyEnd {
+                    rowData.append(data[srcOffset])
+                    srcOffset += 1
+                }
+            }
+        }
+
+        return rowData
+    }
+
+    private static func decodeILBM24Body(data: Data, bodyOffset: Int, bodySize: Int, width: Int, height: Int, numPlanes: Int, compression: UInt8, hasMaskPlane: Bool) -> CGImage? {
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
         var srcOffset = bodyOffset
+        let bodyEnd = min(bodyOffset + bodySize, data.count)
         
         let bytesPerRow = ((width + 15) / 16) * 2
         let planesPerChannel = 8
         
         for y in 0..<height {
             var planeBits: [[UInt8]] = Array(repeating: [], count: numPlanes)
-            
+
             for plane in 0..<numPlanes {
-                var rowData: [UInt8] = []
-                
-                if compression == 1 {
-                    var bytesRead = 0
-                    while bytesRead < bytesPerRow && srcOffset < bodyOffset + bodySize && srcOffset < data.count {
-                        let cmd = Int8(bitPattern: data[srcOffset])
-                        srcOffset += 1
-                        
-                        if cmd >= 0 {
-                            let count = Int(cmd) + 1
-                            for _ in 0..<count {
-                                if srcOffset < bodyOffset + bodySize && srcOffset < data.count && bytesRead < bytesPerRow {
-                                    rowData.append(data[srcOffset])
-                                    srcOffset += 1
-                                    bytesRead += 1
-                                }
-                            }
-                        } else if cmd != -128 {
-                            let count = Int(-cmd) + 1
-                            if srcOffset < bodyOffset + bodySize && srcOffset < data.count {
-                                let repeatByte = data[srcOffset]
-                                srcOffset += 1
-                                for _ in 0..<count {
-                                    if bytesRead < bytesPerRow {
-                                        rowData.append(repeatByte)
-                                        bytesRead += 1
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    for _ in 0..<bytesPerRow {
-                        if srcOffset < bodyOffset + bodySize && srcOffset < data.count {
-                            rowData.append(data[srcOffset])
-                            srcOffset += 1
-                        }
-                    }
-                }
-                
-                planeBits[plane] = rowData
+                planeBits[plane] = readPlaneRow(data: data, srcOffset: &srcOffset, bodyEnd: bodyEnd, bytesPerRow: bytesPerRow, compression: compression)
+            }
+            if hasMaskPlane {
+                _ = readPlaneRow(data: data, srcOffset: &srcOffset, bodyEnd: bodyEnd, bytesPerRow: bytesPerRow, compression: compression)
             }
             
             for x in 0..<width {
@@ -281,68 +315,45 @@ class AmigaIFFDecoder {
         return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
     }
     
-    private static func decodeILBMBody(data: Data, bodyOffset: Int, bodySize: Int, width: Int, height: Int, numPlanes: Int, compression: UInt8, palette: [(r: UInt8, g: UInt8, b: UInt8)]) -> CGImage? {
+    private static func decodeILBMBody(data: Data, bodyOffset: Int, bodySize: Int, width: Int, height: Int, numPlanes: Int, compression: UInt8, hasMaskPlane: Bool, isEHB: Bool, palette: [(r: UInt8, g: UInt8, b: UInt8)]) -> CGImage? {
         let bytesPerRow = ((width + 15) / 16) * 2
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
         
         var finalPalette = palette
         let numColors = 1 << numPlanes
         
-        if finalPalette.isEmpty || finalPalette.count < numColors {
-            finalPalette = []
+        if finalPalette.isEmpty {
+            // No CMAP at all: fall back to a grayscale ramp
             for i in 0..<numColors {
-                let gray = UInt8((i * 255) / (numColors - 1))
+                let gray = UInt8((i * 255) / max(numColors - 1, 1))
                 finalPalette.append((gray, gray, gray))
             }
+        } else if isEHB && numPlanes == 6 && finalPalette.count <= 32 {
+            // Extra-Half-Brite: colors 32-63 are colors 0-31 at half brightness
+            while finalPalette.count < 32 {
+                finalPalette.append((0, 0, 0))
+            }
+            for i in 0..<32 {
+                let c = finalPalette[i]
+                finalPalette.append((c.r / 2, c.g / 2, c.b / 2))
+            }
+        }
+        // A CMAP shorter than 2^planes keeps its colors; undefined entries are black
+        while finalPalette.count < numColors {
+            finalPalette.append((0, 0, 0))
         }
         
         var srcOffset = bodyOffset
+        let bodyEnd = min(bodyOffset + bodySize, data.count)
         
         for y in 0..<height {
             var planeBits: [[UInt8]] = Array(repeating: [], count: numPlanes)
-            
+
             for plane in 0..<numPlanes {
-                var rowData: [UInt8] = []
-                
-                if compression == 1 {
-                    var bytesRead = 0
-                    while bytesRead < bytesPerRow && srcOffset < bodyOffset + bodySize {
-                        let cmd = Int8(bitPattern: data[srcOffset])
-                        srcOffset += 1
-                        
-                        if cmd >= 0 {
-                            let count = Int(cmd) + 1
-                            for _ in 0..<count {
-                                if srcOffset < bodyOffset + bodySize && bytesRead < bytesPerRow {
-                                    rowData.append(data[srcOffset])
-                                    srcOffset += 1
-                                    bytesRead += 1
-                                }
-                            }
-                        } else if cmd != -128 {
-                            let count = Int(-cmd) + 1
-                            if srcOffset < bodyOffset + bodySize {
-                                let repeatByte = data[srcOffset]
-                                srcOffset += 1
-                                for _ in 0..<count {
-                                    if bytesRead < bytesPerRow {
-                                        rowData.append(repeatByte)
-                                        bytesRead += 1
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    for _ in 0..<bytesPerRow {
-                        if srcOffset < bodyOffset + bodySize {
-                            rowData.append(data[srcOffset])
-                            srcOffset += 1
-                        }
-                    }
-                }
-                
-                planeBits[plane] = rowData
+                planeBits[plane] = readPlaneRow(data: data, srcOffset: &srcOffset, bodyEnd: bodyEnd, bytesPerRow: bytesPerRow, compression: compression)
+            }
+            if hasMaskPlane {
+                _ = readPlaneRow(data: data, srcOffset: &srcOffset, bodyEnd: bodyEnd, bytesPerRow: bytesPerRow, compression: compression)
             }
             
             for x in 0..<width {
@@ -380,7 +391,7 @@ class AmigaIFFDecoder {
     //   10: Hold G and B, modify R
     //   11: Hold R and B, modify G
 
-    private static func decodeHAMBody(data: Data, bodyOffset: Int, bodySize: Int, width: Int, height: Int, numPlanes: Int, compression: UInt8, palette: [(r: UInt8, g: UInt8, b: UInt8)]) -> CGImage? {
+    private static func decodeHAMBody(data: Data, bodyOffset: Int, bodySize: Int, width: Int, height: Int, numPlanes: Int, compression: UInt8, hasMaskPlane: Bool, palette: [(r: UInt8, g: UInt8, b: UInt8)]) -> CGImage? {
         let bytesPerRow = ((width + 15) / 16) * 2
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
 
@@ -398,53 +409,16 @@ class AmigaIFFDecoder {
         }
 
         var srcOffset = bodyOffset
+        let bodyEnd = min(bodyOffset + bodySize, data.count)
 
         for y in 0..<height {
             var planeBits: [[UInt8]] = Array(repeating: [], count: numPlanes)
 
-            // Decompress/read plane data for this row
             for plane in 0..<numPlanes {
-                var rowData: [UInt8] = []
-
-                if compression == 1 {
-                    var bytesRead = 0
-                    while bytesRead < bytesPerRow && srcOffset < bodyOffset + bodySize {
-                        let cmd = Int8(bitPattern: data[srcOffset])
-                        srcOffset += 1
-
-                        if cmd >= 0 {
-                            let count = Int(cmd) + 1
-                            for _ in 0..<count {
-                                if srcOffset < bodyOffset + bodySize && bytesRead < bytesPerRow {
-                                    rowData.append(data[srcOffset])
-                                    srcOffset += 1
-                                    bytesRead += 1
-                                }
-                            }
-                        } else if cmd != -128 {
-                            let count = Int(-cmd) + 1
-                            if srcOffset < bodyOffset + bodySize {
-                                let repeatByte = data[srcOffset]
-                                srcOffset += 1
-                                for _ in 0..<count {
-                                    if bytesRead < bytesPerRow {
-                                        rowData.append(repeatByte)
-                                        bytesRead += 1
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    for _ in 0..<bytesPerRow {
-                        if srcOffset < bodyOffset + bodySize {
-                            rowData.append(data[srcOffset])
-                            srcOffset += 1
-                        }
-                    }
-                }
-
-                planeBits[plane] = rowData
+                planeBits[plane] = readPlaneRow(data: data, srcOffset: &srcOffset, bodyEnd: bodyEnd, bytesPerRow: bytesPerRow, compression: compression)
+            }
+            if hasMaskPlane {
+                _ = readPlaneRow(data: data, srcOffset: &srcOffset, bodyEnd: bodyEnd, bytesPerRow: bytesPerRow, compression: compression)
             }
 
             // Process pixels with HAM decoding

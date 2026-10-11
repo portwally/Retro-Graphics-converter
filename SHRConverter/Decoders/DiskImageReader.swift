@@ -1461,9 +1461,13 @@ extension DiskImageReader {
         return nil
     }
     
-    static func readProDOSDirectoryForCatalog(data: Data, startBlock: Int, blockSize: Int, parentPath: String) -> [DiskCatalogEntry] {
+    static func readProDOSDirectoryForCatalog(data: Data, startBlock: Int, blockSize: Int, parentPath: String, visited: Set<Int> = []) -> [DiskCatalogEntry] {
         var entries: [DiskCatalogEntry] = []
         var currentBlock = startBlock
+
+        // A corrupt disk can have a subdirectory pointing back at one of its parents
+        guard !visited.contains(startBlock) else { return entries }
+        let visited = visited.union([startBlock])
         
         for _ in 0..<100 {
             let blockOffset = currentBlock * blockSize
@@ -1495,7 +1499,7 @@ extension DiskImageReader {
                 let fullPath = parentPath.isEmpty ? fileName : "\(parentPath)/\(fileName)"
 
                 if entryStorageType == 0x0D {
-                    let subEntries = readProDOSDirectoryForCatalog(data: data, startBlock: keyPointer, blockSize: blockSize, parentPath: fullPath)
+                    let subEntries = readProDOSDirectoryForCatalog(data: data, startBlock: keyPointer, blockSize: blockSize, parentPath: fullPath, visited: visited)
                     
                     let dirEntry = DiskCatalogEntry(
                         name: fileName,
@@ -2045,8 +2049,12 @@ extension DiskImageReader {
         )
     }
 
-    private static func readADFDirectoryEntries(data: Data, dirHeaderBlock: Int, dirHeaderData: Data) -> [DiskCatalogEntry] {
+    private static func readADFDirectoryEntries(data: Data, dirHeaderBlock: Int, dirHeaderData: Data, visitedDirs: Set<Int> = []) -> [DiskCatalogEntry] {
         var entries: [DiskCatalogEntry] = []
+
+        // A corrupt disk can have a subdirectory pointing back at one of its parents
+        guard !visitedDirs.contains(dirHeaderBlock) else { return entries }
+        let visitedDirs = visitedDirs.union([dirHeaderBlock])
 
         // Read hash table from directory header
         for i in 0..<72 {
@@ -2102,7 +2110,7 @@ extension DiskImageReader {
 
                     } else if headerSecType == 2 {
                         // Subdirectory - recursive call
-                        let subEntries = readADFDirectoryEntries(data: data, dirHeaderBlock: currentBlock, dirHeaderData: headerData)
+                        let subEntries = readADFDirectoryEntries(data: data, dirHeaderBlock: currentBlock, dirHeaderData: headerData, visitedDirs: visitedDirs)
 
                         let entry = DiskCatalogEntry(
                             name: entryName,

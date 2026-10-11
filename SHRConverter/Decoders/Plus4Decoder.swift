@@ -220,7 +220,7 @@ class Plus4Decoder {
         let size = data.count
 
         // Try to determine format by file extension
-        let ext = filename?.split(separator: ".").last?.lowercased() ?? ""
+        let ext = ImageHelpers.fileExtension(of: filename)
 
         // PRG files may have a 2-byte load address
         let hasLoadAddress = ext == "prg"

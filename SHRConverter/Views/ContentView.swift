@@ -723,14 +723,28 @@ struct ContentView: View {
         let transitionFrameCount = settings.transition != .none ? 15 : 0
         var frameNumber: Int64 = 0
 
+        // Returns false if the writer failed, so we never wait forever on a dead input
+        func waitUntilReady() -> Bool {
+            while !writerInput.isReadyForMoreMediaData {
+                guard assetWriter.status == .writing else { return false }
+                Thread.sleep(forTimeInterval: 0.01)
+            }
+            return true
+        }
+
+        func abortWriting() -> Bool {
+            print("Movie export failed: \(assetWriter.error?.localizedDescription ?? "unknown")")
+            assetWriter.cancelWriting()
+            DispatchQueue.main.async { self.progressString = "" }
+            return false
+        }
+
         for (index, image) in images.enumerated() {
             // Write frames for this image's duration
             let holdFrames = max(1, framesPerImage - (index < images.count - 1 ? transitionFrameCount : 0))
 
             for _ in 0..<holdFrames {
-                while !writerInput.isReadyForMoreMediaData {
-                    Thread.sleep(forTimeInterval: 0.01)
-                }
+                guard waitUntilReady() else { return abortWriting() }
 
                 if let pixelBuffer = createPixelBufferFromPool(adaptor: adaptor, image: image, size: outputSize) {
                     let presentationTime = CMTime(value: frameNumber, timescale: fps)
@@ -750,9 +764,7 @@ struct ContentView: View {
                     : settings.transition
 
                 for t in 1...transitionFrameCount {
-                    while !writerInput.isReadyForMoreMediaData {
-                        Thread.sleep(forTimeInterval: 0.01)
-                    }
+                    guard waitUntilReady() else { return abortWriting() }
 
                     let progress = CGFloat(t) / CGFloat(transitionFrameCount)
                     if let transitionImage = renderTransitionFrame(
@@ -1066,6 +1078,14 @@ struct ContentView: View {
                     if msxResult.image != nil {
                         finalType = msxResult.type
                     }
+                } else if case .TRS80 = entry.imageType {
+                    // Use the original filename: nameWithTypeInfo would hide the extension
+                    // and skip the 320x200 / 640x200 mode detection for CoCo 3 files
+                    let cocoResult = TRS80Decoder.decode(data: entry.data, filename: entry.name)
+                    cgImage = cocoResult.image
+                    if cocoResult.image != nil {
+                        finalType = cocoResult.type
+                    }
                 } else if case .BBCMicro = entry.imageType {
                     // Use decode() which handles embedded palettes from BitPast
                     // It checks for embedded palette first, then falls back to filename/size detection
@@ -1173,19 +1193,26 @@ struct ContentView: View {
     func loadDroppedFiles(_ providers: [NSItemProvider]) {
         isProcessing = true; statusMessage = "Loading dropped files..."
         var filesToProcess: [(data: Data, name: String, url: URL?)] = []
+        let filesLock = NSLock()  // provider callbacks arrive on arbitrary threads
         let dispatchGroup = DispatchGroup()
         
         for (index, provider) in providers.enumerated() {
             dispatchGroup.enter()
             provider.loadFileRepresentation(forTypeIdentifier: UTType.data.identifier) { url, error in
                 if let url = url, let data = try? Data(contentsOf: url) {
+                    filesLock.lock()
                     filesToProcess.append((data: data, name: url.lastPathComponent, url: url))
+                    filesLock.unlock()
                     dispatchGroup.leave()
                 } else {
                     guard let typeIdentifier = provider.registeredTypeIdentifiers.first else { dispatchGroup.leave(); return }
                     provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, error in
                         defer { dispatchGroup.leave() }
-                        if let data = data { filesToProcess.append((data: data, name: "dropped_file_\(index).\(typeIdentifier.split(separator: ".").last ?? "bin")", url: nil)) }
+                        if let data = data {
+                            filesLock.lock()
+                            filesToProcess.append((data: data, name: "dropped_file_\(index).\(typeIdentifier.split(separator: ".").last ?? "bin")", url: nil))
+                            filesLock.unlock()
+                        }
                     }
                 }
             }
@@ -1328,7 +1355,7 @@ struct ContentView: View {
     func exportSingleImage(_ item: ImageItem) {
         let savePanel = NSSavePanel()
         let fileExtension = selectedExportFormat == .original ? item.originalFileExtension : selectedExportFormat.fileExtension
-        savePanel.allowedContentTypes = [UTType(filenameExtension: fileExtension)!]
+        savePanel.allowedContentTypes = [UTType(filenameExtension: fileExtension) ?? .data]
         savePanel.nameFieldStringValue = "\(item.url.deletingPathExtension().lastPathComponent).\(fileExtension)"
         savePanel.prompt = "Export"; savePanel.canCreateDirectories = true
         savePanel.begin { response in

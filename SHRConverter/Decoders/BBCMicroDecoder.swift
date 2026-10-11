@@ -436,7 +436,7 @@ class BBCMicroDecoder {
         }
 
         // Try to determine mode by file extension
-        let ext = filename?.split(separator: ".").last?.lowercased() ?? ""
+        let ext = ImageHelpers.fileExtension(of: filename)
 
         switch ext {
         case "bbm0", "mode0":

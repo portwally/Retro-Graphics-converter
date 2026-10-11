@@ -7,20 +7,34 @@ class PCImageDecoder {
     
     // MARK: - BMP Decoder
     
+    /// Signed 32-bit little-endian read (BMP heights are negative for top-down images)
+    static func readLittleEndianInt32(_ data: Data, at offset: Int) -> Int {
+        guard offset + 4 <= data.count else { return 0 }
+        let raw = UInt32(data[offset]) | (UInt32(data[offset + 1]) << 8) | (UInt32(data[offset + 2]) << 16) | (UInt32(data[offset + 3]) << 24)
+        return Int(Int32(bitPattern: raw))
+    }
+
     static func decodeBMP(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
         guard data.count >= 54, data[0] == 0x42, data[1] == 0x4D else { return (nil, .Unknown) }
-        
+
         let dibHeaderSize = Int(data[14]) | (Int(data[15]) << 8) | (Int(data[16]) << 16) | (Int(data[17]) << 24)
-        let width = Int(data[18]) | (Int(data[19]) << 8) | (Int(data[20]) << 16) | (Int(data[21]) << 24)
-        var height = Int(data[22]) | (Int(data[23]) << 8) | (Int(data[24]) << 16) | (Int(data[25]) << 24)
+        let width = readLittleEndianInt32(data, at: 18)
+        var height = readLittleEndianInt32(data, at: 22)
         let topDown = height < 0; if topDown { height = -height }
         let bitsPerPixel = Int(data[28]) | (Int(data[29]) << 8)
         let compression = Int(data[30]) | (Int(data[31]) << 8) | (Int(data[32]) << 16) | (Int(data[33]) << 24)
-        
-        guard compression == 0, width > 0, height > 0, width < 10000, height < 10000 else { return (nil, .Unknown) }
-        
+
+        guard width > 0, height > 0, width < 10000, height < 10000 else { return (nil, .Unknown) }
+
+        // RLE, bitfield and 16-bit variants are left to ImageIO; the type stays .BMP
+        guard compression == 0, [1, 4, 8, 24, 32].contains(bitsPerPixel) else {
+            let systemResult = ModernImageDecoder.decode(data: data, format: "bmp")
+            guard let image = systemResult.image else { return (nil, .Unknown) }
+            return (image, .BMP(width: image.width, height: image.height, bitsPerPixel: bitsPerPixel))
+        }
+
         let pixelDataOffset = Int(data[10]) | (Int(data[11]) << 8) | (Int(data[12]) << 16) | (Int(data[13]) << 24)
-        
+
         var palette: [(r: UInt8, g: UInt8, b: UInt8)] = []
         if bitsPerPixel <= 8 {
             let numColors = 1 << bitsPerPixel
@@ -46,6 +60,9 @@ class PCImageDecoder {
                 switch bitsPerPixel {
                 case 24:
                     let pixelOffset = rowOffset + (x * 3)
+                    if pixelOffset + 2 < data.count { b = data[pixelOffset]; g = data[pixelOffset + 1]; r = data[pixelOffset + 2] }
+                case 32:
+                    let pixelOffset = rowOffset + (x * 4)
                     if pixelOffset + 2 < data.count { b = data[pixelOffset]; g = data[pixelOffset + 1]; r = data[pixelOffset + 2] }
                 case 8:
                     let pixelOffset = rowOffset + x

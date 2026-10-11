@@ -9,45 +9,65 @@ class SHRDecoder {
     
     static func decode(data: Data, filename: String? = nil) -> (image: CGImage?, type: AppleIIImageType) {
         let size = data.count
-        let fileExtension = filename?.split(separator: ".").last?.lowercased() ?? ""
-        
+        let fileExtension = ImageHelpers.fileExtension(of: filename)
+
         // Modern image formats (PNG, JPEG, GIF, etc.)
         let modernFormats = ["png", "jpg", "jpeg", "gif", "tiff", "tif", "heic", "heif", "webp"]
         if modernFormats.contains(fileExtension) {
             return ModernImageDecoder.decode(data: data, format: fileExtension)
         }
 
+        // Several platforms share extensions (.pic, .pi3, .gr5, .bin), so an extension
+        // match is only a hint: if that platform's decoder rejects the file we fall
+        // through to the next candidate and finally to magic/size detection.
+        let isAtariScreenSize = (7680...7800).contains(size)   // 40 bytes x 192 lines + optional palette
+        let isDegasSize = (size == 32034 || size == 32066)
+
         // MSX formats by extension
         // SC* = Screen, SR* = Screen Raw, GE* = Graphics Editor, GR* = Graphics
-        // Note: gr7 and gr8 are Atari 8-bit modes, not MSX - handled by Atari8bitDecoder
-        let msxExtensions = ["sc1", "sc2", "sr2", "sc5", "sr5", "sc7", "sc8", "sr8",
+        // Note: gr7 and gr8 are Atari 8-bit modes, not MSX - handled by Atari8bitDecoder.
+        // gr5 is used by both; Atari-sized files go to the Atari decoder below.
+        let msxExtensions = ["sc1", "sc2", "sr2", "sc5", "sr5", "sc7", "sr7", "sc8", "sr8",
                              "ge1", "ge2", "ge5", "ge7", "ge8", "gr5"]
-        if msxExtensions.contains(fileExtension) {
-            return MSXDecoder.decode(data: data, filename: filename)
+        if msxExtensions.contains(fileExtension) && !(fileExtension == "gr5" && isAtariScreenSize) {
+            let result = MSXDecoder.decode(data: data, filename: filename)
+            if result.image != nil { return result }
         }
 
         // BBC Micro formats by extension
         let bbcExtensions = ["bbc", "bbm0", "bbm1", "bbm2", "bbm4", "bbm5", "mode0", "mode1", "mode2", "mode4", "mode5"]
         if bbcExtensions.contains(fileExtension) {
-            return BBCMicroDecoder.decode(data: data, filename: filename)
+            let result = BBCMicroDecoder.decode(data: data, filename: filename)
+            if result.image != nil { return result }
+        }
+
+        // Atari ST Degas formats by extension (.PI1, .PI2, .PI3)
+        // .PI3 is also a CoCo 3 extension, so for .PI3 only Degas-sized files are taken here.
+        let degasExtensions = ["pi1", "pi2", "pi3"]
+        if degasExtensions.contains(fileExtension) && (isDegasSize || fileExtension != "pi3") {
+            let result = AtariSTDecoder.decodeDegas(data: data)
+            if result.image != nil { return result }
+        }
+
+        // Atari ST NEOchrome
+        if fileExtension == "neo" {
+            let result = AtariSTDecoder.decodeNEOchrome(data: data)
+            if result.image != nil { return result }
         }
 
         // TRS-80/CoCo formats by extension
         let trs80Extensions = ["max", "cm3", "pi3", "mg3", "pic", "pix", "bin"]
         if trs80Extensions.contains(fileExtension) {
-            return TRS80Decoder.decode(data: data, filename: filename)
-        }
-
-        // Atari ST Degas formats by extension (.PI1, .PI2, .PI3)
-        let degasExtensions = ["pi1", "pi2", "pi3"]
-        if degasExtensions.contains(fileExtension) {
-            return AtariSTDecoder.decodeDegas(data: data)
+            let result = TRS80Decoder.decode(data: data, filename: filename)
+            if result.image != nil { return result }
         }
 
         // Atari 8-bit (400/800/XL/XE) formats by extension
-        let atari8bitExtensions = ["gr8", "gr9", "gr15", "gr7", "gr11", "gr1", "gr2", "gr3", "gr4", "gr5", "gr6", "mic", "pic"]
-        if atari8bitExtensions.contains(fileExtension) {
-            return Atari8bitDecoder.decode(data: data, filename: filename)
+        // .pic is shared with other platforms, so only Atari-sized .pic files are taken here.
+        let atari8bitExtensions = ["gr8", "gr9", "gr10", "gr15", "gr7", "gr11", "gr1", "gr2", "gr3", "gr4", "gr5", "gr6", "mic", "pic"]
+        if atari8bitExtensions.contains(fileExtension) && (fileExtension != "pic" || isAtariScreenSize) {
+            let result = Atari8bitDecoder.decode(data: data, filename: filename)
+            if result.image != nil { return result }
         }
 
         // Magic byte detection
@@ -68,9 +88,12 @@ class SHRDecoder {
             return PCImageDecoder.decodeBMP(data: data)
         }
         
-        // PCX format
-        if size >= 128 && data[0] == 0x0A {
-            return PCImageDecoder.decodePCX(data: data)
+        // PCX format: manufacturer 0x0A, known version, RLE flag 0/1, 1/2/4/8 bits per plane.
+        // The first byte alone is not enough - plenty of raw screen dumps start with 0x0A.
+        if size >= 128 && data[0] == 0x0A &&
+           [0, 2, 3, 4, 5].contains(data[1]) && data[2] <= 1 && [1, 2, 4, 8].contains(data[3]) {
+            let result = PCImageDecoder.decodePCX(data: data)
+            if result.image != nil { return result }
         }
         
         // Apple IIgs PNT detection - check ProDOS file type first
@@ -111,6 +134,12 @@ class SHRDecoder {
                     return (AppleIIDecoder.decodeSHR(data: data, is3200Color: true), .SHR(mode: "3200", width: 320, height: 200))
                 }
             }
+            // ProDOS type $C2 (ANI) - PaintWorks animation: the file starts with a complete
+            // 32768-byte SHR screen (first frame), followed by the animation deltas
+            if filename.count >= 7 && filename.suffix(7).hasPrefix("#c2") && data.count >= 32768 {
+                return (AppleIIDecoder.decodeSHR(data: data, is3200Color: false), .SHR(mode: "Standard", width: 320, height: 200))
+            }
+
             // ProDOS type $C1 (PIC) auxtype $8003 - DreamGrafix unpacked
             if filename.contains("#c18003") {
                 return DreamGrafixDecoder.decodeDreamGrafixUnpacked(data: data)
@@ -262,6 +291,12 @@ class SHRDecoder {
         case 32000:
             // CoCo 3 320x200 16-color mode
             return TRS80Decoder.decodeCoCo3_320(data: data)
+        case 32128:
+            // Atari ST NEOchrome (128-byte header + 32000 bytes), whatever the extension
+            let neoResult = AtariSTDecoder.decodeNEOchrome(data: data)
+            if neoResult.image != nil {
+                return neoResult
+            }
         default:
             break
         }
@@ -326,8 +361,9 @@ class SHRDecoder {
         case 32767...32768:
             // Standard SHR: 32KB file (some files are 1 byte short)
             return (AppleIIDecoder.decodeSHR(data: data, is3200Color: false), .SHR(mode: "Standard", width: 320, height: 200))
-        case 38400...:
-            // 3200 color SHR: needs full palette data
+        case 38400...38656:
+            // 3200 color SHR ("Brooks"): 32000 pixels + 200 palettes = 38400 bytes,
+            // allowing for up to half a block of trailing padding
             return (AppleIIDecoder.decodeSHR(data: data, is3200Color: true), .SHR(mode: "3200", width: 320, height: 200))
         case 8184...8200:
             return (AppleIIDecoder.decodeHGR(data: data), .HGR)
@@ -336,7 +372,7 @@ class SHRDecoder {
         default:
             // Check for Paintworks signature before trying MacPaint
             // Paintworks files have a palette at offset 0 and patterns at offset 0x22
-            if size >= 546 && PackedSHRDecoder.isPaintworksFormat(data) {
+            if size >= 546 && PackedSHRDecoder.isLikelyPaintworks(data) {
                 return PackedSHRDecoder.decodePNT0000(data: data)
             }
 
@@ -350,7 +386,8 @@ class SHRDecoder {
             }
 
             // Last resort: MacPaint
-            if size >= 20000 && size <= 100000 && size >= 512 {
+            // Without a .mac/.pntg extension, require the MacPaint version marker (0, 2 or 3)
+            if size >= 20000 && size <= 100000 && ImageHelpers.readBigEndianUInt32(data: data, offset: 0) <= 3 {
                 let result = RetroDecoder.decodeMacPaint(data: data)
                 if result.image != nil {
                     return result

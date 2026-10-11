@@ -4,7 +4,16 @@ import CoreGraphics
 // MARK: - Image Helper Functions
 
 class ImageHelpers {
-    
+
+    // MARK: - Filename Handling
+
+    /// Lowercased extension of a filename, or "" when the name has no dot.
+    /// (Splitting on "." would return the whole name for extension-less files like "PIC".)
+    static func fileExtension(of filename: String?) -> String {
+        guard let name = filename, let dot = name.lastIndex(of: ".") else { return "" }
+        return name[name.index(after: dot)...].lowercased()
+    }
+
     // MARK: - Big Endian Reading
     
     static func readBigEndianUInt32(data: Data, offset: Int) -> UInt32 {

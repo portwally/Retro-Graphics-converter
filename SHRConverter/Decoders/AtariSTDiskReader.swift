@@ -199,7 +199,7 @@ class AtariSTDiskReader {
             return nil
         }
 
-        let tracks = totalSectors / (sectorsPerTrack * max(1, sides))
+        let tracks = totalSectors / (max(1, sectorsPerTrack) * max(1, sides))
 
         return DiskGeometry(
             totalSectors: totalSectors,
@@ -310,8 +310,12 @@ class AtariSTDiskReader {
     // MARK: - Subdirectory Reading
 
     private func readSubdirectory(data: Data, entry: DirectoryEntry, geometry: DiskGeometry,
-                                   fat: [UInt16], path: String) -> [DiskCatalogEntry] {
+                                   fat: [UInt16], path: String, visited: Set<UInt16> = []) -> [DiskCatalogEntry] {
         var catalogEntries: [DiskCatalogEntry] = []
+
+        // A corrupt disk can have a subdirectory pointing back at one of its parents
+        guard !visited.contains(entry.firstCluster) else { return catalogEntries }
+        let visited = visited.union([entry.firstCluster])
 
         // Get clusters for this directory
         let clusters = getClusterChain(startCluster: entry.firstCluster, fat: fat)
@@ -338,7 +342,7 @@ class AtariSTDiskReader {
             let fullPath = "\(path)/\(subEntry.fullName)"
 
             if subEntry.isDirectory {
-                let nested = readSubdirectory(data: data, entry: subEntry, geometry: geometry, fat: fat, path: fullPath)
+                let nested = readSubdirectory(data: data, entry: subEntry, geometry: geometry, fat: fat, path: fullPath, visited: visited)
                 catalogEntries.append(contentsOf: nested)
             } else if let fileData = extractFile(data: data, entry: subEntry, geometry: geometry, fat: fat) {
                 let fileTypeStr = detectFileType(name: subEntry.fullName, data: fileData)

@@ -366,145 +366,13 @@ struct PaletteRenderer {
     // MARK: - IFF Renderer
 
     private static func renderIFF(data: Data, palette: PaletteInfo) -> CGImage? {
-        guard data.count >= 12 else { return nil }
-
-        // Parse IFF structure
-        guard let formHeader = String(data: data.subdata(in: 0..<4), encoding: .ascii),
-              formHeader == "FORM",
-              let ilbmType = String(data: data.subdata(in: 8..<12), encoding: .ascii),
-              ilbmType == "ILBM" else {
-            return nil
-        }
-
-        var offset = 12
-        var width = 0
-        var height = 0
-        var numPlanes = 0
-        var compression: UInt8 = 0
-        var bodyOffset = 0
-        var bodySize = 0
-
-        // Parse chunks
-        while offset + 8 <= data.count {
-            guard let chunkID = String(data: data.subdata(in: offset..<offset+4), encoding: .ascii) else {
-                break
-            }
-
-            let chunkSize = Int(ImageHelpers.readBigEndianUInt32(data: data, offset: offset + 4))
-            offset += 8
-
-            if offset + chunkSize > data.count {
-                break
-            }
-
-            switch chunkID {
-            case "BMHD":
-                if chunkSize >= 20 {
-                    width = Int(ImageHelpers.readBigEndianUInt16(data: data, offset: offset))
-                    height = Int(ImageHelpers.readBigEndianUInt16(data: data, offset: offset + 2))
-                    numPlanes = Int(data[offset + 8])
-                    compression = data[offset + 10]
-                }
-            case "BODY":
-                bodyOffset = offset
-                bodySize = chunkSize
-            default:
-                break
-            }
-
-            offset += chunkSize
-            if chunkSize % 2 == 1 {
-                offset += 1
-            }
-        }
-
-        guard width > 0, height > 0, numPlanes > 0, numPlanes <= 8, bodyOffset > 0 else {
-            return nil
-        }
-
         let primaryPalette = palette.primaryPalette
         guard !primaryPalette.isEmpty else { return nil }
 
+        // Use the real decoder so mask planes, EHB and aspect correction match the original image.
+        // (HAM and 24-bit images ignore the override; their displayed palette is derived, not a CMAP.)
         let iffPalette: [(r: UInt8, g: UInt8, b: UInt8)] = primaryPalette.map { ($0.r, $0.g, $0.b) }
-
-        let bytesPerRow = ((width + 15) / 16) * 2
-        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
-
-        var srcOffset = bodyOffset
-
-        for y in 0..<height {
-            var planeBits: [[UInt8]] = Array(repeating: [], count: numPlanes)
-
-            for plane in 0..<numPlanes {
-                var rowData: [UInt8] = []
-
-                if compression == 1 {
-                    // PackBits decompression
-                    var bytesRead = 0
-                    while bytesRead < bytesPerRow && srcOffset < bodyOffset + bodySize {
-                        let cmd = Int8(bitPattern: data[srcOffset])
-                        srcOffset += 1
-
-                        if cmd >= 0 {
-                            let count = Int(cmd) + 1
-                            for _ in 0..<count {
-                                if srcOffset < bodyOffset + bodySize && bytesRead < bytesPerRow {
-                                    rowData.append(data[srcOffset])
-                                    srcOffset += 1
-                                    bytesRead += 1
-                                }
-                            }
-                        } else if cmd != -128 {
-                            let count = Int(-cmd) + 1
-                            if srcOffset < bodyOffset + bodySize {
-                                let repeatByte = data[srcOffset]
-                                srcOffset += 1
-                                for _ in 0..<count {
-                                    if bytesRead < bytesPerRow {
-                                        rowData.append(repeatByte)
-                                        bytesRead += 1
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // Uncompressed
-                    for _ in 0..<bytesPerRow {
-                        if srcOffset < bodyOffset + bodySize {
-                            rowData.append(data[srcOffset])
-                            srcOffset += 1
-                        }
-                    }
-                }
-
-                planeBits[plane] = rowData
-            }
-
-            // Extract pixels from bitplanes
-            for x in 0..<width {
-                let byteIndex = x / 8
-                let bitIndex = 7 - (x % 8)
-
-                var colorIndex = 0
-                for plane in 0..<numPlanes {
-                    if byteIndex < planeBits[plane].count {
-                        let bit = (planeBits[plane][byteIndex] >> bitIndex) & 1
-                        colorIndex |= Int(bit) << plane
-                    }
-                }
-
-                let color = colorIndex < iffPalette.count ? iffPalette[colorIndex] : (r: UInt8(0), g: UInt8(0), b: UInt8(0))
-                let bufferIdx = (y * width + x) * 4
-
-                rgbaBuffer[bufferIdx] = color.r
-                rgbaBuffer[bufferIdx + 1] = color.g
-                rgbaBuffer[bufferIdx + 2] = color.b
-                rgbaBuffer[bufferIdx + 3] = 255
-            }
-        }
-
-        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+        return AmigaIFFDecoder.decode(data: data, paletteOverride: iffPalette).image
     }
 
     // MARK: - Degas Renderer
@@ -774,8 +642,8 @@ struct PaletteRenderer {
     private static func renderBMP(data: Data, palette: PaletteInfo, bitsPerPixel: Int) -> CGImage? {
         guard data.count >= 54, data[0] == 0x42, data[1] == 0x4D else { return nil }
 
-        let width = Int(data[18]) | (Int(data[19]) << 8) | (Int(data[20]) << 16) | (Int(data[21]) << 24)
-        var height = Int(data[22]) | (Int(data[23]) << 8) | (Int(data[24]) << 16) | (Int(data[25]) << 24)
+        let width = PCImageDecoder.readLittleEndianInt32(data, at: 18)
+        var height = PCImageDecoder.readLittleEndianInt32(data, at: 22)
         let topDown = height < 0
         if topDown { height = -height }
 
@@ -1044,9 +912,11 @@ struct PaletteRenderer {
             return renderMSXScreen5(data: data, palette: palette)
         case 8:
             return renderMSXScreen8(data: data, palette: palette)
-        default:
-            // For other modes (1, 2), use Screen 2 renderer as fallback
+        case 2:
             return renderMSXScreen2(data: data, palette: palette)
+        default:
+            // Screen 1 and Screen 7 have their own layouts; no palette re-render for them yet
+            return nil
         }
     }
 

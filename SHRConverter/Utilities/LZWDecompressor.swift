@@ -122,9 +122,8 @@ struct LZWDecompressor {
             } else if code == dictionary.count {
                 // Special case: code not yet in dictionary
                 // This happens when encoder emits code for string just added
-                if prevCode < dictionary.count {
-                    let prevSequence = dictionary[prevCode]
-                    sequence = prevSequence + [prevSequence[0]]
+                if prevCode < dictionary.count, let first = dictionary[prevCode].first {
+                    sequence = dictionary[prevCode] + [first]
                 } else {
                     // Error case
                     break
