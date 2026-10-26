@@ -959,7 +959,23 @@ extension DiskImageReader {
             entries: entries
         )
     }
-    
+
+    /// Commodore disks store names in PETSCII. Control codes are not shown (Koala Painter names
+    /// start with $81), shifted letters ($61-$7A, $C1-$DA) are shown as plain letters and other
+    /// graphics characters as "?". Returns nil for a byte that has no visible character.
+    private static func petsciiCharacter(_ byte: UInt8) -> Character? {
+        switch byte {
+        case 0x00...0x1F, 0x80...0x9F: return nil
+        case 0x20...0x5B, 0x5D: return Character(UnicodeScalar(byte))
+        case 0x5C: return "£"
+        case 0x5E: return "↑"
+        case 0x5F: return "←"
+        case 0x61...0x7A: return Character(UnicodeScalar(byte - 0x20))
+        case 0xC1...0xDA: return Character(UnicodeScalar(byte - 0x80))
+        default: return "?"
+        }
+    }
+
     static func readD64CatalogFull(data: Data, filename: String) -> DiskCatalog? {
         guard let kind = cbmDiskKind(data: data) else { return nil }
 
@@ -980,7 +996,7 @@ extension DiskImageReader {
         for i in 0..<16 {
             let char = bamData[kind.diskNameOffset + i]
             if char == 0xA0 || char == 0 { break }
-            diskName.append(Character(UnicodeScalar(char)))
+            if let c = petsciiCharacter(char) { diskName.append(c) }
         }
         if diskName.isEmpty { diskName = filename }
         
@@ -1004,7 +1020,8 @@ extension DiskImageReader {
             // 8 entries per sector
             for entryIdx in 0..<8 {
                 let entryOffset = 2 + (entryIdx * 32)
-                guard entryOffset + 32 <= sectorData.count else { continue }
+                // Each 32-byte slot starts with the 2-byte sector link, so an entry has 30 bytes
+                guard entryOffset + 30 <= sectorData.count else { continue }
                 
                 let fileType = sectorData[entryOffset]
                 if fileType == 0 || fileType == 0x80 { continue }
@@ -1015,7 +1032,7 @@ extension DiskImageReader {
                     guard entryOffset + 3 + i < sectorData.count else { break }
                     let char = sectorData[entryOffset + 3 + i]
                     if char == 0xA0 || char == 0 { break }
-                    fileName.append(Character(UnicodeScalar(char)))
+                    if let c = petsciiCharacter(char) { fileName.append(c) }
                 }
                 if fileName.isEmpty { continue }
                 
