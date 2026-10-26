@@ -15,7 +15,7 @@ Retro Platforms
 
 🍎 Apple II/IIGS: SHR (Standard/3200/3200 Packed/816Paint/DreamGrafix/Paintworks/Apple Preferred Format), PaintWorks animations (first frame), HGR, DHGR, PNT, PIC<br>
 🖥️ Amiga: IFF/ILBM (8-bit indexed, Extra-Half-Brite, 24-bit RGB, HAM6 4096 colors, HAM8 262144 colors), ADF disk images<br>
-🕹️ Atari ST: Degas (PI1/PI2/PI3), NEOchrome (.NEO), Art Director (.ART), ST disk images (.st)<br>
+🕹️ Atari ST: Degas (PI1/PI2/PI3), NEOchrome (.NEO), Art Director, GFA Artist, Palette Master (.ART), Doodle (.DOO), ST disk images (.st)<br>
 🎰 Atari 8-bit (400/800/XL/XE): GR.8, GR.9, GR.10, GR.11, GR.15/GR.7, MicroIllustrator (.MIC), ATR disk images<br>
 💾 Commodore 64: Koala Painter, HIRES, Art Studio, D64/D71/D81 disk images<br>
 🎹 Commodore Plus/4: HiRes (320×200), Multicolor (160×200), 128-color TED palette<br>

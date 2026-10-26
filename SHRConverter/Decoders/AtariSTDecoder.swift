@@ -267,39 +267,125 @@ class AtariSTDecoder {
         return (cgImage, .NEOchrome(colors: numColors))
     }
 
-    // MARK: - Art Director Format
+    // MARK: - Art Director, GFA Artist, Doodle and Palette Master
 
-    /// Art Director: a 32000-byte low resolution screen followed by 16 palettes of 16 colors
-    /// (512 bytes); the picture uses the first palette.
-    static let artDirectorSize = 32512
-
-    /// True when the data has the Art Director layout: the exact size, and 256 palette words
-    /// that are all valid ST colors (only the low 12 bits used)
-    static func isArtDirector(_ data: Data) -> Bool {
-        guard data.count == artDirectorSize else { return false }
-        for i in 0..<256 where ImageHelpers.readBigEndianUInt16(data: data, offset: 32000 + i * 2) > 0x0FFF {
-            return false
-        }
-        return true
-    }
+    typealias RGB = (r: UInt8, g: UInt8, b: UInt8)
 
     /// Converts an ST palette word (0x0RGB, 3 bits per channel) to 8-bit RGB
-    static func stColor(_ word: UInt16) -> (r: UInt8, g: UInt8, b: UInt8) {
+    static func stColor(_ word: UInt16) -> RGB {
         let scale = { (v: UInt16) in UInt8(Int(v & 0x07) * 255 / 7) }
         return (scale(word >> 8), scale(word >> 4), scale(word))
     }
 
-    static func decodeArtDirector(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
-        guard isArtDirector(data) else { return (nil, .Unknown) }
+    private static func stPalette(_ data: Data, offset: Int) -> [RGB] {
+        (0..<16).map { stColor(ImageHelpers.readBigEndianUInt16(data: data, offset: offset + $0 * 2)) }
+    }
 
+    /// True when the 16 words at `offset` are all valid ST colors (only the low 12 bits used)
+    private static func isSTPalette(_ data: Data, offset: Int) -> Bool {
+        guard offset + 32 <= data.count else { return false }
+        return (0..<16).allSatisfy { ImageHelpers.readBigEndianUInt16(data: data, offset: offset + $0 * 2) <= 0x0FFF }
+    }
+
+    /// Art Director: 32000-byte screen, then 8 palettes; the byte at $7E1F picks the one in use
+    private static func artDirectorPaletteOffset(_ data: Data) -> Int? {
+        guard data.count == 32512, data[0x7E1F] < 8 else { return nil }
+        let offset = 32000 + Int(data[0x7E1F]) * 32
+        return isSTPalette(data, offset: offset) ? offset : nil
+    }
+
+    /// The picture formats this section knows, identified by layout (and extension where the
+    /// layout alone is too common to be sure)
+    private enum ExtraFormat {
+        case artDirector(paletteOffset: Int)
+        case gfaArtist      // 16-color palette, then a 32000-byte screen (32032 bytes)
+        case doodle         // 640x400 mono screen (32000 bytes), only taken by extension
+        case paletteMaster  // screen plus palette changes down the picture (36864 bytes)
+    }
+
+    private static func extraFormat(_ data: Data, fileExtension: String) -> ExtraFormat? {
+        switch data.count {
+        case 32512:
+            return artDirectorPaletteOffset(data).map { .artDirector(paletteOffset: $0) }
+        case 32032 where ["art", "bil"].contains(fileExtension) && isSTPalette(data, offset: 0):
+            return .gfaArtist
+        case 32000 where ["art", "doo"].contains(fileExtension):
+            return .doodle
+        case 36864 where data[0x8C80] == 0xFF && data[0x8C81] == 0xFF && isSTPalette(data, offset: 0x8000):
+            return .paletteMaster
+        default:
+            return nil
+        }
+    }
+
+    /// Format name for disk catalogs, or nil when the data is none of these formats
+    static func extraFormatName(data: Data, fileExtension: String) -> String? {
+        switch extraFormat(data, fileExtension: fileExtension) {
+        case .artDirector: return "Art Director"
+        case .gfaArtist: return "GFA Artist"
+        case .doodle: return "Doodle"
+        case .paletteMaster: return "Palette Master"
+        case nil: return nil
+        }
+    }
+
+    /// The palette the palette editor shows; nil for Palette Master, whose colors change down the picture
+    static func extraFormatPalette(data: Data, fileExtension: String) -> [RGB]? {
+        switch extraFormat(data, fileExtension: fileExtension) {
+        case .artDirector(let offset): return stPalette(data, offset: offset)
+        case .gfaArtist: return stPalette(data, offset: 0)
+        case .doodle: return [(255, 255, 255), (0, 0, 0)]
+        case .paletteMaster, nil: return nil
+        }
+    }
+
+    static func decodeExtraFormats(data: Data, fileExtension: String) -> (image: CGImage?, type: AppleIIImageType) {
+        switch extraFormat(data, fileExtension: fileExtension) {
+        case .artDirector(let offset):
+            let palette = stPalette(data, offset: offset)
+            return (renderLowRes(data, bitmapOffset: 0) { _ in palette },
+                    .AtariSTPicture(format: "Art Director", width: 320, height: 200, colors: 16))
+        case .gfaArtist:
+            let palette = stPalette(data, offset: 0)
+            return (renderLowRes(data, bitmapOffset: 32) { _ in palette },
+                    .AtariSTPicture(format: "GFA Artist", width: 320, height: 200, colors: 16))
+        case .doodle:
+            return (renderMono640x400(data), .AtariSTPicture(format: "Doodle", width: 640, height: 400, colors: 2))
+        case .paletteMaster:
+            return (renderLowRes(data, bitmapOffset: 0, palettes: paletteMasterPalettes(data)),
+                    .AtariSTPicture(format: "Palette Master", width: 320, height: 200, colors: 512))
+        case nil:
+            return (nil, .Unknown)
+        }
+    }
+
+    /// Palette Master: line 0 uses the palette at $8000. From $8020 come 32-byte records
+    /// (line number word, then colors 1-15) that change the palette from that line on.
+    private static func paletteMasterPalettes(_ data: Data) -> (Int) -> [RGB] {
+        var palettes: [[RGB]] = []
+        var palette = stPalette(data, offset: 0x8000)
+        var record = 0x8020
+        for y in 0..<200 {
+            if y > 0, record < 0x9000, data[record] == 0, Int(data[record + 1]) == y {
+                for c in 1..<16 {
+                    palette[c] = stColor(ImageHelpers.readBigEndianUInt16(data: data, offset: record + c * 2))
+                }
+                record += 32
+            }
+            palettes.append(palette)
+        }
+        return { palettes[$0] }
+    }
+
+    /// Low resolution 320x200: groups of four interleaved bitplane words, 16 pixels per group
+    private static func renderLowRes(_ data: Data, bitmapOffset: Int, palettes: (Int) -> [RGB]) -> CGImage? {
         let width = 320, height = 200
-        let palette = (0..<16).map { stColor(ImageHelpers.readBigEndianUInt16(data: data, offset: 32000 + $0 * 2)) }
-        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
-
-        // Low resolution: groups of four interleaved bitplane words, 16 pixels per group
+        guard bitmapOffset + 32000 <= data.count else { return nil }
+        var rgba = [UInt8](repeating: 0, count: width * height * 4)
         for y in 0..<height {
+            let palette = palettes(y)
             for group in 0..<(width / 16) {
-                let offset = y * 160 + group * 8
+                let offset = bitmapOffset + y * 160 + group * 8
                 let planes = (0..<4).map { ImageHelpers.readBigEndianUInt16(data: data, offset: offset + $0 * 2) }
                 for bit in 0..<16 {
                     var colorIndex = 0
@@ -308,17 +394,29 @@ class AtariSTDecoder {
                     }
                     let color = palette[colorIndex]
                     let index = (y * width + group * 16 + bit) * 4
-                    rgbaBuffer[index] = color.r
-                    rgbaBuffer[index + 1] = color.g
-                    rgbaBuffer[index + 2] = color.b
-                    rgbaBuffer[index + 3] = 255
+                    rgba[index] = color.r
+                    rgba[index + 1] = color.g
+                    rgba[index + 2] = color.b
+                    rgba[index + 3] = 255
                 }
             }
         }
+        return ImageHelpers.createCGImage(from: rgba, width: width, height: height)
+    }
 
-        guard let cgImage = ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height) else {
-            return (nil, .Unknown)
+    /// 640x400 mono: a set bit is black on a white background
+    private static func renderMono640x400(_ data: Data) -> CGImage? {
+        let width = 640, height = 400
+        guard data.count >= 32000 else { return nil }
+        var rgba = [UInt8](repeating: 255, count: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width where (data[y * 80 + x / 8] >> (7 - x % 8)) & 1 == 1 {
+                let index = (y * width + x) * 4
+                rgba[index] = 0
+                rgba[index + 1] = 0
+                rgba[index + 2] = 0
+            }
         }
-        return (cgImage, .ArtDirector)
+        return ImageHelpers.createCGImage(from: rgba, width: width, height: height)
     }
 }

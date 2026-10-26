@@ -455,8 +455,8 @@ class AtariSTDiskReader {
                 return "NEOchrome"
             }
 
-            if AtariSTDecoder.isArtDirector(data) {
-                return "Art Director"
+            if let format = AtariSTDecoder.extraFormatName(data: data, fileExtension: ext.lowercased()) {
+                return format
             }
 
             // IFF/ILBM check
@@ -519,8 +519,9 @@ class AtariSTDiskReader {
                 }
             }
 
-            if AtariSTDecoder.isArtDirector(data) {
-                return (true, .ArtDirector)
+            let extraResult = AtariSTDecoder.decodeExtraFormats(data: data, fileExtension: ext.lowercased())
+            if extraResult.image != nil {
+                return (true, extraResult.type)
             }
 
             // IFF/ILBM check
