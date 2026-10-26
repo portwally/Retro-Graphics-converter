@@ -184,16 +184,18 @@ struct SHRConverterApp: App {
                 }
             }
 
-            // Cmd+A is shared with Edit > Select All: while a text field is being edited that
-            // item is enabled and takes the key; otherwise it falls through to this one.
+            // SwiftUI matches these shortcuts before a text field sees the key, so while a text
+            // field is being edited the key is passed on to it instead.
             CommandMenu("Image") {
                 Button("Select All Images") {
+                    if sendToTextField(#selector(NSText.selectAll(_:))) { return }
                     appState.pendingCommand = .selectAll
                 }
                 .keyboardShortcut("a", modifiers: .command)
                 .disabled(!appState.hasImages)
 
                 Button("Remove Selected Images") {
+                    if sendToTextField(#selector(NSResponder.deleteToBeginningOfLine(_:))) { return }
                     appState.pendingCommand = .removeSelected
                 }
                 .keyboardShortcut(.delete, modifiers: .command)
@@ -270,4 +272,11 @@ struct SHRConverterApp: App {
     }
 }
 
-
+/// Sends an editing action to the text field being edited, if there is one.
+/// Returns false when no text field has keyboard focus.
+@MainActor
+private func sendToTextField(_ action: Selector) -> Bool {
+    guard let textView = NSApp.keyWindow?.firstResponder as? NSTextView, textView.isEditable else { return false }
+    textView.doCommand(by: action)
+    return true
+}

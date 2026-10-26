@@ -205,8 +205,16 @@ struct ContentView: View {
         .focusable()
         .focusEffectDisabled()
         .focused($keyboardFocused)
-        .onKeyPress(keys: [.upArrow, .downArrow, .leftArrow, .rightArrow, .home, .end, .delete, .deleteForward]) { press in
+        // The Mac's Delete (backspace) key sends U+007F, not the U+0008 of KeyEquivalent.delete
+        .onKeyPress(keys: [.upArrow, .downArrow, .leftArrow, .rightArrow, .home, .end, .delete, .deleteForward, Self.backspaceKey]) { press in
             handleKeyPress(press.key) ? .handled : .ignored
+        }
+        // Edit > Select All owns Cmd+A in AppKit's menu, and in this window its action finds
+        // nothing to select, so the browser takes the key itself
+        .onKeyPress(KeyEquivalent("a"), phases: .down) { press in
+            guard press.modifiers == .command, !isAnySheetShowing else { return .ignored }
+            perform(.selectAll)
+            return .handled
         }
         .onAppear {
             keyboardFocused = true
@@ -489,6 +497,8 @@ struct ContentView: View {
         }
     }
 
+    private static let backspaceKey = KeyEquivalent("\u{7F}")
+
     /// Unmodified keys in the main window: arrows / Home / End move through the browser, Delete removes
     private func handleKeyPress(_ key: KeyEquivalent) -> Bool {
         guard !isAnySheetShowing, !isProcessing else { return false }
@@ -506,7 +516,7 @@ struct ContentView: View {
             guard let last = filteredImages.last else { return false }
             selectedImage = last
             return true
-        case .delete, .deleteForward:
+        case .delete, .deleteForward, Self.backspaceKey:
             guard selectedImage != nil || !selectedImages.isEmpty else { return false }
             deleteSelectedImages()
             return true
