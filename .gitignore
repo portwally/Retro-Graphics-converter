@@ -62,3 +62,6 @@ fastlane/screenshots/**/*.png
 fastlane/test_output
 default.profraw
 .DS_Store
+
+# Finished App Store screenshots (rebuild with AppStoreAssets/make-appstore-screenshots.swift)
+AppStoreAssets/screenshots/
