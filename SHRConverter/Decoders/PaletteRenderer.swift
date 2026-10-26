@@ -20,21 +20,18 @@ struct PaletteRenderer {
 
         switch type {
         case .SHR(let mode, _, _):
-            if mode.contains("APF") {
+            if mode.contains("DreamGrafix") {
+                // DreamGrafix (256 or 3200 colors): the real decoder draws it with the edited colors,
+                // at the size its footer gives
+                let tables = palette.palettes.map { $0.map { (r: $0.r, g: $0.g, b: $0.b) } }
+                cgImage = DreamGrafixDecoder.decodeDreamGrafixPacked(data: data, paletteOverride: tables).image
+                    ?? DreamGrafixDecoder.decodeDreamGrafixUnpacked(data: data, paletteOverride: tables).image
+            } else if mode.contains("APF") {
                 // Apple Preferred Format: let the real decoder draw it with the edited colors
                 let tables = palette.palettes.map { $0.map { (r: $0.r, g: $0.g, b: $0.b) } }
                 cgImage = PackedSHRDecoder.decodePNT0002(data: data, paletteOverride: tables).image
             } else if mode.contains("3200") {
                 cgImage = renderSHR3200(data: data, palettes: palette.palettes, mode: mode)
-            } else if mode.contains("DreamGrafix") {
-                // 256-color DreamGrafix: LZW-packed standard SHR layout followed by a 17-byte footer
-                guard data.count > 17 else { return nil }
-                let body = data.subdata(in: 0..<(data.count - 17))
-                if let unpacked = LZWDecompressor.decompressDreamGrafixLZW(data: body), unpacked.count >= 32000 {
-                    cgImage = renderStandardSHR(data: unpacked, palette: palette)
-                } else {
-                    cgImage = renderStandardSHR(data: body, palette: palette)
-                }
             } else if mode.contains("Paintworks") {
                 cgImage = renderPaintworks(data: data, palette: palette)
             } else if mode.contains("Packed") || mode.contains("816") {
@@ -192,18 +189,6 @@ struct PaletteRenderer {
             let decompressed = PackedSHRDecoder.unpackBytes(data: compressedData, maxOutputSize: 32000)
             guard decompressed.count >= 32000 else { return nil }
             pixelData = Data(decompressed)
-        } else if mode.contains("DreamGrafix") {
-            // DreamGrafix: LZW compressed, pixels at start of decompressed data
-            guard data.count >= 17 else { return nil }
-            let compressedData = data.subdata(in: 0..<(data.count - 17))
-            if let decompressed = LZWDecompressor.decompressDreamGrafixLZW(data: compressedData), decompressed.count >= 32000 {
-                pixelData = decompressed.subdata(in: 0..<32000)
-            } else if data.count >= 32000 {
-                // Try using raw data if decompression fails
-                pixelData = data.subdata(in: 0..<32000)
-            } else {
-                return nil
-            }
         } else {
             // Standard 3200 format: pixel data at offset 0
             guard data.count >= 32000 else { return nil }

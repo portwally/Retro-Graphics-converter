@@ -362,12 +362,14 @@ class DiskImageReader {
     enum CBMDiskKind {
         case d64   // 1541: 35 or 40 tracks, 17-21 sectors per track
         case d71   // 1571: two 35-track sides
+        case d71x80 // 1571 extended: two 40-track sides (80 tracks)
         case d81   // 1581: 80 tracks x 40 sectors
 
         var formatName: String {
             switch self {
             case .d64: return "C64 D64"
             case .d71: return "C64/C128 D71"
+            case .d71x80: return "C64/C128 D71 (80 tracks)"
             case .d81: return "C64/C128 D81"
             }
         }
@@ -379,6 +381,7 @@ class DiskImageReader {
             switch self {
             case .d64: return 40
             case .d71: return 70
+            case .d71x80: return 80
             case .d81: return 80
             }
         }
@@ -391,6 +394,12 @@ class DiskImageReader {
             return .d64
         case 349696, 351062:
             return .d71
+        case 393216, 394752:
+            // Two 40-track sides (with or without error bytes). 393216 is also a 384K ProDOS volume:
+            // require the 1571 header on track 18 (dir link 18/1, DOS version 'A', double-sided flag)
+            let header = 357 * 256
+            guard data[header] == 18, data[header + 1] == 1, data[header + 2] == 0x41, data[header + 3] == 0x80 else { return nil }
+            return .d71x80
         case 819200, 822400:
             // 819200 is also an 800K ProDOS volume: require the 1581 header (dir link 40/3, DOS version 'D')
             let header = 39 * 40 * 256
@@ -403,8 +412,13 @@ class DiskImageReader {
 
     private static func cbmSectorsPerTrack(kind: CBMDiskKind, track: Int) -> Int {
         if kind == .d81 { return 40 }
-        // 1571 side 2 (tracks 36-70) repeats the zone layout of tracks 1-35
-        let t = (kind == .d71 && track > 35) ? track - 35 : track
+        // 1571 side 2 (tracks 36-70, or 41-80 on 80-track images) repeats the zone layout of side 1
+        let t: Int
+        switch kind {
+        case .d71 where track > 35: t = track - 35
+        case .d71x80 where track > 40: t = track - 40
+        default: t = track
+        }
         switch t {
         case 1...17: return 21
         case 18...24: return 19

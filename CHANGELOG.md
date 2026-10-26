@@ -22,7 +22,8 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 - **ZX Spectrum TR-DOS**: Files were read from the wrong place on standard .trd images (the reader assumed 32 sectors per track instead of 16). The track layout is now detected per disk; images cut off after the last used track are accepted
 - **BBC Micro DFS**: .ssd/.dsd images shorter than a full disk are now accepted (most are); double-sided .dsd images show the files of both sides; files in other DFS directories keep their directory letter; start sector and file length are read from the correct catalog bits; I/O processor load addresses are shown as $FFxxxx, as BBC tools show them
 - **Other Platforms' Disks**: On Atari, MSX, CPC, BBC, CoCo and Spectrum disks, files are no longer listed as Apple II or other foreign picture formats just because of their size
-- **Commodore D71 and D81**: 1571 and 1581 disk images are now read, as are 40-track D64 images (previously only standard D64 worked)
+- **Commodore D71 and D81**: 1571 and 1581 disk images are now read, as are 40-track D64 images and 80-track D71 images (previously only standard D64 worked)
+- **CoCo RS-DOS Disks**: Real RS-DOS disks now read correctly - directory entries were read one byte off (wrong names, BASIC programs hidden) and files past the directory track came from the wrong place. Double-sided disks show both sides; disks from older BitPast versions still open
 - **Commodore Directories**: The last file of every directory sector (files 8, 16, 24 ...) was missing from D64, D71 and D81 catalogs; file and disk names are now read as PETSCII, so hidden control codes (Koala Painter names start with one) no longer show up as odd characters
 - **ProDOS Subdirectories on DOS-Ordered Disks**: Folders on ProDOS volumes stored in DOS sector order (.dsk, .do) are now listed; they were skipped before
 - **DOS 3.3 Filenames**: Names containing spaces are no longer cut off at the first space ("GRID SCRUNCH" was shown as "GRID")
@@ -63,7 +64,7 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 - **More Platforms**: Palette edits now take effect for Amstrad CPC, Atari 8-bit, BBC Micro, Plus/4, VIC-20, TRS-80/CoCo, C64 hi-res, NEOchrome and MSX Screen 1/7. If a color is not used in the picture, the status bar says so
 - **Accurate Palettes**: ZX Spectrum colors no longer shift after an edit; Amstrad CPC shows the inks actually used by the file; MSX Screen 5/7 show the palette found in the file
 - **Scanline Tracking**: The palette shown while moving the mouse over a multi-palette SHR picture now follows all 200 lines (it only tracked the top 16)
-- **Palette Editor**: Reset and Paste are applied in one step (Reset on a 3200-color picture used to re-render the image 3,200 times); the editor opens on the palette of the line under the mouse; the color panel follows Reset and Paste instead of keeping the last picked color
+- **Palette Editor**: Reset and Paste are applied in one step (Reset on a 3200-color picture used to re-render the image 3,200 times); the editor opens on the palette of the line under the mouse; the color panel follows Reset and Paste instead of keeping the last picked color; the palette list scrolls to the line the editor opens on; DreamGrafix pictures are redrawn by their decoder after an edit, at their real size
 
 ### Keyboard Shortcuts
 
@@ -83,6 +84,7 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 - **Selection**: Changing the filter removes hidden images from the selection, so Delete and Export only act on visible images
 - **Adjustments**: The brightness/contrast preview is cleared when the popover is closed without applying
 - **Thumbnails**: Keep the picture's aspect ratio
+- **Info Bar**: Shows the picture's real size, also after a crop or rotate (it showed the format's nominal size)
 - **Movie Export Sheet**: Fits on small screens
 - **Toolbar Labels**: The zoom labels are no longer cut off ("Zo...") and the Fit button shows its label; the zoom buttons are labelled Out / In with full tooltips
 - **Single Window**: The app now uses one window, so Undo and Recent Folders no longer act on several windows at once

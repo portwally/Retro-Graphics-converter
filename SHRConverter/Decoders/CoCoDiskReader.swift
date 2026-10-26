@@ -16,17 +16,25 @@ class CoCoDiskReader {
 
     // MARK: - Types
 
+    /// How the files on a volume are recorded.
+    /// - standard: RS-DOS as written by Disk BASIC (and BitPast since its RS-DOS fix): name in
+    ///   bytes 0-7, extension 8-10, type 11, last-sector byte count big-endian; granules 34-67
+    ///   skip the directory track.
+    /// - legacyBitPast: disks from BitPast versions before that fix, recognised by granules 34
+    ///   and 35 marked $FC: entries shifted by one byte and granules numbered straight through.
+    enum Layout {
+        case standard
+        case legacyBitPast
+    }
+
     struct DirectoryEntry {
-        let fileType: UInt8         // File type: 0=killed, 1=BASIC, 2=binary/data, 3=ML, 0xFF=unused
+        let fileType: UInt8         // standard: 0 BASIC, 1 data, 2 machine language, 3 text
         let name: String            // 8 characters
         let ext: String             // 3 characters
         let asciiFlag: UInt8        // 0=binary, 0xFF=ASCII
         let firstGranule: UInt8     // First granule number
         let lastSectorBytes: Int    // Bytes used in last sector
-
-        var isDeleted: Bool { fileType == 0x00 }
-        var isUnused: Bool { fileType == 0xFF }
-        var isValid: Bool { !isDeleted && !isUnused && firstGranule < 140 }  // Support larger disks
+        let layout: Layout
 
         var fullName: String {
             let trimmedName = name.trimmingCharacters(in: .whitespaces)
@@ -38,14 +46,33 @@ class CoCoDiskReader {
         }
 
         var fileTypeString: String {
-            switch fileType {
-            case 0: return "DEL"
-            case 1: return "BAS"
-            case 2: return "BIN"
-            case 3: return "ML"
-            default: return "???"
+            switch layout {
+            case .standard:
+                switch fileType {
+                case 0: return "BAS"
+                case 1: return "DAT"
+                case 2: return "BIN"
+                case 3: return "TXT"
+                default: return "???"
+                }
+            case .legacyBitPast:
+                switch fileType {
+                case 1: return "BAS"
+                case 2: return "BIN"
+                case 3: return "ML"
+                default: return "???"
+                }
             }
         }
+    }
+
+    /// One RS-DOS volume: a single-sided disk, or one side of a double-sided one
+    private struct Volume {
+        let data: Data
+        /// Byte offset of a sector (0-based within the track)
+        let sectorOffset: (_ track: Int, _ sector: Int) -> Int
+        /// Old BitPast double-sided disks put side 1 after side 0 and number its granules 70-139
+        var granuleCount = 68
     }
 
     // MARK: - Detection
@@ -64,19 +91,17 @@ class CoCoDiskReader {
         let maxSize = 380000  // ~370KB maximum
         guard data.count >= minSize && data.count <= maxSize else { return false }
 
-        // Check for valid directory structure on track 17
-        let dirOffset = getTrackOffset(track: directoryTrack)
-        guard dirOffset + (sectorsPerTrack * bytesPerSector) <= data.count else { return false }
+        let volume = volumes(of: data)[0]
 
         // Read FAT sector and validate
-        let fatOffset = dirOffset + (fatSector * bytesPerSector)
+        let fatOffset = volume.sectorOffset(directoryTrack, fatSector)
         guard fatOffset + 68 <= data.count else { return false }
 
         // Check if FAT has reasonable values
         // Each granule entry should be:
         // 0x00-0x8F: Next granule number (up to 143 for double-sided disks)
         // 0xC0-0xC9: Last granule marker (0-9 sectors used)
-        // 0xFC: System use / unavailable (used by BitPast for directory track)
+        // 0xFC: System use / unavailable (old BitPast disks, directory track)
         // 0xFF: Free granule
         var validFATEntries = 0
         var freeGranules = 0
@@ -93,69 +118,75 @@ class CoCoDiskReader {
         // At least 90% of FAT entries should be valid
         guard validFATEntries >= 60 else { return false }
 
-        // There should be some free granules (unless disk is completely full)
-        // and not ALL granules free (that would indicate an unformatted disk)
-        guard freeGranules > 0 && freeGranules < 68 else {
-            // Allow fully used disks, but check directory
-            let firstDirOffset = dirOffset + (directoryStartSector * bytesPerSector)
-            guard firstDirOffset < data.count else { return false }
+        // An unformatted (all free) or fully used disk must at least start with a real entry
+        let firstEntry = volume.sectorOffset(directoryTrack, directoryStartSector)
+        guard firstEntry < data.count else { return false }
+        if freeGranules == 0 || freeGranules == 68 {
+            return !readDirectory(volume: volume, layout: layout(fat: readFAT(volume: volume))).isEmpty
+        }
+        return true
+    }
 
-            // First directory entry should have valid status
-            let firstStatus = data[firstDirOffset]
-            if firstStatus != 0xFF && firstStatus <= 3 {
-                return true  // Has at least one file
-            }
-            return false
+    // MARK: - Volumes
+
+    /// Splits an image into its RS-DOS volumes. Double-sided images (with or without the 2-byte
+    /// JVC header) interleave the sides track by track, and each side is its own volume.
+    private func volumes(of data: Data) -> [Volume] {
+        let trackBytes = sectorsPerTrack * bytesPerSector
+        let singleSided = 35 * trackBytes
+        let headerSize = data.count % trackBytes == 2 ? 2 : 0   // JVC header: sectors per track, sides
+        let sides = headerSize == 2 && data[1] == 2 ? 2 : (data.count - headerSize >= 2 * singleSided ? 2 : 1)
+
+        let plain = Volume(data: data) { track, sector in headerSize + (track * self.sectorsPerTrack + sector) * self.bytesPerSector }
+        guard sides == 2 else { return [plain] }
+
+        // Old BitPast double-sided disks: side 1 follows side 0, one FAT for both sides
+        if headerSize == 0, layout(fat: readFAT(volume: plain)) == .legacyBitPast {
+            var legacy = plain
+            legacy.granuleCount = 140
+            return [legacy]
         }
 
-        // Check first directory entry for valid structure
-        let firstDirOffset = dirOffset + (directoryStartSector * bytesPerSector)
-        if firstDirOffset < data.count {
-            let firstStatus = data[firstDirOffset]
-            // First entry should be a file (0-3), deleted (0), or unused (0xFF)
-            if firstStatus <= 3 || firstStatus == 0xFF {
-                return true
+        return (0..<2).map { side in
+            Volume(data: data) { track, sector in
+                headerSize + ((track * 2 + side) * self.sectorsPerTrack + sector) * self.bytesPerSector
             }
         }
+    }
 
-        return validFATEntries >= 60
+    private func readFAT(volume: Volume) -> [UInt8] {
+        let fatOffset = volume.sectorOffset(directoryTrack, fatSector)
+        var fat = [UInt8](repeating: 0xFF, count: volume.granuleCount)
+        for i in 0..<min(volume.granuleCount, bytesPerSector) where fatOffset + i < volume.data.count {
+            fat[i] = volume.data[fatOffset + i]
+        }
+        return fat
+    }
+
+    /// Old BitPast marked the two directory-track granules (34 and 35) as $FC; RS-DOS never uses $FC
+    private func layout(fat: [UInt8]) -> Layout {
+        fat.count > 35 && fat[34] == 0xFC && fat[35] == 0xFC ? .legacyBitPast : .standard
     }
 
     // MARK: - Reading
 
     /// Read all files from the CoCo disk image
     func readDisk(data: Data) -> [DiskCatalogEntry]? {
-        // Calculate total tracks and granules based on disk size
-        let totalTracks = data.count / (sectorsPerTrack * bytesPerSector)
-        let granulesPerSide = 70  // 35 tracks × 2 granules per track (includes directory track 17)
-        let isDoubleSided = totalTracks > 40
-        let maxGranules = isDoubleSided ? granulesPerSide * 2 : granulesPerSide  // 140 or 70
-
-        // Read FAT (full sector to support double-sided)
-        let fatOffset = getTrackOffset(track: directoryTrack) + (fatSector * bytesPerSector)
-        guard fatOffset + bytesPerSector <= data.count else { return nil }
-
-        var fat = [UInt8](repeating: 0xFF, count: maxGranules)
-        for i in 0..<min(maxGranules, bytesPerSector) {
-            fat[i] = data[fatOffset + i]
-        }
-
-        // Read directory entries
-        let entries = readDirectory(data: data)
-        guard !entries.isEmpty else { return nil }
-
-        // Build catalog entries
+        let allVolumes = volumes(of: data)
         var catalogEntries: [DiskCatalogEntry] = []
 
-        for entry in entries {
-            guard entry.isValid else { continue }
+        for (side, volume) in allVolumes.enumerated() {
+            let fat = readFAT(volume: volume)
+            let layout = layout(fat: fat)
+            // Files on the second side get a folder-like prefix (each side is its own volume)
+            let prefix = allVolumes.count > 1 && side > 0 ? "Side \(side + 1)/" : ""
 
-            // Extract file data
-            if let fileData = extractFile(data: data, entry: entry, fat: fat) {
+            for entry in readDirectory(volume: volume, layout: layout) {
+                guard let fileData = extractFile(volume: volume, entry: entry, fat: fat, layout: layout) else { continue }
                 let (isImage, imageType) = detectImageType(name: entry.fullName, data: fileData)
 
-                let catalogEntry = DiskCatalogEntry(
-                    name: entry.fullName,
+                catalogEntries.append(DiskCatalogEntry(
+                    name: prefix + entry.fullName,
                     fileType: UInt8(entry.fileType),
                     fileTypeString: entry.fileTypeString,
                     size: fileData.count,
@@ -167,84 +198,55 @@ class CoCoDiskReader {
                     imageType: imageType,
                     isDirectory: false,
                     children: nil
-                )
-                catalogEntries.append(catalogEntry)
+                ))
             }
         }
 
-        return catalogEntries
+        return catalogEntries.isEmpty ? nil : catalogEntries
     }
 
     // MARK: - Directory Reading
 
-    private func readDirectory(data: Data) -> [DirectoryEntry] {
+    private func readDirectory(volume: Volume, layout: Layout) -> [DirectoryEntry] {
+        let data = volume.data
         var entries: [DirectoryEntry] = []
-        let dirBaseOffset = getTrackOffset(track: directoryTrack)
 
-        // Directory spans sectors 3-11 (9 sectors)
+        // Directory spans sectors 3-11 (9 sectors), 8 entries of 32 bytes each
         for sector in directoryStartSector..<(directoryStartSector + 9) {
-            let sectorOffset = dirBaseOffset + (sector * bytesPerSector)
+            let sectorOffset = volume.sectorOffset(directoryTrack, sector)
             guard sectorOffset + bytesPerSector <= data.count else { break }
 
-            // Each sector contains 8 directory entries (32 bytes each)
             for entryIndex in 0..<8 {
-                let entryOffset = sectorOffset + (entryIndex * 32)
-                guard entryOffset + 32 <= data.count else { break }
+                let e = sectorOffset + (entryIndex * 32)
 
-                // Byte 0 is file type: 0=killed, 1=BASIC, 2=binary, 3=ML, 0xFF=unused
-                let fileType = data[entryOffset]
+                // Where the name starts, and what marks an unused or killed entry
+                let nameOffset = layout == .standard ? 0 : 1
+                let marker = data[e]
+                if marker == 0xFF { return entries }  // end of the directory
+                if marker == 0x00 && (layout == .standard || data[e + 13] == 0x00) { continue }  // killed
 
-                // Stop at first unused entry
-                if fileType == 0xFF {
-                    // Check if this is truly the end
-                    let nextOffset = entryOffset + 32
-                    if nextOffset < data.count && data[nextOffset] == 0xFF {
-                        return entries
-                    }
+                func text(_ offset: Int, _ count: Int) -> String {
+                    String((0..<count).compactMap { i -> Character? in
+                        let byte = data[e + offset + i]
+                        return byte >= 0x20 && byte < 0x7F ? Character(UnicodeScalar(byte)) : nil
+                    })
                 }
 
-                // Skip deleted entries (type 0 with no first granule)
-                if fileType == 0x00 && data[entryOffset + 13] == 0x00 {
-                    continue
+                let entry: DirectoryEntry
+                switch layout {
+                case .standard:
+                    entry = DirectoryEntry(
+                        fileType: data[e + 11], name: text(nameOffset, 8), ext: text(8, 3),
+                        asciiFlag: data[e + 12], firstGranule: data[e + 13],
+                        lastSectorBytes: Int(data[e + 14]) << 8 | Int(data[e + 15]), layout: layout)
+                case .legacyBitPast:
+                    entry = DirectoryEntry(
+                        fileType: marker, name: text(nameOffset, 8), ext: text(9, 3),
+                        asciiFlag: data[e + 12], firstGranule: data[e + 13],
+                        lastSectorBytes: Int(data[e + 14]) | Int(data[e + 15]) << 8, layout: layout)
                 }
 
-                // Parse filename (bytes 1-8)
-                var nameChars = [Character]()
-                for i in 0..<8 {
-                    let byte = data[entryOffset + 1 + i]
-                    if byte >= 0x20 && byte < 0x7F {
-                        nameChars.append(Character(UnicodeScalar(byte)))
-                    }
-                }
-                let name = String(nameChars)
-
-                // Parse extension (bytes 9-11)
-                var extChars = [Character]()
-                for i in 0..<3 {
-                    let byte = data[entryOffset + 9 + i]
-                    if byte >= 0x20 && byte < 0x7F {
-                        extChars.append(Character(UnicodeScalar(byte)))
-                    }
-                }
-                let ext = String(extChars)
-
-                // Byte 12: ASCII flag (0=binary, 0xFF=ASCII)
-                let asciiFlag = data[entryOffset + 12]
-                // Byte 13: First granule number
-                let firstGranule = data[entryOffset + 13]
-                // Bytes 14-15: Bytes used in last sector (little-endian)
-                let lastSectorBytes = Int(data[entryOffset + 14]) | (Int(data[entryOffset + 15]) << 8)
-
-                let entry = DirectoryEntry(
-                    fileType: fileType,
-                    name: name,
-                    ext: ext,
-                    asciiFlag: asciiFlag,
-                    firstGranule: firstGranule,
-                    lastSectorBytes: lastSectorBytes
-                )
-
-                if entry.isValid {
+                if Int(entry.firstGranule) < volume.granuleCount && !entry.fullName.isEmpty {
                     entries.append(entry)
                 }
             }
@@ -255,53 +257,34 @@ class CoCoDiskReader {
 
     // MARK: - File Extraction
 
-    private func extractFile(data: Data, entry: DirectoryEntry, fat: [UInt8]) -> Data? {
+    private func extractFile(volume: Volume, entry: DirectoryEntry, fat: [UInt8], layout: Layout) -> Data? {
+        let data = volume.data
         var fileData = Data()
         var currentGranule = entry.firstGranule
         var granulesRead = 0
-        let maxGranules = fat.count  // Support single and double-sided disks
 
-        while granulesRead < maxGranules {
+        while granulesRead < fat.count {
             guard Int(currentGranule) < fat.count else { break }
 
             let fatEntry = fat[Int(currentGranule)]
-
-            // Calculate granule offset
-            let granuleOffset = getGranuleOffset(granule: Int(currentGranule))
+            let granuleOffset = granuleOffset(granule: Int(currentGranule), volume: volume, layout: layout)
             guard granuleOffset >= 0 && granuleOffset < data.count else { break }
 
-            // Determine how many sectors to read from this granule
-            let sectorsToRead: Int
+            // The last granule's entry is $C0 + the number of sectors used (0-9)
             let isLastGranule = fatEntry >= 0xC0 && fatEntry <= 0xC9
+            let sectorsToRead = isLastGranule ? Int(fatEntry & 0x0F) : 9
+            if isLastGranule && sectorsToRead == 0 { break }
 
-            if isLastGranule {
-                // Last granule: low nibble indicates sectors used (0-9)
-                sectorsToRead = Int(fatEntry & 0x0F)
-                if sectorsToRead == 0 {
-                    break  // No more data
-                }
-            } else {
-                sectorsToRead = 9  // Full granule
-            }
-
-            // Read sectors from this granule
             for sector in 0..<sectorsToRead {
                 let sectorOffset = granuleOffset + (sector * bytesPerSector)
                 guard sectorOffset + bytesPerSector <= data.count else { break }
-
-                let sectorData = data[sectorOffset..<sectorOffset + bytesPerSector]
-                fileData.append(sectorData)
+                fileData.append(data[sectorOffset..<sectorOffset + bytesPerSector])
             }
 
             if isLastGranule {
-                // Trim to exact size using lastSectorBytes
-                if entry.lastSectorBytes > 0 && entry.lastSectorBytes <= bytesPerSector {
-                    let fullSectorsBytes = (sectorsToRead - 1) * bytesPerSector
-                    let totalBytes = fullSectorsBytes + entry.lastSectorBytes
-                    let previousBytes = fileData.count - (sectorsToRead * bytesPerSector)
-                    if previousBytes + totalBytes < fileData.count {
-                        fileData = fileData.prefix(previousBytes + totalBytes)
-                    }
+                // Trim the last sector to the byte count from the directory
+                if entry.lastSectorBytes > 0 && entry.lastSectorBytes < bytesPerSector {
+                    fileData = fileData.prefix(fileData.count - bytesPerSector + entry.lastSectorBytes)
                 }
                 break
             }
@@ -316,31 +299,20 @@ class CoCoDiskReader {
 
     // MARK: - Offset Calculations
 
-    private func getTrackOffset(track: Int) -> Int {
-        return track * sectorsPerTrack * bytesPerSector
-    }
-
-    private func getGranuleOffset(granule: Int) -> Int {
-        // RS-DOS standard: granule N is on track N/2
-        // Each track has 2 granules (9 sectors each = 2304 bytes per granule)
-        // Track 17 (directory) has granules 34-35 (marked as system use in FAT)
-        //
-        // Double-sided disks: granules 0-69 on side 0, 70-139 on side 1
-        // (70 granules per side = 35 tracks × 2 granules/track)
-
-        let granulesPerSide = 70  // 35 tracks × 2 granules per track
-        let side = granule / granulesPerSide
-        let granuleWithinSide = granule % granulesPerSide
-
-        // Simple calculation: track = granule / 2
-        let track = granuleWithinSide / 2
-        let granuleInTrack = granuleWithinSide % 2
-        let sectorInTrack = granuleInTrack * 9
-
-        // Side offset: side 1 starts after all 35 tracks of side 0
-        let sideOffset = side * 35 * sectorsPerTrack * bytesPerSector
-
-        return sideOffset + (track * sectorsPerTrack + sectorInTrack) * bytesPerSector
+    private func granuleOffset(granule: Int, volume: Volume, layout: Layout) -> Int {
+        // Each track holds two granules of 9 sectors
+        switch layout {
+        case .standard:
+            // Granules 0-33 are tracks 0-16; granules 34-67 skip the directory track (17)
+            let track = granule / 2 + (granule >= 34 ? 1 : 0)
+            return volume.sectorOffset(track, (granule % 2) * 9)
+        case .legacyBitPast:
+            // Old BitPast: granule n on track n/2; on double-sided disks granules 70-139 are side 1,
+            // stored after the 35 tracks of side 0
+            let side = granule / 70
+            let withinSide = granule % 70
+            return volume.sectorOffset(side * 35 + withinSide / 2, (withinSide % 2) * 9)
+        }
     }
 
     // MARK: - Image Type Detection

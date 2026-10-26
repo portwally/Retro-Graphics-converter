@@ -130,7 +130,7 @@ on this Mac). The four **[likely]** items are untouched — they need sample fil
   border/background at 9002/9003 and colour RAM at 9018. Needs a real `.ocp` file to confirm.
 - [x] **[confirmed and fixed 2026-10-12, see 6e] TR-DOS file offsets are doubled.** `TRDOSDiskReader.swift:156` uses 32 sectors per
   logical track; TR-DOS directory entries store a logical track with 16 sectors each. Needs a real `.trd`.
-- [ ] **[likely] CoCo RS-DOS granule mapping is off by one track past the directory.**
+- [x] **[confirmed and fixed 2026-10-26 with a real disk, see 6f] CoCo RS-DOS granule mapping is off by one track past the directory.**
   `CoCoDiskReader.swift:322` maps granules 34+ to track `n/2`; genuine RS-DOS skips track 17
   (`n/2 + 1`). The current mapping only matches BitPast-made disks.
 - [x] **[confirmed and fixed 2026-10-12, see 6e] BBC `.dsd` images are read as if linear.** `BBCMicroDiskReader.extractFile` ignores
@@ -291,7 +291,7 @@ of them. 12,000 decodes hashed before and after confirm no decoder output change
   differed from the decoder on 20-80% of *generated* files (random headers). There are no real PCX
   or BMP files on this Mac to tell whether real files are affected. Same fix would apply: draw
   through the decoder with a palette override.
-- [ ] **DreamGrafix re-render is always 320x200**, ignoring the footer's width/height. All 32 real
+- [x] **Fixed 2026-10-26: DreamGrafix re-render is always 320x200**, ignoring the footer's width/height. All 32 real
   DreamGrafix files are 320x200, so this only shows on malformed files.
 - [x] Palette editor UI exercised by hand on 2026-10-26 (swatch, colour panel, Reset): works;
   the colour panel did not follow Reset - fixed, see 6f.
@@ -349,7 +349,7 @@ clean build without warnings, app launches, the 3,368 real disks give identical 
 - [ ] Left in place on purpose - small unused properties that describe parsed data and cost
   nothing: `isLocked`, `isReadOnly`, `fileTypeDescription`, `diskTypeDescription` on the disk
   readers; `swiftUIColor`, `totalColors`, `totalUniqueColors`, `withUpdatedColor` on the palette model.
-- [ ] `AppleIIImageType.colorDepth` is never displayed anywhere. (The label corrections made to
+- [x] Removed 2026-10-26 (with the unused `resolution`): `AppleIIImageType.colorDepth` is never displayed anywhere. (The label corrections made to
   it in section 5 therefore have no visible effect; either show it in the info bar or remove it.)
 
 ## 6c. Remaining views and models (third reading pass, 2026-10-11)
@@ -396,7 +396,7 @@ below were clicked through.**
     3. Delete in a text field inside a sheet deletes text, not images (commands are ignored
        while any sheet is open).
     4. Cmd + works on your keyboard layout.
-- [ ] The info bar shows the format's nominal size (e.g. 160x200 for Plus/4 multicolor that is
+- [x] Fixed 2026-10-26: The info bar shows the format's nominal size (e.g. 160x200 for Plus/4 multicolor that is
   drawn 320x200, and unchanged after a crop or rotate); the details popover shows the real size.
 - Not a bug after testing: I expected `PaletteColor(nsColor:)` to crash on wide-gamut colours and
   to drift by one on round trips. A test showed neither happens (macOS clamps on conversion). The
@@ -453,8 +453,8 @@ New bugs the samples exposed (fixed):
   low-res, Degas, MicroIllustrator, GR.8, GR.9, HAM6/HAM8, EHB, Koala, 3200 and 3201.
 
 Still open after this pass:
-- [ ] **CoCo RS-DOS granule mapping** - still no genuine RS-DOS disk to test. `.st`, `.d71` and
-  MSX disks also still have no real sample.
+- [x] **CoCo RS-DOS granule mapping** - settled with a real disk (see 6f). Real `.d71` disks were
+  also tested (blank 70- and 80-track images); `.st` and MSX disks still have no real sample.
 - [ ] Not supported (seen in the samples, shown as "not decoded"): IFF PBM (`.lbm` from Deluxe
   Paint on PC), tall 240-line MicroIllustrator files, true GR.7 (160x96), `.P41` / `.P11` CoCo
   files, ZX 6144-byte screens without attributes, STE / larger NEOchrome variants.
@@ -495,8 +495,15 @@ Still open:
   screenshots still show the old labels.
 - [ ] `FISH.neo` (an IFF despite the name) looks scrambled; an independent decode looks the same,
   so the file is probably damaged - not investigated further.
-- [ ] **Palette editor line list does not scroll to the open line** - opened on line 100 of a
+- [x] **Fixed: Palette editor line list does not scroll to the open line** - opened on line 100 of a
   3200-colour picture, the list on the left still shows line 0 at the top.
+- [x] **CoCo RS-DOS read wrong on real disks** (found with `minilisp.dsk`, Jamie Cho): directory
+  entries were read one byte off (name from byte 1, type from byte 0, byte count little-endian) and
+  granules 34+ ignored the skipped directory track. The reader matched disks from old BitPast
+  versions. Now: standard RS-DOS by default; old BitPast disks (granules 34/35 marked $FC) keep the
+  old layout; double-sided JVC images are read as two volumes ("Side 2/" prefix).
+- [x] **80-track D71** (two 40-track sides, 393,216 bytes) is now read; the 1571 header is required
+  because the size is also a 384K ProDOS volume.
 - [ ] Other `.art` variants: GFA Artist 34,360-byte files (per-line palettes) and the small Atari
   8-bit `.ART` formats are not supported (they show as "not decoded", no false pictures).
 

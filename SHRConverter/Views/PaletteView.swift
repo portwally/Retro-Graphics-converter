@@ -220,6 +220,8 @@ struct AllPalettesView: View {
     @Binding var isPresented: Bool
 
     @State private var selectedPaletteIndex: Int = 0
+    /// Set once the editor knows its start palette; the palette list scrolls to it
+    @State private var startPaletteIndex: Int?
     @State private var selectedColorIndex: Int? = nil
     @State private var copiedPalette: [PaletteColor]? = nil
     @State private var originalPalettes: [[PaletteColor]] = []
@@ -282,6 +284,7 @@ struct AllPalettesView: View {
                     selectedPaletteIndex = line
                 }
             }
+            startPaletteIndex = selectedPaletteIndex
             // Store original palettes for reset functionality
             originalPalettes = paletteInfo.palettes
         }
@@ -345,8 +348,10 @@ struct AllPalettesView: View {
                     }
                 }
                 .listStyle(.sidebar)
-                .onAppear {
-                    proxy.scrollTo(selectedPaletteIndex, anchor: .center)
+                // The list appears before the editor has picked its start palette (the line under
+                // the mouse), so scroll when that is known rather than on appear
+                .onChange(of: startPaletteIndex) { _, index in
+                    if let index = index { proxy.scrollTo(index, anchor: .center) }
                 }
             }
         }

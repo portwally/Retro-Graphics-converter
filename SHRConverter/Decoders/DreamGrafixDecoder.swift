@@ -32,8 +32,11 @@ class DreamGrafixDecoder {
 
     // MARK: - Public Decode Methods
 
+    typealias RGB = (r: UInt8, g: UInt8, b: UInt8)
+
     /// Decode DreamGrafix PNT/$8005 (LZW compressed)
-    static func decodeDreamGrafixPacked(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+    /// - Parameter paletteOverride: replaces the file's palettes (used for live palette editing)
+    static func decodeDreamGrafixPacked(data: Data, paletteOverride: [[RGB]]? = nil) -> (image: CGImage?, type: AppleIIImageType) {
         guard let footer = parseFooter(data: data) else {
             return (nil, .Unknown)
         }
@@ -46,11 +49,11 @@ class DreamGrafixDecoder {
             return (nil, .Unknown)
         }
 
-        return renderDreamGrafix(data: decompressedData, footer: footer)
+        return renderDreamGrafix(data: decompressedData, footer: footer, paletteOverride: paletteOverride)
     }
 
     /// Decode DreamGrafix PIC/$8003 (uncompressed)
-    static func decodeDreamGrafixUnpacked(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+    static func decodeDreamGrafixUnpacked(data: Data, paletteOverride: [[RGB]]? = nil) -> (image: CGImage?, type: AppleIIImageType) {
         guard let footer = parseFooter(data: data) else {
             return (nil, .Unknown)
         }
@@ -58,7 +61,7 @@ class DreamGrafixDecoder {
         // Data without footer
         let rawData = data.subdata(in: 0..<(data.count - 17))
 
-        return renderDreamGrafix(data: rawData, footer: footer)
+        return renderDreamGrafix(data: rawData, footer: footer, paletteOverride: paletteOverride)
     }
 
     /// Detect if data has DreamGrafix signature
@@ -112,21 +115,27 @@ class DreamGrafixDecoder {
 
     // MARK: - Rendering
 
-    private static func renderDreamGrafix(data: Data, footer: DreamGrafixFooter) -> (image: CGImage?, type: AppleIIImageType) {
+    private static func renderDreamGrafix(data: Data, footer: DreamGrafixFooter, paletteOverride: [[RGB]]?) -> (image: CGImage?, type: AppleIIImageType) {
         let width = Int(footer.width)
         let height = Int(footer.height)
 
         if footer.is3200Color {
-            return render3200Color(data: data, width: width, height: height)
+            return render3200Color(data: data, width: width, height: height, paletteOverride: paletteOverride)
         } else {
-            return render256Color(data: data, width: width, height: height)
+            return render256Color(data: data, width: width, height: height, paletteOverride: paletteOverride)
         }
+    }
+
+    /// The override's palettes, padded with the file's own so every palette the picture uses exists
+    private static func applyOverride(_ override: [[RGB]]?, to palettes: [[RGB]]) -> [[RGB]] {
+        guard let override = override, !override.isEmpty else { return palettes }
+        return palettes.indices.map { $0 < override.count && override[$0].count >= 16 ? override[$0] : palettes[$0] }
     }
 
     // MARK: - 256-Color Mode Rendering
     // Layout: 32000 pixels + 256 SCB + 512 palette + 512 optional
 
-    private static func render256Color(data: Data, width: Int, height: Int) -> (image: CGImage?, type: AppleIIImageType) {
+    private static func render256Color(data: Data, width: Int, height: Int, paletteOverride: [[RGB]]?) -> (image: CGImage?, type: AppleIIImageType) {
         let bytesPerLine = width / 2  // 2 pixels per byte in 320 mode
         let pixelDataSize = bytesPerLine * height
         let scbOffset = pixelDataSize
@@ -159,6 +168,7 @@ class DreamGrafixDecoder {
             }
             palettes.append(colors)
         }
+        palettes = applyOverride(paletteOverride, to: palettes)
 
         // Render image
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
@@ -232,7 +242,7 @@ class DreamGrafixDecoder {
     // MARK: - 3200-Color Mode Rendering
     // Layout: 32000 pixels + 6400 per-line palettes (200 lines × 16 colors × 2 bytes)
 
-    private static func render3200Color(data: Data, width: Int, height: Int) -> (image: CGImage?, type: AppleIIImageType) {
+    private static func render3200Color(data: Data, width: Int, height: Int, paletteOverride: [[RGB]]?) -> (image: CGImage?, type: AppleIIImageType) {
         let bytesPerLine = width / 2
         let pixelDataSize = bytesPerLine * height
         let paletteOffset = pixelDataSize
@@ -261,6 +271,7 @@ class DreamGrafixDecoder {
             }
             palettes.append(colors)
         }
+        palettes = applyOverride(paletteOverride, to: palettes)
 
         // Render image
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)

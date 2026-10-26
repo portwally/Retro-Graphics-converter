@@ -73,10 +73,10 @@ struct InfoBarView: View {
                         .background(Color.blue.opacity(0.2))
                         .cornerRadius(4)
 
-                    // Resolution
-                    let res = image.type.resolution
-                    if res.width > 0 && res.height > 0 {
-                        Text("\(res.width)x\(res.height)")
+                    // Size of the picture as shown (after any crop or rotate), not the format's nominal size
+                    let size = image.image.size
+                    if size.width > 0 && size.height > 0 {
+                        Text("\(Int(size.width))x\(Int(size.height))")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
