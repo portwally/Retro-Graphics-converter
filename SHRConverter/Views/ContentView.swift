@@ -302,6 +302,22 @@ struct ContentView: View {
                 // Keep the current image visible when stepping through with the keyboard
                 if let newID = newID { scrollProxy.scrollTo(newID) }
             }
+            .overlay {
+                // Empty-state hint; it ignores clicks so drops still reach the list
+                if filteredImages.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: imageItems.isEmpty ? "square.and.arrow.down.on.square" : "line.3.horizontal.decrease.circle")
+                            .font(.system(size: 32))
+                        Text(imageItems.isEmpty ? "Drag and drop pictures or disk images here to import them"
+                                                : "No pictures for this filter")
+                            .font(.callout)
+                            .multilineTextAlignment(.center)
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(24)
+                    .allowsHitTesting(false)
+                }
+            }
             }
             .onDrop(of: [.fileURL, .url, .data, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .twoimg, .dsk, .hdv, .do_disk, .po, .bbc, .adf, .st, .atr, .ssd, .dsd], isTargeted: nil) { providers in loadDroppedFiles(providers); return true }
 

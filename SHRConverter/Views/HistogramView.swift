@@ -196,6 +196,11 @@ struct HistogramView: View {
 
     private func drawHistogram(context: GraphicsContext, size: CGSize) {
         let maxVal = max(1, histogramData.maxValue)
+        // Keep a margin so bars at 0 and 255 are not hidden by the rounded corners
+        let inset: CGFloat = 4
+        var context = context
+        context.translateBy(x: inset, y: 0)
+        let size = CGSize(width: size.width - 2 * inset, height: size.height)
         let barWidth = size.width / 256
 
         switch selectedChannel {
@@ -228,18 +233,16 @@ struct HistogramView: View {
 
     private func drawChannel(context: GraphicsContext, size: CGSize, data: [Int],
                             color: Color, maxValue: Int, barWidth: CGFloat) {
+        // One bar per value. Retro pictures use only a few colours, so a connected outline would be
+        // a few needle-thin spikes (invisible at 0 and 255); bars are at least 3 points wide.
         var path = Path()
+        let width = max(barWidth, 3)
 
-        path.move(to: CGPoint(x: 0, y: size.height))
-
-        for i in 0..<256 {
-            let height = CGFloat(data[i]) / CGFloat(maxValue) * size.height
-            let x = CGFloat(i) * barWidth
-            path.addLine(to: CGPoint(x: x, y: size.height - height))
+        for i in 0..<256 where data[i] > 0 {
+            let height = max(1, CGFloat(data[i]) / CGFloat(maxValue) * size.height)
+            let x = min(CGFloat(i) * barWidth, size.width - width)
+            path.addRect(CGRect(x: x, y: size.height - height, width: width, height: height))
         }
-
-        path.addLine(to: CGPoint(x: size.width, y: size.height))
-        path.closeSubpath()
 
         context.fill(path, with: .color(color))
     }

@@ -84,6 +84,8 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 - **Selection**: Changing the filter removes hidden images from the selection, so Delete and Export only act on visible images
 - **Adjustments**: The brightness/contrast preview is cleared when the popover is closed without applying
 - **Thumbnails**: Keep the picture's aspect ratio
+- **Histogram**: Drawn as bars, so pictures with only a few colors show clearly (they were thin spikes, invisible at black and white)
+- **Empty Browser**: Shows a hint to drag and drop pictures or disk images, or that the filter hides all pictures
 - **Info Bar**: Shows the picture's real size, also after a crop or rotate (it showed the format's nominal size)
 - **Movie Export Sheet**: Fits on small screens
 - **Toolbar Labels**: The zoom labels are no longer cut off ("Zo...") and the Fit button shows its label; the zoom buttons are labelled Out / In with full tooltips
