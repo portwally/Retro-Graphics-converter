@@ -91,8 +91,9 @@ class AppState: ObservableObject {
     // MARK: - Recent Folders
 
     func addRecentFolder(_ url: URL) {
-        // Remove if already exists
+        // Remove if already exists; a folder picked again gets a fresh bookmark
         recentFolders.removeAll { $0 == url }
+        bookmarks[url.path] = nil
         // Add to front
         recentFolders.insert(url, at: 0)
         // Limit count
@@ -107,19 +108,51 @@ class AppState: ObservableObject {
         saveRecentFolders()
     }
 
+    // In the App Store (sandboxed) build a folder path alone gives no access after a relaunch, so
+    // each folder is also remembered as a security-scoped bookmark, keyed by its path.
+    private let recentBookmarksKey = "RecentFolderBookmarks"
+    private var bookmarks: [String: Data] = [:]
+    /// Folders whose bookmark access is open; kept open for the rest of the session
+    private var accessedFolders: Set<URL> = []
+
     private func loadRecentFolders() {
+        bookmarks = UserDefaults.standard.dictionary(forKey: recentBookmarksKey) as? [String: Data] ?? [:]
         if let paths = UserDefaults.standard.stringArray(forKey: recentFoldersKey) {
-            recentFolders = paths.compactMap { URL(fileURLWithPath: $0) }
+            recentFolders = paths.map { URL(fileURLWithPath: $0) }
         }
     }
 
     private func saveRecentFolders() {
         let paths = recentFolders.map { $0.path }
+        // Bookmarks of folders that dropped off the list are not kept
+        for url in recentFolders where bookmarks[url.path] == nil {
+            bookmarks[url.path] = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil)
+        }
+        bookmarks = bookmarks.filter { paths.contains($0.key) }
         UserDefaults.standard.set(paths, forKey: recentFoldersKey)
+        UserDefaults.standard.set(bookmarks, forKey: recentBookmarksKey)
     }
 
     func openRecentFolder(_ url: URL) {
-        openFolderRequest = url
+        openFolderRequest = accessibleURL(for: url)
+    }
+
+    /// The folder with its sandbox access restored from the bookmark (the plain URL when there is
+    /// no bookmark, as for folders remembered by older versions or an unsandboxed build)
+    private func accessibleURL(for url: URL) -> URL {
+        guard let data = bookmarks[url.path] else { return url }
+        var isStale = false
+        guard let resolved = try? URL(resolvingBookmarkData: data, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) else {
+            return url
+        }
+        if !accessedFolders.contains(resolved), resolved.startAccessingSecurityScopedResource() {
+            accessedFolders.insert(resolved)
+        }
+        if isStale, let fresh = try? resolved.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
+            bookmarks[url.path] = fresh
+            UserDefaults.standard.set(bookmarks, forKey: recentBookmarksKey)
+        }
+        return resolved
     }
 }
 

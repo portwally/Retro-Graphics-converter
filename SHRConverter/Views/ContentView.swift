@@ -167,7 +167,8 @@ struct ContentView: View {
                 importedCount: imageItems.count,
                 selectedCount: selectedImages.count,
                 removedCount: removedCount,
-                exportedCount: exportedCount
+                exportedCount: exportedCount,
+                message: statusMessage
             )
         }
         .sheet(isPresented: $showCatalogBrowser) {
@@ -762,8 +763,11 @@ struct ContentView: View {
         while folderName.hasPrefix(".") { folderName.removeFirst() }
         if folderName.isEmpty { folderName = "Retro Graphics" }
 
-        let picturesFolder = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Pictures")
+        // In the sandbox the home folder is the app's container; ask for the Pictures folder instead
+        // (the container's Pictures links to the real one, which the Pictures entitlement opens)
+        let picturesRoot = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Pictures")
+        let picturesFolder = picturesRoot.resolvingSymlinksInPath()
             .appendingPathComponent("Retro Screensavers")
             .appendingPathComponent(folderName)
 
@@ -1314,7 +1318,8 @@ struct ContentView: View {
         let openPanel = NSOpenPanel()
         openPanel.allowsOtherFileTypes = true; openPanel.allowsMultipleSelection = true; openPanel.canChooseDirectories = true; openPanel.canChooseFiles = true
         openPanel.prompt = "Open Files or Folders"
-        openPanel.allowedContentTypes = [.png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .scr, .twoimg, .dsk, .hdv, .do_disk, .po, .st, .data]
+        // .folder lets a folder be chosen (with only file types listed, the Open button stays disabled for folders)
+        openPanel.allowedContentTypes = [.folder, .png, .jpeg, .gif, .bmp, .tiff, .pcx, .shr, .pic, .pnt, .scr, .twoimg, .dsk, .hdv, .do_disk, .po, .st, .data]
         if openPanel.runModal() == .OK {
             // Add folders to recent folders
             for url in openPanel.urls {

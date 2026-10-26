@@ -504,6 +504,11 @@ Still open:
   old layout; double-sided JVC images are read as two volumes ("Side 2/" prefix).
 - [x] **80-track D71** (two 40-track sides, 393,216 bytes) is now read; the 1571 header is required
   because the size is also a 384K ProDOS volume.
+- [x] **Sandboxed (App Store) build** tested with a locally signed Release copy: Recent Folders
+  could not be reopened after a restart (paths only, now security-scoped bookmarks), Export Files
+  and screensaver export were denied (Downloads/Pictures entitlements added in the Release build
+  settings; the screensaver path no longer uses the container's home), the Import panel could not
+  choose folders, and `statusMessage` was never displayed. All fixed and retested in the sandbox.
 - [ ] Other `.art` variants: GFA Artist 34,360-byte files (per-line palettes) and the small Atari
   8-bit `.ART` formats are not supported (they show as "not decoded", no false pictures).
 

@@ -7,6 +7,8 @@ struct StatusBarView: View {
     let selectedCount: Int
     let removedCount: Int
     let exportedCount: Int
+    /// Last message from the app (results, errors, hints)
+    var message: String = ""
 
     var body: some View {
         HStack(spacing: 16) {
@@ -44,6 +46,11 @@ struct StatusBarView: View {
             )
 
             Spacer()
+
+            Text(message)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(message)
         }
         .font(.caption)
         .foregroundColor(.secondary)

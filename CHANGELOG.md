@@ -92,6 +92,14 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 - **Single Window**: The app now uses one window, so Undo and Recent Folders no longer act on several windows at once
 - **Help**: Updated to match the app
 
+### App Store (Sandboxed) Version
+
+- **Recent Folders**: Folders are remembered with their access permission, so they open again after the app is restarted (they could not be read before)
+- **Export Files and Screensavers**: Writing to the Downloads and Pictures folders is now allowed; both failed in the App Store version
+- **Import Folders**: A folder can now be chosen in the Import panel (the Open button stayed disabled)
+- **Status Messages**: Results and errors are shown at the right of the status bar; they were never displayed
+- **Exported Disk Files**: The export folder no longer carries the disk name's padding spaces, and Commodore files always get their .prg/.seq extension, also when the name contains a dot
+
 ### Code Quality
 
 - Removed about 1,650 lines of unused code, including `ImageCropView.swift` and the legacy disk-reading path

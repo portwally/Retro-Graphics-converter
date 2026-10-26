@@ -1,0 +1,38 @@
+Version 4.5 is a big quality update. Every decoder and disk reader was checked against thousands of real disk images and sample pictures, and many pictures that used to look wrong now open correctly.
+
+NEW
+• Keyboard shortcuts: ⌘O Import, ⌘E Export, ⌘A Select All, Delete to remove, ⌘+ / ⌘− / ⌘0 to zoom, arrow keys, Home and End to step through your pictures
+• New Atari ST formats: Art Director, GFA Artist, Palette Master and Doodle
+• More disk images: Commodore D71 and D81, 40-track D64 and Apple DiskCopy 4.2
+• CoCo PMODE 1 pictures and CoCo pictures saved from Disk BASIC
+• Browser filters for Atari 8-bit, BBC Micro, MSX, Plus/4, VIC-20 and TRS-80/CoCo
+• Palette editing for Apple Preferred Format, the most common Apple IIgs format, and for Amstrad CPC, Atari 8-bit, BBC Micro, Plus/4, VIC-20, CoCo, MSX and more
+
+BETTER DISK SUPPORT
+• Apple II disks are no longer mistaken for CoCo disks
+• ProDOS folders on .dsk/.do images are now listed, and DOS 3.3 names with spaces are shown in full
+• C64 disks show every file (the 8th, 16th, 24th... file was missing) with clean names
+• Real CoCo RS-DOS disks, ZX Spectrum TR-DOS and BBC Micro .ssd/.dsd disks are read correctly, including both sides of double-sided disks
+• The disk browser shows the right file type for every platform
+• Several disk images opened together now open one after another
+• Exporting files from a disk keeps folders and never overwrites files
+
+BETTER PICTURES
+• Amiga: Extra-Half-Brite colors, masked pictures and short palettes are now correct
+• C64 Advanced Art Studio, MSX Screen 7 and 8, MacPaint with MacBinary header, BMP (top-down, 16 and 32-bit) are fixed
+• Atari ST high-resolution pictures are shown in black and white, as on the ST
+• Fewer false pictures: music and data files on disks are no longer shown as images
+
+EASIER TO USE
+• The palette editor follows the line under the mouse, scrolls to it, and resets in one step, even on 3200-color pictures
+• The histogram now shows pictures with few colors clearly
+• Batch export never overwrites files with the same name
+• Rotate, flip and upscale work for every picture
+• The info bar shows the real picture size, also after crop or rotate
+• Cleaner toolbar labels, a drag-and-drop hint in the empty browser, and updated Help
+
+STABILITY
+• Recent Folders open again after restarting the app, and exporting files from disk images and creating screensavers work again
+• Whole folders can be chosen in the Import panel
+• Results and error messages are now shown in the status bar
+• Fixed several crashes and hangs with damaged pictures and disk images, when dropping many files at once, and during movie export

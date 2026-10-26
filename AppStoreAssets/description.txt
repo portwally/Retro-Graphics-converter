@@ -1,0 +1,57 @@
+RETRO GRAPHICS CONVERTER
+
+Open, view and convert graphics from the golden age of home computers. Retro Graphics Converter reads pictures from 16 classic platforms - Apple II and IIgs, Commodore 64, Amiga, Atari ST, ZX Spectrum, BBC Micro, MSX and more - straight from their files or from original disk images, and turns them into modern PNG, JPEG, TIFF, GIF or HEIC files.
+
+PICTURES FROM DISK IMAGES
+- Open 15 disk image formats: Apple II (2IMG, DSK, DO, PO, HDV, DiskCopy 4.2), Commodore (D64, D71, D81), Amiga (ADF), Atari ST (ST), Atari 8-bit (ATR), BBC Micro (SSD, DSD), ZX Spectrum (TRD), Amstrad CPC, MSX and CoCo (DSK)
+- Browse ProDOS folders, DOS 3.3 catalogs and every other file system with real file types
+- Pictures on the disk are found automatically
+- Search, tick the pictures you want and import them in one go
+- Export the raw files from a disk image as well
+
+SUPPORTED PICTURE FORMATS
+Apple II / IIgs: HGR, Double Hi-Res, Super Hi-Res (including 3200-color, Apple Preferred Format, 816/Paint, DreamGrafix and PaintWorks)
+Commodore 64: Koala Painter, Art Studio, Advanced Art Studio, Hi-Res
+Commodore Plus/4 and VIC-20: Hi-Res and Multicolor
+Amiga: IFF/ILBM up to 256 colors, Extra-Half-Brite, HAM6 and HAM8
+Atari ST: Degas, NEOchrome, Art Director, GFA Artist, Palette Master, Doodle
+Atari 8-bit: GR.8 to GR.15, MicroIllustrator
+ZX Spectrum: SCR screens
+Amstrad CPC: Mode 0 and Mode 1
+MSX: Screen 1, 2, 5, 7 and 8
+BBC Micro: Modes 0, 1, 2, 4 and 5
+TRS-80 and CoCo: block graphics, PMODE, CoCo 3
+PC and Mac: PCX, BMP, MacPaint
+Modern: PNG, JPEG, GIF, TIFF, HEIC
+
+EDIT THE ORIGINAL PALETTE
+- Change any color and see the picture update at once
+- Works even on 3200-color Apple IIgs pictures with a palette on every line
+- Copy and paste palettes, reset with one click
+- Compare the edited picture with the original
+
+CONVERT AND SHARE
+- Export to PNG, JPEG, TIFF, GIF or HEIC, or keep the original retro file
+- Upscale 2x, 4x or 8x with crisp pixels
+- Batch export many pictures at once, without overwriting files
+- Rotate, flip, crop, invert and adjust brightness and contrast
+- Create a macOS screensaver or a video slideshow from your collection
+
+FAST TO USE
+- Drag and drop pictures, folders or disk images
+- Thumbnail browser with a filter for each platform
+- Zoom, histogram and picture details
+- Keyboard shortcuts for import, export, selection, zoom and browsing
+
+PERFECT FOR
+- Retro computing and gaming fans exploring classic art
+- Archivists preserving vintage computer graphics
+- Collectors managing disk image libraries
+- Artists and educators studying pixel art history
+
+Built by a vintage computing enthusiast for the retro community.
+
+SYSTEM REQUIREMENTS
+macOS 15.6 or later, Apple Silicon or Intel Mac.
+
+Apple II, Apple IIgs and Macintosh are trademarks of Apple Inc. Amiga, Commodore 64, Atari ST, ZX Spectrum, Amstrad CPC, MSX, BBC Micro, TRS-80 and other names are trademarks of their respective owners. Retro Graphics Converter is an independent app and is not affiliated with or endorsed by any of them.

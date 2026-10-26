@@ -114,7 +114,10 @@ struct DiskCatalogBrowserView: View {
         
         let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
         let dateFormatter = DateFormatter(); dateFormatter.dateFormat = "yyyy-MM-dd_HHmmss"
-        let safeDiskName = catalog.diskName.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+        // Disk names are often padded with spaces (C64 names are 16 characters)
+        var safeDiskName = catalog.diskName.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if safeDiskName.isEmpty { safeDiskName = "Disk" }
         let exportFolder = downloadsURL.appendingPathComponent("\(safeDiskName)_export_\(dateFormatter.string(from: Date()))")
         
         var failures: [String] = []
@@ -135,8 +138,15 @@ struct DiskCatalogBrowserView: View {
                 return (cleaned.isEmpty || cleaned == "." || cleaned == "..") ? "_" : cleaned
             }
             var filename = components.last ?? "_"
-            if !filename.contains(".") {
-                filename += "." + entry.defaultExportExtension
+            let typeExtension = entry.defaultExportExtension
+            // Commodore names have no extensions; a dot in "PIC A.C.S." is part of the name,
+            // so their type is always added
+            let isCommodoreFile = ["prg", "seq", "usr", "rel"].contains(typeExtension)
+            if isCommodoreFile {
+                while filename.count > 1 && filename.hasSuffix(".") { filename.removeLast() }
+            }
+            if !filename.contains(".") || (isCommodoreFile && !filename.lowercased().hasSuffix("." + typeExtension)) {
+                filename += "." + typeExtension
             }
 
             var folder = exportFolder
