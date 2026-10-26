@@ -8,7 +8,7 @@ Was bored and added then more graphic formats...
 
 Just drag and drop your disk images in the app and extract your pics from there. You also can export any file from within the app to your Mac.
 
-<img width="1608" height="1004" alt="Screenshot 2026-01-23 at 21 27 44" src="https://github.com/user-attachments/assets/f9526914-2f72-41f8-bd90-cebcfd1576f4" />
+<img width="1000" alt="Disk catalog browser showing the pictures on a C64 Koala Painter disk" src="screenshots/disk-browser.png" />
 
 📂 Supported Formats (16 Platforms)
 Retro Platforms
@@ -156,29 +156,31 @@ Technical Highlights
 🎬 Video Slideshows: Create movies from your graphics with transitions for sharing or presentations<br>
 
 
-<img width="1492" height="831" alt="Bildschirmfoto 2025-12-10 um 14 49 07" src="https://github.com/user-attachments/assets/db620b3a-73e4-4c0c-988c-9c659bcfb75a" />
+<img width="1000" alt="Main window with pictures from many platforms" src="screenshots/main-window.png" />
 
+Palette editor (here on an Atari ST NEOchrome picture)
+<img width="1000" alt="Palette editor" src="screenshots/palette-editor.png" />
 
-Amiga images
-<img width="1149" height="746" alt="Bildschirmfoto 2025-12-09 um 14 45 48" src="https://github.com/user-attachments/assets/74ba32a7-689f-4859-be10-9a6abfdd7b81" />
+Amiga IFF: 32 and 256 colors, Extra-Half-Brite and HAM
+<img width="1000" alt="Amiga IFF pictures" src="screenshots/amiga.png" />
 
-Atari ST images, PI1,PI2,PI3
-<img width="1064" height="771" alt="Bildschirmfoto 2025-12-09 um 15 31 55" src="https://github.com/user-attachments/assets/eeea4e1a-efdc-47ea-ab3a-7233741aecf8" />
+Atari ST: Degas PI1, PI2, PI3 and NEOchrome
+<img width="1000" alt="Atari ST pictures" src="screenshots/atari-st.png" />
 
-C64 Koala and Art Studio
-<img width="1074" height="755" alt="Bildschirmfoto 2025-12-09 um 17 38 31" src="https://github.com/user-attachments/assets/4a3591b1-aff6-4f2a-932d-1850b9062f5e" />
+C64: Koala Painter and Advanced Art Studio, imported from a D64 disk
+<img width="1000" alt="C64 pictures" src="screenshots/c64.png" />
 
 ZX Spectrum SCR
-<img width="1074" height="755" alt="Bildschirmfoto 2025-12-09 um 19 11 49" src="https://github.com/user-attachments/assets/36dd5c9c-d223-43d6-a9e7-51ef7b4bd926" />
+<img width="1000" alt="ZX Spectrum screens" src="screenshots/zx-spectrum.png" />
 
 PCX
-<img width="1074" height="755" alt="Bildschirmfoto 2025-12-09 um 21 17 13" src="https://github.com/user-attachments/assets/35aa1129-a246-45bf-badd-381230f928cb" />
+<img width="1000" alt="PCX pictures" src="screenshots/pcx.png" />
 
-Macpaint
-<img width="1127" height="740" alt="Bildschirmfoto 2025-12-09 um 22 25 20" src="https://github.com/user-attachments/assets/69af6b59-32d2-4724-bc26-ccdb18519062" />
+MacPaint
+<img width="1000" alt="MacPaint pictures" src="screenshots/macpaint.png" />
 
 BMP
-<img width="1127" height="740" alt="Bildschirmfoto 2025-12-09 um 22 31 06" src="https://github.com/user-attachments/assets/9a3c7574-deb0-4614-91da-09f402d2824c" />
+<img width="1000" alt="BMP pictures" src="screenshots/bmp.png" />
 
 
 IMPORTANT INSTALLATION NOTE (Apple Gatekeeper)

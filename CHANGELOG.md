@@ -23,6 +23,7 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 - **BBC Micro DFS**: .ssd/.dsd images shorter than a full disk are now accepted (most are); double-sided .dsd images show the files of both sides; files in other DFS directories keep their directory letter; start sector and file length are read from the correct catalog bits; I/O processor load addresses are shown as $FFxxxx, as BBC tools show them
 - **Other Platforms' Disks**: On Atari, MSX, CPC, BBC, CoCo and Spectrum disks, files are no longer listed as Apple II or other foreign picture formats just because of their size
 - **Commodore D71 and D81**: 1571 and 1581 disk images are now read, as are 40-track D64 images (previously only standard D64 worked)
+- **Commodore Directories**: The last file of every directory sector (files 8, 16, 24 ...) was missing from D64, D71 and D81 catalogs; file and disk names are now read as PETSCII, so hidden control codes (Koala Painter names start with one) no longer show up as odd characters
 - **ProDOS Subdirectories on DOS-Ordered Disks**: Folders on ProDOS volumes stored in DOS sector order (.dsk, .do) are now listed; they were skipped before
 - **DOS 3.3 Filenames**: Names containing spaces are no longer cut off at the first space ("GRID SCRUNCH" was shown as "GRID")
 - **DOS 3.3 Catalog**: The catalog is validated and read from the sector the disk's VTOC points to
