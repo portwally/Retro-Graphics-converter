@@ -20,7 +20,7 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 - **Apple II Disks Misdetected as CoCo**: About one in nine Apple II disks (.dsk, .do, .po) opened as a "CoCo RS-DOS" disk full of garbage files. Apple II volumes are now checked before the formats that can only be recognized by heuristics
 - **DiskCopy 4.2**: Apple DiskCopy 4.2 images are now supported
 - **ZX Spectrum TR-DOS**: Files were read from the wrong place on standard .trd images (the reader assumed 32 sectors per track instead of 16). The track layout is now detected per disk; images cut off after the last used track are accepted
-- **BBC Micro DFS**: .ssd/.dsd images shorter than a full disk are now accepted (most are); double-sided .dsd images show the files of both sides; files in other DFS directories keep their directory letter; start sector and file length are read from the correct catalog bits
+- **BBC Micro DFS**: .ssd/.dsd images shorter than a full disk are now accepted (most are); double-sided .dsd images show the files of both sides; files in other DFS directories keep their directory letter; start sector and file length are read from the correct catalog bits; I/O processor load addresses are shown as $FFxxxx, as BBC tools show them
 - **Other Platforms' Disks**: On Atari, MSX, CPC, BBC, CoCo and Spectrum disks, files are no longer listed as Apple II or other foreign picture formats just because of their size
 - **Commodore D71 and D81**: 1571 and 1581 disk images are now read, as are 40-track D64 images (previously only standard D64 worked)
 - **ProDOS Subdirectories on DOS-Ordered Disks**: Folders on ProDOS volumes stored in DOS sector order (.dsk, .do) are now listed; they were skipped before
@@ -60,15 +60,16 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 - **More Platforms**: Palette edits now take effect for Amstrad CPC, Atari 8-bit, BBC Micro, Plus/4, VIC-20, TRS-80/CoCo, C64 hi-res, NEOchrome and MSX Screen 1/7. If a color is not used in the picture, the status bar says so
 - **Accurate Palettes**: ZX Spectrum colors no longer shift after an edit; Amstrad CPC shows the inks actually used by the file; MSX Screen 5/7 show the palette found in the file
 - **Scanline Tracking**: The palette shown while moving the mouse over a multi-palette SHR picture now follows all 200 lines (it only tracked the top 16)
-- **Palette Editor**: Reset and Paste are applied in one step (Reset on a 3200-color picture used to re-render the image 3,200 times); the editor opens on the palette of the line under the mouse
+- **Palette Editor**: Reset and Paste are applied in one step (Reset on a 3200-color picture used to re-render the image 3,200 times); the editor opens on the palette of the line under the mouse; the color panel follows Reset and Paste instead of keeping the last picked color
 
 ### Keyboard Shortcuts
 
 - **File**: Cmd+O Import, Cmd+E Export
-- **Selection**: Cmd+A Select All Images, Delete (or Cmd+Delete) removes the selected images
+- **Selection**: Cmd+A Select All Images, Delete (or Cmd+Delete) removes the selected images; the next image then becomes the current one
 - **View**: Cmd +, Cmd -, Cmd 0 for Zoom In, Zoom Out and Fit to Window
 - **Navigation**: Arrow keys for previous/next image, Home and End for first/last
 - The same commands are available in the File, Image and View menus
+- In text fields, Cmd+A and Cmd+Delete edit the text as usual instead of selecting or removing images
 
 ### User Interface
 
