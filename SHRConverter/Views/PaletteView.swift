@@ -489,6 +489,7 @@ struct AllPalettesView: View {
                 onColorEdit?(selectedPaletteIndex, colorIndex, color.nsColor)
             }
         }
+        syncColorPanel(to: palettes)
     }
 
     // MARK: - Reset
@@ -505,6 +506,22 @@ struct AllPalettesView: View {
                 }
             }
         }
+        syncColorPanel(to: originalPalettes)
+    }
+
+    /// Shows the new value of the color being edited in the open color panel, so the panel
+    /// does not keep showing a color the palette no longer has
+    private func syncColorPanel(to palettes: [[PaletteColor]]) {
+        let colorPanel = NSColorPanel.shared
+        guard colorPanel.isVisible,
+              let handler = objc_getAssociatedObject(colorPanel, &AllPalettesColorHandler.associationKey) as? AllPalettesColorHandler,
+              let color = palettes[safe: handler.lineIndex]?[safe: handler.colorIndex] else { return }
+        // Detach first so setting the color is not reported back as an edit
+        colorPanel.setTarget(nil)
+        colorPanel.setAction(nil)
+        colorPanel.color = color.nsColor
+        colorPanel.setTarget(handler)
+        colorPanel.setAction(#selector(AllPalettesColorHandler.colorChanged(_:)))
     }
 
     // MARK: - Color Picker

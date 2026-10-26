@@ -1263,11 +1263,13 @@ struct ContentView: View {
     }
 
     func deleteSelectedImages() {
+        // Where the current image sits in the browser, so the selection can stay in that spot
+        let visibleBefore = filteredImages
+        let currentIndex = selectedImage.flatMap { current in visibleBefore.firstIndex { $0.id == current.id } }
+
         if selectedImages.isEmpty {
             if let current = selectedImage {
                 imageItems.removeAll { $0.id == current.id }
-                selectedImage = imageItems.first
-                if imageItems.isEmpty { showBrowser = false }
                 removedCount += 1
                 statusMessage = "Image deleted."
             }
@@ -1275,10 +1277,20 @@ struct ContentView: View {
             let count = selectedImages.count
             imageItems.removeAll { selectedImages.contains($0.id) }
             selectedImages.removeAll()
-            if let current = selectedImage, !imageItems.contains(where: { $0.id == current.id }) { selectedImage = imageItems.first }
-            if imageItems.isEmpty { selectedImage = nil; showBrowser = false }
             removedCount += count
             statusMessage = "Deleted \(count) image(s)."
+        }
+
+        if imageItems.isEmpty {
+            selectedImage = nil
+            showBrowser = false
+        } else if let current = selectedImage, !imageItems.contains(where: { $0.id == current.id }) {
+            // Take the next image that is still there, else the nearest one before it
+            let remaining = Set(imageItems.map { $0.id })
+            let start = currentIndex ?? 0
+            let next = visibleBefore[start...].first { remaining.contains($0.id) }
+                ?? visibleBefore[..<start].last { remaining.contains($0.id) }
+            selectedImage = next.flatMap { item in imageItems.first { $0.id == item.id } } ?? imageItems.first
         }
     }
     

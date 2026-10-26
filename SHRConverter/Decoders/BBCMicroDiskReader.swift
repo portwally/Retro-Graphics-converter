@@ -107,6 +107,13 @@ class BBCMicroDiskReader {
         return true
     }
 
+    /// DFS keeps only bits 16-17 of an address; both set means the I/O processor (&FFxxxx),
+    /// which is how BBC tools show it
+    static func displayAddress(_ address: UInt32) -> Int {
+        let address = Int(address)
+        return address & 0x30000 == 0x30000 ? 0xFF0000 | (address & 0xFFFF) : address
+    }
+
     /// Splits an image into its sides. A double-sided image stores track 0 of side 0, then
     /// track 0 of side 1, then track 1 of side 0 and so on; each side is its own DFS disk with
     /// its own catalog. An image is treated as double-sided when the place where side 1 would
@@ -160,7 +167,7 @@ class BBCMicroDiskReader {
                         fileTypeString: fileTypeStr,
                         size: Int(entry.length),
                         blocks: nil,
-                        loadAddress: Int(entry.loadAddress),
+                        loadAddress: Self.displayAddress(entry.loadAddress),
                         length: Int(entry.length),
                         data: fileData,
                         isImage: isImage,
