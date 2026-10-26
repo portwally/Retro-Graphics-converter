@@ -1,5 +1,6 @@
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
-![Language](https://img.shields.io/badge/language-Swift%20%7C%20C-orange)
+![Language](https://img.shields.io/badge/language-Swift-orange)
+![Version](https://img.shields.io/badge/version-4.5-blue)
 
 I was in search of a tool for MacOS that could batch convert Apple IIgs SHR graphics into png format but could not find anything.
 In the end I decided to code one myself in Swift. It started with SHR uncompressed graphic files to png format.
@@ -7,6 +8,10 @@ Then i added HGR and DHGR conversion and output formats like png, jpg, tiff, gif
 Was bored and added then more graphic formats...
 
 Just drag and drop your disk images in the app and extract your pics from there. You also can export any file from within the app to your Mac.
+
+**Get it:** [Mac App Store](https://apps.apple.com/us/app/retro-graphics-converter/id6756440759?mt=12) (ready to run) or free from the [GitHub releases](https://github.com/portwally/Retro-Graphics-converter/releases). Requires macOS 15.6 or later, Apple Silicon or Intel.
+
+**New in 4.5:** a full quality pass - every decoder and disk reader was checked against thousands of real disk images and sample pictures. Keyboard shortcuts, new Atari ST formats (Art Director, GFA Artist, Palette Master, Doodle), D71/D81 and DiskCopy 4.2 disks, palette editing for many more formats, and many fixes. See the [CHANGELOG](CHANGELOG.md) for everything.
 
 <img width="1000" alt="Disk catalog browser showing the pictures on a C64 Koala Painter disk" src="screenshots/disk-browser.png" />
 
@@ -17,13 +22,13 @@ Retro Platforms
 🖥️ Amiga: IFF/ILBM (8-bit indexed, Extra-Half-Brite, 24-bit RGB, HAM6 4096 colors, HAM8 262144 colors), ADF disk images<br>
 🕹️ Atari ST: Degas (PI1/PI2/PI3), NEOchrome (.NEO), Art Director, GFA Artist, Palette Master (.ART), Doodle (.DOO), ST disk images (.st)<br>
 🎰 Atari 8-bit (400/800/XL/XE): GR.8, GR.9, GR.10, GR.11, GR.15/GR.7, MicroIllustrator (.MIC), ATR disk images<br>
-💾 Commodore 64: Koala Painter, HIRES, Art Studio, D64/D71/D81 disk images<br>
+💾 Commodore 64: Koala Painter, HIRES, Art Studio, Advanced Art Studio, D64/D71/D81 disk images<br>
 🎹 Commodore Plus/4: HiRes (320×200), Multicolor (160×200), 128-color TED palette<br>
 📺 Commodore VIC-20: HiRes (176×184), Multicolor (88×184), 16-color VIC palette<br>
 🎮 ZX Spectrum: SCR (6912 bytes), TRD disk images (TR-DOS Beta Disk Interface)<br>
 💻 Amstrad CPC: Mode 0 (16 colors), Mode 1 (4 colors), DSK disk images<br>
 📺 MSX/MSX2: Screen 1, 2, 5, 7, 8 (SC2/SC5/SC7/SC8/GRP files, BSAVE format), DSK disk images<br>
-📻 BBC Micro: MODE 0-5 (2/4/16 colors, .bbc/.bbm0-5 files, BitPast palette support), SSD/DSD disk images<br>
+📻 BBC Micro: MODE 0, 1, 2, 4, 5 (2/4/16 colors, .bbc/.bbm files, BitPast palette support), SSD/DSD disk images<br>
 🖳 TRS-80/CoCo: Model I/III block graphics, CoCo PMODE 1/3/4, CoCo 3 (320×200 16 colors, 640×200 4 colors), DSK disk images<br>
 🖨️ PC/DOS: PCX (CGA 4-color, EGA 16-color, EGA 64-color, VGA 256-color, 24-bit RGB with RLE compression)<br>
 🪟 Windows: BMP (1/4/8/24/32-bit)<br>
@@ -44,11 +49,11 @@ Modern Formats
 | **.2mg** | Apple II | 2IMG container format (ProDOS or DOS 3.3 volumes) |
 | **.po** | Apple II | ProDOS-order disk image (140KB-32MB) |
 | **.do** | Apple II | DOS 3.3-order disk image (140KB) |
-| **.dsk** | Apple II / Amstrad CPC / MSX / CoCo | Universal disk format (auto-detected, including DiskCopy 4.2 images) |
+| **.dsk** | Apple II / Amstrad CPC / MSX / CoCo | Universal disk format (auto-detected, including DiskCopy 4.2 and double-sided CoCo RS-DOS images) |
 | **.hdv** | Apple II | ProDOS hard disk volume (up to 32MB) |
 | **.img** | Various | Generic disk image format |
 | **.d64** | Commodore 64 | 1541 disk image (170KB, 35 or 40 tracks) |
-| **.d71** | Commodore 128 | 1571 disk image (340KB, 70 tracks, double-sided) |
+| **.d71** | Commodore 128 | 1571 disk image (340KB, 70 tracks, double-sided; 80-track images too) |
 | **.d81** | Commodore 128 | 1581 disk image (800KB, 80 tracks, 3.5" floppy) |
 | **.adf** | Amiga | Amiga Disk File (880KB OFS/FFS) |
 | **.st** | Atari ST | Atari ST disk image (360KB-720KB) |
@@ -77,12 +82,15 @@ Image Tools
 👁️ Before/After: Toggle between original and modified view<br>
 ↩️ Undo: Revert up to 10 actions (Cmd+Z); a batch transform counts as one<br>
 📊 Batch Transform: Apply rotate/flip/invert to all selected images at once<br>
+☀️ Adjustments: Brightness and contrast with live preview<br>
+📈 Histogram: RGB, single channel and luminance histograms with color count<br>
 
 Palette Editing
 
 🎨 Live Color Editing: Click any palette color to modify it in real-time<br>
 🖼️ Supported Formats: SHR (including Apple Preferred Format), 3200-color, C64, Plus/4, VIC-20, Amiga IFF, Atari ST, Atari 8-bit, ZX Spectrum, Amstrad CPC, MSX, BBC Micro, TRS-80/CoCo, MacPaint, and more<br>
 📍 Scanline Palettes: Move the mouse over the picture to see the palette of each line (SHR and 3200-color images)<br>
+📋 Copy & Paste: Copy a palette and paste it onto another line or picture<br>
 🔄 Reset: One-click reset to restore original palette<br>
 
 Export & Conversion
@@ -113,7 +121,7 @@ User Interface
 
 🔍 Adjustable Thumbnails: Slider to resize preview thumbnails (50-150px)<br>
 ℹ️ Image Info: Click info button to see dimensions, file size, color count, format details<br>
-📊 Status Bar: Track imported, selected, removed, and exported file counts<br>
+📊 Status Bar: Track imported, selected, removed, and exported file counts, plus the latest result or error message<br>
 🎛️ Modern Toolbar: Hero-style buttons with icons and labels<br>
 
 Keyboard Shortcuts
@@ -123,11 +131,13 @@ Keyboard Shortcuts
 | **Cmd+O** | Import files or folders |
 | **Cmd+E** | Export |
 | **Cmd+A** | Select all images shown in the browser |
-| **Delete** | Remove the selected images |
+| **Delete** / **Cmd+Delete** | Remove the selected images |
 | **Cmd+Z** | Undo |
 | **Cmd +** / **Cmd -** / **Cmd 0** | Zoom in / zoom out / fit to window |
 | **Arrow keys** | Previous / next image |
 | **Home** / **End** | First / last image |
+
+In text fields, Cmd+A and Cmd+Delete edit the text as usual.
 
 Smart Detection
 
@@ -184,9 +194,9 @@ BMP
 <img width="1000" alt="BMP pictures" src="screenshots/bmp.png" />
 
 
-IMPORTANT INSTALLATION NOTE (Apple Gatekeeper)
+IMPORTANT INSTALLATION NOTE (Apple Gatekeeper) - GitHub download only
 
-Since this app is not distributed through the official Apple App Store and may not have been Notarized by a paid Apple Developer Account, macOS might display a security warning upon the first launch.
+The App Store version installs and opens normally. The builds on GitHub are not notarized, so macOS might display a security warning upon the first launch.
 
 You may see a message stating: "The app cannot be opened because it is from an unverified developer."
 
@@ -210,3 +220,6 @@ Applications → Utilities → Terminal
 [![Stars](https://img.shields.io/github/stars/portwally/Retro-Graphics-converter?style=flat&color=f1c40f)](https://github.com/portwally/Retro-Graphics-converter/stargazers)
 [![Forks](https://img.shields.io/github/forks/portwally/Retro-Graphics-converter?style=flat&color=2ecc71)](https://github.com/portwally/Retro-Graphics-converter/network/members)
 
+---
+
+Apple II, Apple IIgs and Macintosh are trademarks of Apple Inc. Amiga, Commodore 64, Atari ST, ZX Spectrum, Amstrad CPC, MSX, BBC Micro, TRS-80 and other names are trademarks of their respective owners. Retro Graphics Converter is an independent app and is not affiliated with or endorsed by any of them.
