@@ -235,6 +235,7 @@ struct ImageItem: Identifiable {
         case .IFF(_, _, _): return "iff"
         case .DEGAS(_, _): return "pi1"
         case .NEOchrome(_): return "neo"
+        case .ArtDirector: return "art"
         case .C64(_): return "c64"
         case .Plus4(let mode, _): return mode == "Multicolor" ? "ocp" : "art"
         case .VIC20(_, _): return "prg"

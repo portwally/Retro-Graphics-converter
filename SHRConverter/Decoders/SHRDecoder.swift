@@ -55,6 +55,12 @@ class SHRDecoder {
             if result.image != nil { return result }
         }
 
+        // Atari ST Art Director: identified by its exact layout, whatever the extension
+        // (otherwise the CoCo 3 size range would take it)
+        if AtariSTDecoder.isArtDirector(data) {
+            return AtariSTDecoder.decodeArtDirector(data: data)
+        }
+
         // TRS-80/CoCo formats by extension
         let trs80Extensions = ["max", "cm3", "pi3", "mg3", "pic", "pix", "bin"]
         if trs80Extensions.contains(fileExtension) {

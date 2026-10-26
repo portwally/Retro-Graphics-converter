@@ -266,4 +266,59 @@ class AtariSTDecoder {
 
         return (cgImage, .NEOchrome(colors: numColors))
     }
+
+    // MARK: - Art Director Format
+
+    /// Art Director: a 32000-byte low resolution screen followed by 16 palettes of 16 colors
+    /// (512 bytes); the picture uses the first palette.
+    static let artDirectorSize = 32512
+
+    /// True when the data has the Art Director layout: the exact size, and 256 palette words
+    /// that are all valid ST colors (only the low 12 bits used)
+    static func isArtDirector(_ data: Data) -> Bool {
+        guard data.count == artDirectorSize else { return false }
+        for i in 0..<256 where ImageHelpers.readBigEndianUInt16(data: data, offset: 32000 + i * 2) > 0x0FFF {
+            return false
+        }
+        return true
+    }
+
+    /// Converts an ST palette word (0x0RGB, 3 bits per channel) to 8-bit RGB
+    static func stColor(_ word: UInt16) -> (r: UInt8, g: UInt8, b: UInt8) {
+        let scale = { (v: UInt16) in UInt8(Int(v & 0x07) * 255 / 7) }
+        return (scale(word >> 8), scale(word >> 4), scale(word))
+    }
+
+    static func decodeArtDirector(data: Data) -> (image: CGImage?, type: AppleIIImageType) {
+        guard isArtDirector(data) else { return (nil, .Unknown) }
+
+        let width = 320, height = 200
+        let palette = (0..<16).map { stColor(ImageHelpers.readBigEndianUInt16(data: data, offset: 32000 + $0 * 2)) }
+        var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
+
+        // Low resolution: groups of four interleaved bitplane words, 16 pixels per group
+        for y in 0..<height {
+            for group in 0..<(width / 16) {
+                let offset = y * 160 + group * 8
+                let planes = (0..<4).map { ImageHelpers.readBigEndianUInt16(data: data, offset: offset + $0 * 2) }
+                for bit in 0..<16 {
+                    var colorIndex = 0
+                    for plane in 0..<4 {
+                        colorIndex |= Int((planes[plane] >> (15 - bit)) & 1) << plane
+                    }
+                    let color = palette[colorIndex]
+                    let index = (y * width + group * 16 + bit) * 4
+                    rgbaBuffer[index] = color.r
+                    rgbaBuffer[index + 1] = color.g
+                    rgbaBuffer[index + 2] = color.b
+                    rgbaBuffer[index + 3] = 255
+                }
+            }
+        }
+
+        guard let cgImage = ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height) else {
+            return (nil, .Unknown)
+        }
+        return (cgImage, .ArtDirector)
+    }
 }

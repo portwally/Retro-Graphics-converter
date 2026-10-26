@@ -75,6 +75,15 @@ struct PaletteExtractor {
         case .NEOchrome:
             return extractNEOchromePalette(from: data)
 
+        case .ArtDirector:
+            // The picture uses the first of the 16 palettes stored after the screen
+            guard data.count >= 32032 else { return nil }
+            let colors = (0..<16).map { i -> PaletteColor in
+                let c = AtariSTDecoder.stColor(ImageHelpers.readBigEndianUInt16(data: data, offset: 32000 + i * 2))
+                return PaletteColor(r: c.r, g: c.g, b: c.b)
+            }
+            return PaletteInfo(singlePalette: colors, platformName: "Atari ST")
+
         case .ZXSpectrum:
             return createZXSpectrumPalette()
 

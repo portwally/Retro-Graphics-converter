@@ -31,6 +31,7 @@ enum AppleIIImageType: Equatable, Sendable {
     case IFF(width: Int, height: Int, colors: String)
     case DEGAS(resolution: String, colors: Int)
     case NEOchrome(colors: Int)
+    case ArtDirector
     case C64(format: String)
     case Plus4(mode: String, colors: Int)
     case VIC20(mode: String, colors: Int)
@@ -56,7 +57,7 @@ enum AppleIIImageType: Equatable, Sendable {
         switch self {
         case .SHR, .DHGR, .HGR: return "Apple II"
         case .IFF: return "Amiga"
-        case .DEGAS, .NEOchrome: return "Atari ST"
+        case .DEGAS, .NEOchrome, .ArtDirector: return "Atari ST"
         case .C64: return "C64"
         case .Plus4: return "Plus/4"
         case .VIC20: return "VIC-20"
@@ -94,6 +95,7 @@ enum AppleIIImageType: Equatable, Sendable {
             case 2: return (640, 400)
             default: return (320, 200)
             }
+        case .ArtDirector: return (320, 200)
         case .C64: return (320, 200)
         case .Plus4(let mode, _):
             return mode == "Multicolor" ? (160, 200) : (320, 200)
@@ -170,6 +172,7 @@ enum AppleIIImageType: Equatable, Sendable {
         case .IFF(_, _, let colors): return "IFF (\(colors))"
         case .DEGAS(let res, let colors): return "Degas (\(res), \(colors) colors)"
         case .NEOchrome(let colors): return "NEOchrome (\(colors) colors)"
+        case .ArtDirector: return "Art Director (16 colors)"
         case .C64(let format): return "C64 (\(format))"
         case .Plus4(let mode, _): return "Plus/4 (\(mode))"
         case .VIC20(let mode, _): return "VIC-20 (\(mode))"
@@ -204,6 +207,7 @@ enum AppleIIImageType: Equatable, Sendable {
         case .IFF(_, _, let colors): return colors
         case .DEGAS(_, let colors): return "\(colors) colors"
         case .NEOchrome(let colors): return "\(colors) colors"
+        case .ArtDirector: return "16 colors"
         case .C64(let format):
             if format.contains("FLI") || format.contains("Multicolor") || format.contains("Koala") {
                 return "4-bit (16 colors)"

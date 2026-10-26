@@ -455,6 +455,10 @@ class AtariSTDiskReader {
                 return "NEOchrome"
             }
 
+            if AtariSTDecoder.isArtDirector(data) {
+                return "Art Director"
+            }
+
             // IFF/ILBM check
             if data[0] == 0x46 && data[1] == 0x4F && data[2] == 0x52 && data[3] == 0x4D {
                 return "IFF"
@@ -513,6 +517,10 @@ class AtariSTDiskReader {
                 if result.image != nil {
                     return (true, result.type)
                 }
+            }
+
+            if AtariSTDecoder.isArtDirector(data) {
+                return (true, .ArtDirector)
             }
 
             // IFF/ILBM check

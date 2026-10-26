@@ -34,6 +34,7 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 ### Format Detection
 
 - **Atari ST .PI3**: Degas high-resolution files were decoded as CoCo 3 pictures; now recognized correctly
+- **Atari ST Art Director**: .ART pictures (320x200, 16 colors) are now supported; they were decoded as garbled CoCo 3 pictures
 - **NEOchrome**: .NEO files were decoded as CoCo 3 pictures; now recognized by extension and by size
 - **.BIN and .PIC Files**: A file with one of these extensions that is not a TRS-80/CoCo picture is now passed on to the other decoders (an HGR picture named PIC.BIN used to be rejected)
 - **Files Without Extension**: A name without a dot is no longer treated as its own extension

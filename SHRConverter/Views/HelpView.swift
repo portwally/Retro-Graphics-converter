@@ -479,6 +479,7 @@ struct HelpView: View {
 
             FormatRow(format: "Degas", description: "PI1/PI2/PI3 (16/4/2 colors)")
             FormatRow(format: "NEOchrome", description: "NEO files (16/4/2 colors)")
+            FormatRow(format: "Art Director", description: "ART files (320x200, 16 colors)")
             FormatRow(format: "ST Disks", description: "Raw sector disk images (360KB/720KB/1.44MB)")
 
             Divider()
