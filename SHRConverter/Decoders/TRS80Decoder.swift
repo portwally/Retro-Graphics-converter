@@ -300,6 +300,14 @@ class TRS80Decoder {
 
     // Simulates the NTSC artifact coloring
 
+    /// Size of a raw CoCo 3 320-wide picture: whole 160-byte rows (150 to 200 of them), with or
+    /// without a 16-byte palette. Other files in the 24000-33000 byte range (a 32768-byte Apple IIgs
+    /// .PIC, for one) are not CoCo 3 pictures.
+    static func isCoCo3Size(_ size: Int) -> Bool {
+        let pixelBytes = size % 160 == 16 ? size - 16 : size
+        return pixelBytes % 160 == 0 && (150...200).contains(pixelBytes / 160)
+    }
+
     // MARK: - CoCo 3 320x200 16-color mode
     // Screen memory: 32000 bytes (4 bits per pixel)
     // Some formats include a 16-byte palette header with GIME register values
@@ -763,7 +771,7 @@ class TRS80Decoder {
             // CoCo PMODE 1 (128x96, 4 colors). PMODE 2 (128x192, 2 colors) has the same
             // size and cannot be told apart; PMODE 1 is assumed, as PMODE 3 is for 6144 bytes.
             return decodePMode1(data: data)
-        } else if dataSize >= 24000 && dataSize <= 33000 {
+        } else if isCoCo3Size(dataSize) {
             // CoCo 3 modes - check for 640x200 vs 320x200
             if dataSize == 32000 && detectCoCo3Mode(data: data) {
                 return decodeCoCo3_640(data: data)

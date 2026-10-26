@@ -1,7 +1,11 @@
 # Audit TODO — Retro Graphics Converter
 
-Audit sessions of 2026-10-10/11 (two passes). Build is clean (Debug, zero warnings). Nothing in
-the project was changed; this file is the only output.
+Audit sessions of 2026-10-10/11 (two passes), follow-up sessions 2026-10-12 and 2026-10-26.
+Build is clean (Debug, zero warnings).
+
+**Status 2026-10-26:** every fix in this file is committed and merged into `main` (version 4.5,
+not yet released). Notes below that say "uncommitted" or "branch `audit-fixes`" describe the state
+at the time they were written. Section 6f lists what the click-through test of 2026-10-26 found.
 
 Status legend: **[confirmed]** = reproduced with a test harness built from the project's
 decoder sources · **[code]** = found by reading the code, not yet reproduced ·
@@ -65,8 +69,10 @@ Verified with crafted files for every item below, 8,000 fuzz cases, and the 3,36
   extension-less MacPaint needs a version word of 0–3; 3072-byte CoCo files are decoded as PMODE 1
   (new decoder, not checked against a real file); CoCo catalog entries are decoded by
   `TRS80Decoder` directly on import.
-- Still open: `.pic`/`.bin` files of 24000–33000 bytes are still claimed by the CoCo 3 decoder
-  first (so a IIgs `FOO.PIC` of 32768 bytes opens as CoCo 3) — unchanged from before.
+- [x] Fixed 2026-10-26: `.pic`/`.bin` files of 24000–33000 bytes were claimed by the CoCo 3
+  decoder first (a IIgs `FOO.PIC` of 32768 bytes opened as CoCo 3). CoCo 3 by size now needs whole
+  160-byte lines (150–200) plus an optional 16-byte palette; a 32,000-byte `.PIC` is a Doodle
+  picture, as in RECOIL. See 6f.
 
 - [x] **[confirmed] Atari ST `.PI3` files decode as CoCo 3 garbage.** `pi3` is in `trs80Extensions`
   (line 36), which is checked before the Degas list (line 42). A 32034-byte hi-res Degas file comes
@@ -287,8 +293,8 @@ of them. 12,000 decodes hashed before and after confirm no decoder output change
   through the decoder with a palette override.
 - [ ] **DreamGrafix re-render is always 320x200**, ignoring the footer's width/height. All 32 real
   DreamGrafix files are 320x200, so this only shows on malformed files.
-- [ ] Not exercised by hand: the palette editor UI itself (clicking a swatch, the reset button).
-  The handlers were tested through the same renderer and recolour functions they call.
+- [x] Palette editor UI exercised by hand on 2026-10-26 (swatch, colour panel, Reset): works;
+  the colour panel did not follow Reset - fixed, see 6f.
 
 ## 5c. More UI items (second pass)
 
@@ -381,7 +387,7 @@ below were clicked through.**
   Image > Remove Selected Images (Cmd+Delete), View > Zoom In / Zoom Out / Fit to Window
   (Cmd +, Cmd -, Cmd 0). Plain keys in the main window: arrow keys (previous / next image),
   Home, End, Delete. The browser scrolls to keep the current image visible. Help lists them again.
-  - [ ] **Needs a manual check** - I could not drive the app to test these. In particular:
+  - [x] **Checked by hand on 2026-10-26** (results and fixes in 6f). The original list:
     1. Cmd+A with nothing focused selects all images, and inside a text field (disk browser
        search, screensaver name) still selects the text. This relies on Edit > Select All taking
        the key only while a text field is active.
@@ -407,10 +413,8 @@ Found `~/Downloads/Testbilder` and `~/Roms` (not covered by the earlier disk sea
 - [x] Real Degas `.PI3`, `.PI1`, `.PI2`, MacPaint, ZX `.SCR`, Koala, APF, DHGR: decode as the right type.
 - [x] PCX and palettised BMP re-render: identical to the decoder on all 35 real files
   (2 + 30 PCX, 3 BMP). The mismatches seen on generated files do not show up on real ones.
-- [ ] Still no real sample anywhere on this Mac for: `.trd`, `.ssd` / `.dsd`, a genuine CoCo RS-DOS
-  `.dsk`, `.d71`, `.atr`, `.st`, `.adf`, MSX disks and `.sc2`-`.sc8`, `.neo`, `.mic` / `.gr8`,
-  `.cm3`, and a 10018-byte C64 Advanced Art Studio picture. The three **[likely]** disk items and
-  the Art Studio layout in section 3 therefore remain unconfirmed.
+- [ ] Samples for most of these were found later (6e, kept in `~/Downloads/Testbilder/samples`).
+  Still no real sample for: a genuine CoCo RS-DOS `.dsk`, `.d71`, `.st`, MSX disks and `.cm3`.
 
 ## 6e. Checks against downloaded public samples (2026-10-12)
 
@@ -458,6 +462,41 @@ Still open after this pass:
 - [ ] The RECOIL archive has ~550 formats; only the ones this app claims were looked at, and
   "looks right" was judged by eye, not against a reference decoder.
 
+## 6f. Click-through test, README screenshots and format fixes (2026-10-26)
+
+The 20-step checklist was run in the app (background control, plus full-screen control for real
+keystrokes, the filter menu and the colour panel). All steps pass after the fixes below; all are
+committed and pushed to `main`.
+
+Fixed:
+- [x] **Delete key did nothing** - the Mac's Delete key sends U+007F, `KeyEquivalent.delete` is U+0008.
+- [x] **Cmd+A was lost in the main window** - Edit > Select All owns Cmd+A in AppKit's menu and its
+  action found nothing to select; the browser now handles the key itself.
+- [x] **Cmd+A and Cmd+Delete in text fields selected / removed images** - the SwiftUI menu shortcuts
+  win over a text field; they now pass the key on to the field being edited.
+- [x] **BBC load addresses** with both high bits set now show as `$FFxxxx`.
+- [x] **Colour panel kept the last picked colour** after Reset or Paste Palette.
+- [x] **Deleting the current image jumped to the first image**; it now selects the next (or previous) one.
+- [x] **Every 8th file on Commodore disks was missing** (D64/D71/D81): the directory bounds check
+  assumed 32 bytes from each entry's start; each slot begins with the 2-byte sector link.
+- [x] **Commodore names were read as Latin-1** - now PETSCII; control codes (Koala names start
+  with $81) are dropped.
+- [x] **Atari ST `.ART` / `.DOO` formats added** - Art Director (palette chosen by byte $7E1F),
+  GFA Artist, Doodle, Palette Master (palette changes per line; palette editing off). They were
+  decoded as CoCo 3 or MacPaint garbage. Layouts taken from RECOIL.
+- [x] **CoCo 3 by size claimed unrelated files** - see section 2.
+- [x] README screenshots replaced (10 shots in `screenshots/`).
+
+Still open:
+- [ ] **DCTV pictures** (`beautyfc.iff`, `breakfst.iff` in the RECOIL samples) decode as stripes -
+  needs a DCTV decoder (new feature, not a bug).
+- [ ] **Toolbar labels are cut off** - the zoom group shows "Zo..." and a lone "-" / "+" as labels
+  (visible in every screenshot).
+- [ ] `FISH.neo` (an IFF despite the name) looks scrambled; an independent decode looks the same,
+  so the file is probably damaged - not investigated further.
+- [ ] Other `.art` variants: GFA Artist 34,360-byte files (per-line palettes) and the small Atari
+  8-bit `.ART` formats are not supported (they show as "not decoded", no false pictures).
+
 ## 7. Audit work still to do
 
 - [x] Run the disk readers over the real disk images on this Mac — 3,368 images, no crashes or
@@ -470,7 +509,8 @@ Still open after this pass:
   logic parts of ScreensaverExportSheet and MovieExportSheet.
 - [x] README/HelpView claims checked (D71/D81 finding in section 4; Degas Elite `.PC1`–`.PC3`
   are not claimed in the README, but the ST catalog flags them as images that then fail to import).
-- [ ] Find sample files to settle the four **[likely]** items (`.ocp`, `.trd`, genuine RS-DOS `.dsk`, `.dsd`).
+- [ ] Find sample files to settle the **[likely]** items: `.ocp`, `.trd` and `.dsd` are settled (6e);
+  a genuine RS-DOS `.dsk` is still missing.
 - [x] All source files have now been read (section 6c), except that `PaletteExtractor.swift` and
   `PaletteRenderer.swift` were checked by measurement (decode vs re-render on 18,000 real images)
   rather than line by line.

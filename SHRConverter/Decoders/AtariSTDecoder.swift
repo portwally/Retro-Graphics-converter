@@ -299,7 +299,7 @@ class AtariSTDecoder {
     private enum ExtraFormat {
         case artDirector(paletteOffset: Int)
         case gfaArtist      // 16-color palette, then a 32000-byte screen (32032 bytes)
-        case doodle         // 640x400 mono screen (32000 bytes), only taken by extension
+        case doodle         // 640x400 mono screen (32000 bytes), only taken by extension (.PIC as in RECOIL)
         case paletteMaster  // screen plus palette changes down the picture (36864 bytes)
     }
 
@@ -309,7 +309,7 @@ class AtariSTDecoder {
             return artDirectorPaletteOffset(data).map { .artDirector(paletteOffset: $0) }
         case 32032 where ["art", "bil"].contains(fileExtension) && isSTPalette(data, offset: 0):
             return .gfaArtist
-        case 32000 where ["art", "doo"].contains(fileExtension):
+        case 32000 where ["art", "doo", "pic"].contains(fileExtension):
             return .doodle
         case 36864 where data[0x8C80] == 0xFF && data[0x8C81] == 0xFF && isSTPalette(data, offset: 0x8000):
             return .paletteMaster

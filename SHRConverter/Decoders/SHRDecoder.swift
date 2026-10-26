@@ -380,9 +380,9 @@ class SHRDecoder {
                 return PackedSHRDecoder.decodePNT0000(data: data)
             }
 
-            // CoCo 3 graphics (320x150 to 320x200, 16 colors)
-            // Size range: 24000-33000 bytes (160 bytes/line × 150-200 lines)
-            if size >= 24000 && size <= 33000 {
+            // CoCo 3 graphics (320x150 to 320x200, 16 colors): 160 bytes per line, 150-200 lines,
+            // optionally with a 16-byte palette
+            if TRS80Decoder.isCoCo3Size(size) {
                 let result = TRS80Decoder.decodeCoCo3_320(data: data)
                 if result.image != nil {
                     return result

@@ -37,6 +37,7 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 - **Atari ST .ART and .DOO**: Art Director, GFA Artist, Palette Master and Doodle pictures are now supported; they were decoded as garbled CoCo 3 or MacPaint pictures
 - **NEOchrome**: .NEO files were decoded as CoCo 3 pictures; now recognized by extension and by size
 - **.BIN and .PIC Files**: A file with one of these extensions that is not a TRS-80/CoCo picture is now passed on to the other decoders (an HGR picture named PIC.BIN used to be rejected)
+- **CoCo 3 Detection**: Only files with the exact CoCo 3 layout (whole 160-byte lines, optionally with a palette) are taken as CoCo 3 by size; a 32,768-byte Apple IIgs picture named .PIC or .BIN now opens as SHR, and a 32,000-byte .PIC as an Atari ST Doodle picture, as in RECOIL
 - **Files Without Extension**: A name without a dot is no longer treated as its own extension
 - **Atari 8-bit**: .PIC, .GR5 and .GR10 files with embedded palettes are now recognized
 - **Fewer False Positives**: Unknown files of 38,400 bytes or more are no longer shown as SHR 3200 pictures (music and data files on real disks were listed as images); PCX, Paintworks and extension-less MacPaint detection now check the file header
