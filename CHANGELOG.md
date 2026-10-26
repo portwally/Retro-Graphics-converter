@@ -84,6 +84,7 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 - **Adjustments**: The brightness/contrast preview is cleared when the popover is closed without applying
 - **Thumbnails**: Keep the picture's aspect ratio
 - **Movie Export Sheet**: Fits on small screens
+- **Toolbar Labels**: The zoom labels are no longer cut off ("Zo...") and the Fit button shows its label; the zoom buttons are labelled Out / In with full tooltips
 - **Single Window**: The app now uses one window, so Undo and Recent Folders no longer act on several windows at once
 - **Help**: Updated to match the app
 

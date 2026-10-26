@@ -5,6 +5,8 @@ import SwiftUI
 struct LabeledToolbarButton: View {
     let icon: String
     let label: String
+    /// Tooltip; the label is used when nil
+    var help: String? = nil
     var isActive: Bool = false
     var isDisabled: Bool = false
     let action: () -> Void
@@ -23,6 +25,7 @@ struct LabeledToolbarButton: View {
 
                 Text(label)
                     .font(.system(size: 9))
+                    .fixedSize()
                     .frame(height: 12)
                     .foregroundColor(isDisabled ? Color(NSColor.tertiaryLabelColor) : (isActive ? .accentColor : Color(NSColor.secondaryLabelColor)))
             }
@@ -30,7 +33,7 @@ struct LabeledToolbarButton: View {
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
-        .help(label)
+        .help(help ?? label)
     }
 }
 
@@ -118,7 +121,8 @@ struct MainToolbarView: View {
             HStack(alignment: .top, spacing: 8) {
                 LabeledToolbarButton(
                     icon: "minus.magnifyingglass",
-                    label: "−",
+                    label: "Out",
+                    help: "Zoom Out",
                     isDisabled: isFitMode,
                     action: zoomOut
                 )
@@ -132,6 +136,7 @@ struct MainToolbarView: View {
 
                     Text("Zoom")
                         .font(.system(size: 9))
+                        .fixedSize()
                         .frame(height: 12)
                         .foregroundColor(Color(NSColor.secondaryLabelColor))
                 }
@@ -139,13 +144,15 @@ struct MainToolbarView: View {
 
                 LabeledToolbarButton(
                     icon: "plus.magnifyingglass",
-                    label: "+",
+                    label: "In",
+                    help: "Zoom In",
                     action: zoomIn
                 )
 
                 LabeledToolbarButton(
                     icon: "arrow.up.backward.and.arrow.down.forward",
                     label: "Fit",
+                    help: "Fit to Window",
                     isActive: isFitMode,
                     action: fitToWindow
                 )

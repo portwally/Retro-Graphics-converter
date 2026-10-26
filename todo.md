@@ -490,10 +490,13 @@ Fixed:
 Still open:
 - [ ] **DCTV pictures** (`beautyfc.iff`, `breakfst.iff` in the RECOIL samples) decode as stripes -
   needs a DCTV decoder (new feature, not a bug).
-- [ ] **Toolbar labels are cut off** - the zoom group shows "Zo..." and a lone "-" / "+" as labels
-  (visible in every screenshot).
+- [x] **Toolbar labels were cut off** ("Zo...", Fit without a label) - SwiftUI squeezed the short
+  labels; they now keep their natural size. Zoom buttons are labelled Out / In. The README
+  screenshots still show the old labels.
 - [ ] `FISH.neo` (an IFF despite the name) looks scrambled; an independent decode looks the same,
   so the file is probably damaged - not investigated further.
+- [ ] **Palette editor line list does not scroll to the open line** - opened on line 100 of a
+  3200-colour picture, the list on the left still shows line 0 at the top.
 - [ ] Other `.art` variants: GFA Artist 34,360-byte files (per-line palettes) and the small Atari
   8-bit `.ART` formats are not supported (they show as "not decoded", no false pictures).
 

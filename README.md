@@ -156,9 +156,10 @@ Technical Highlights
 🎬 Video Slideshows: Create movies from your graphics with transitions for sharing or presentations<br>
 
 
+Apple IIgs 3200-color pictures from a ProDOS hard disk image, together with pictures from other platforms
 <img width="1000" alt="Main window with pictures from many platforms" src="screenshots/main-window.png" />
 
-Palette editor (here on an Atari ST NEOchrome picture)
+Palette editor: a 3200-color Apple IIgs picture has its own 16-color palette on each of its 200 lines
 <img width="1000" alt="Palette editor" src="screenshots/palette-editor.png" />
 
 Amiga IFF: 32 and 256 colors, Extra-Half-Brite and HAM
