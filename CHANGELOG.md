@@ -61,6 +61,8 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 
 - **Apple Preferred Format**: Palette editing now works for APF pictures, the most common Apple IIgs format. Before, edits had no effect or drew garbage
 - **Large APF Pictures**: Apple Preferred Format pictures larger than the screen - up to 2048 lines, such as 640x480 and 800x600 3200-color pictures - now open; they were rejected above 400 lines. Palette editing works on them too
+- **Packed SHR under the PaintWorks Type**: packed Super Hi-Res screens saved with type $C0/$0000 (the PaintWorks type) but stored as plain PackBytes now open; 55 such pictures on real game disks were shown as unsupported
+- **Packed Hi-Res and Double Hi-Res (FOT $08)**: Apple's PackBytes-compressed Hi-Res and Double Hi-Res files now open
 - **816/Paint and DreamGrafix**: 256-color pictures are unpacked before re-rendering
 - **More Platforms**: Palette edits now take effect for Amstrad CPC, Atari 8-bit, BBC Micro, Plus/4, VIC-20, TRS-80/CoCo, C64 hi-res, NEOchrome and MSX Screen 1/7. If a color is not used in the picture, the status bar says so
 - **Accurate Palettes**: ZX Spectrum colors no longer shift after an edit; Amstrad CPC shows the inks actually used by the file; MSX Screen 5/7 show the palette found in the file

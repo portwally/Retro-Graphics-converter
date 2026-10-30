@@ -106,7 +106,12 @@ class SHRDecoder {
             // ProDOS type $C0 (PNT) with different auxtypes
             if filename.contains("#c00000") {
                 // Paintworks Packed Picture - uses PackBits, not PackBytes
-                return PackedSHRDecoder.decodePNT0000(data: data)
+                let paintworks = PackedSHRDecoder.decodePNT0000(data: data)
+                if paintworks.image != nil { return paintworks }
+                // Some programs save a plain packed SHR screen ($C0/$0001 layout) under aux $0000
+                let packed = PackedSHRDecoder.decodePNT0001(data: data)
+                if packed.image != nil { return packed }
+                return paintworks
             }
             if filename.contains("#c00001") {
                 // Packed Super Hi-Res - uses PackBytes
@@ -148,6 +153,20 @@ class SHRDecoder {
             // ProDOS type $C1 (PIC) auxtype $8003 - DreamGrafix unpacked
             if filename.contains("#c18003") {
                 return DreamGrafixDecoder.decodeDreamGrafixUnpacked(data: data)
+            }
+
+            // ProDOS type $08 (FOT) packed with PackBytes: Apple's packed Hi-Res ($4000) and Double
+            // Hi-Res ($4001); some files carry aux $0000 instead. Unpacked sizes tell them apart.
+            if filename.count >= 7 && filename.suffix(7).hasPrefix("#08")
+                && !(8184...8200).contains(data.count) && data.count != 16384 {
+                let unpacked = PackedSHRDecoder.unpackBytes(data: data, maxOutputSize: 16384 + 64)
+                if (8184...8200).contains(unpacked.count) {
+                    var screen = unpacked.prefix(8192)
+                    if screen.count < 8192 { screen.append(contentsOf: repeatElement(UInt8(0), count: 8192 - screen.count)) }
+                    if let image = AppleIIDecoder.decodeHGR(data: Data(screen)) { return (image, .HGR) }
+                } else if unpacked.count == 16384, let image = AppleIIDecoder.decodeDHGR(data: unpacked) {
+                    return (image, .DHGR)
+                }
             }
             
             // Fallback for .pnt extension without type info
