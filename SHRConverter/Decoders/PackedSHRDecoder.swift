@@ -86,6 +86,10 @@ class PackedSHRDecoder {
     }
     
     // MARK: - PNT/$0002 Apple Preferred Format Decoder
+
+    /// APF pictures can be larger than the 320x200 screen (real files of 640x480, 800x600 and
+    /// 320x600 exist); this bounds the height and the number of per-line palettes
+    static let maxAPFScanLines = 2048
     
     /// - Parameter paletteOverride: replaces the file's colors (used for live palette editing):
     ///   one palette per scan line for 3200-color files, otherwise the MAIN block's color tables.
@@ -203,7 +207,7 @@ class PackedSHRDecoder {
         let numScanLines = Int(data[pos]) | (Int(data[pos + 1]) << 8)
         pos += 2
         
-        guard numScanLines > 0 && numScanLines <= 400 else { return nil }
+        guard numScanLines > 0 && numScanLines <= maxAPFScanLines else { return nil }
         
         // Read scan line directory
         var scanLineDirectory: [(packedBytes: Int, mode: UInt16)] = []
@@ -217,8 +221,8 @@ class PackedSHRDecoder {
         
         guard scanLineDirectory.count == numScanLines else { return nil }
         
-        // Unpack all scan lines
-        let bytesPerLine = pixelsPerScanLine / 2
+        // Unpack all scan lines (320 mode: 2 pixels per byte, rounded up for odd widths)
+        let bytesPerLine = (pixelsPerScanLine + 1) / 2
         var allPixels = Data()
         allPixels.reserveCapacity(bytesPerLine * numScanLines)
         
@@ -259,7 +263,7 @@ class PackedSHRDecoder {
         guard data.count >= 2 else { return nil }
         
         let numColorTables = Int(data[0]) | (Int(data[1]) << 8)
-        guard numColorTables > 0 && numColorTables <= 400 else { return nil }
+        guard numColorTables > 0 && numColorTables <= maxAPFScanLines else { return nil }
         
         var palettes: [[(r: UInt8, g: UInt8, b: UInt8)]] = []
         var pos = 2
@@ -304,7 +308,7 @@ class PackedSHRDecoder {
     private static func renderSHRStandard(mainData: MAINBlockData) -> CGImage? {
         let width = mainData.pixelsPerScanLine
         let height = mainData.numScanLines
-        let bytesPerLine = width / 2
+        let bytesPerLine = (width + 1) / 2
         
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
         
@@ -393,7 +397,7 @@ class PackedSHRDecoder {
     private static func renderSHR3200(mainData: MAINBlockData, palettes: [[(r: UInt8, g: UInt8, b: UInt8)]]) -> CGImage? {
         let width = mainData.pixelsPerScanLine
         let height = mainData.numScanLines
-        let bytesPerLine = width / 2
+        let bytesPerLine = (width + 1) / 2
         
         var rgbaBuffer = [UInt8](repeating: 0, count: width * height * 4)
         
@@ -411,20 +415,25 @@ class PackedSHRDecoder {
                 let colorIndex1 = Int((byte >> 4) & 0x0F)
                 let color1 = colorIndex1 < palette.count ? palette[colorIndex1] : (0, 0, 0)
                 
-                let bufIdx1 = (y * width + x) * 4
-                rgbaBuffer[bufIdx1] = color1.0
-                rgbaBuffer[bufIdx1 + 1] = color1.1
-                rgbaBuffer[bufIdx1 + 2] = color1.2
-                rgbaBuffer[bufIdx1 + 3] = 255
+                if x < width {
+                    let bufIdx1 = (y * width + x) * 4
+                    rgbaBuffer[bufIdx1] = color1.0
+                    rgbaBuffer[bufIdx1 + 1] = color1.1
+                    rgbaBuffer[bufIdx1 + 2] = color1.2
+                    rgbaBuffer[bufIdx1 + 3] = 255
+                }
                 
                 let colorIndex2 = Int(byte & 0x0F)
                 let color2 = colorIndex2 < palette.count ? palette[colorIndex2] : (0, 0, 0)
                 
-                let bufIdx2 = (y * width + x + 1) * 4
-                rgbaBuffer[bufIdx2] = color2.0
-                rgbaBuffer[bufIdx2 + 1] = color2.1
-                rgbaBuffer[bufIdx2 + 2] = color2.2
-                rgbaBuffer[bufIdx2 + 3] = 255
+                // An odd width leaves the last byte's second pixel outside the picture
+                if x + 1 < width {
+                    let bufIdx2 = (y * width + x + 1) * 4
+                    rgbaBuffer[bufIdx2] = color2.0
+                    rgbaBuffer[bufIdx2 + 1] = color2.1
+                    rgbaBuffer[bufIdx2 + 2] = color2.2
+                    rgbaBuffer[bufIdx2 + 3] = 255
+                }
             }
         }
         

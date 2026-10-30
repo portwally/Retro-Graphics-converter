@@ -493,11 +493,11 @@ struct PaletteExtractor {
 
     /// Parse MULTIPAL block for 3200-color mode
     private static func parseMultipalBlock(from data: Data) -> PaletteInfo? {
-        // MULTIPAL contains 200 palettes (one per scanline), each with 32 bytes (16 colors x 2 bytes)
+        // MULTIPAL has one palette per scan line (200 on a standard screen, more on larger APF pictures), 32 bytes each
         // Block layout: 2-byte palette count, then 32 bytes per palette (same as PackedSHRDecoder)
         guard data.count >= 2 else { return nil }
         let numScanLines = Int(data[0]) | (Int(data[1]) << 8)
-        guard numScanLines > 0 && numScanLines <= 400 else { return nil }
+        guard numScanLines > 0 && numScanLines <= PackedSHRDecoder.maxAPFScanLines else { return nil }
         var palettes: [[PaletteColor]] = []
 
         for y in 0..<numScanLines {
