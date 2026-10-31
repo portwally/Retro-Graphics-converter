@@ -456,6 +456,8 @@ struct HelpView: View {
             FormatRow(format: "Art Studio", description: "C64 high-res art format")
             FormatRow(format: "Doodle", description: "C64 hires, also packed (JJ); Hi-Eddi, Hires-Editor, Run Paint")
             FormatRow(format: "C64 Multicolor", description: "Vidcom, Picasso 64, Dolphin Ed, Blazing Paddles, Drazpaint, Amica Paint and more")
+            FormatRow(format: "C64 FLI", description: "FLI, AFLI, Big FLI, FLI Profi, Flash FLI and more (296 pixels wide)")
+            FormatRow(format: "C64 Interlace", description: "Gunpaint, Funpaint, Pixel Perfect, Drazlace, True Paint, ECI; frames are blended")
             FormatRow(format: "Plus/4 HiRes", description: "Plus/4 320x200, 2 colors per 8x8 cell")
             FormatRow(format: "Plus/4 Multi", description: "Plus/4 160x200, 4 colors per 4x8 cell")
             FormatRow(format: "VIC-20 HiRes", description: "VIC-20 176x184, 2 colors per 8x8 cell")

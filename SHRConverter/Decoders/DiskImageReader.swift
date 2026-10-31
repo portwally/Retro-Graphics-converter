@@ -1066,15 +1066,15 @@ extension DiskImageReader {
                     }
                     
                     // Check for graphics
-                    // C64: 8002 (hires bitmap), 9000-10300 bytes (Koala, Art Studio, Doodle, Vidcom, ...),
-                    //      packed GG.../JJ... pictures of any size
+                    // C64: 9000-10020 bytes (Koala, Art Studio, etc.), plus every other C64 format
+                    //      the decoder knows by size, load address, signature or GG/JJ name
                     // Plus/4: 10002-10004 bytes (Multicolor/HiRes)
                     // VIC-20: 3060-3500 bytes (PRG with screen+color+charset)
-                    let upperName = fileName.uppercased()
                     let isGraphics = (fileData.count >= 3060 && fileData.count <= 3500) ||
-                                     fileData.count == 8002 ||
-                                     (fileData.count >= 9000 && fileData.count <= 10300) ||
-                                     ((upperName.hasPrefix("GG") || upperName.hasPrefix("JJ")) && fileData.count < 10300)
+                                     (fileData.count >= 9000 && fileData.count <= 10020) ||
+                                     C64Decoder.extraFormatName(data: fileData,
+                                                                fileExtension: ImageHelpers.fileExtension(of: fileName),
+                                                                filename: fileName) != nil
                     var result: (image: CGImage?, type: AppleIIImageType) = (nil, .Unknown)
 
                     if isGraphics {
