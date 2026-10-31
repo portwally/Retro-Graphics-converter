@@ -11,7 +11,11 @@ struct PaletteExtractor {
     static func extractPalette(from data: Data, type: AppleIIImageType, filename: String = "") -> PaletteInfo? {
         switch type {
         case .SHR(let mode, _, _):
-            if mode.contains("APF") {
+            if mode == AppleIIgsIconDecoder.modeName {
+                // Finder icons: one fixed 16-color palette (the 640-mode colors)
+                return PaletteInfo(singlePalette: AppleIIgsIconDecoder.palette.map { PaletteColor(from: $0) },
+                                   platformName: "Apple IIgs")
+            } else if mode.contains("APF") {
                 // Apple Preferred Format keeps its colors in its own blocks, whatever the file size
                 return extractAPFPalette(from: data, is3200: mode.contains("3200"))
             } else if mode.contains("DreamGrafix") {

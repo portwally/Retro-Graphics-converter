@@ -421,7 +421,7 @@ struct ProDOSFileTypeInfo {
         case 0xC9:
             return ProDOSFileTypeInfo(shortName: "FND", description: "Finder Data", category: "System", icon: "🔍", isGraphics: false)
         case 0xCA:
-            return ProDOSFileTypeInfo(shortName: "ICN", description: "Icons", category: "Graphics", icon: "🎨", isGraphics: false)
+            return ProDOSFileTypeInfo(shortName: "ICN", description: "Finder Icons", category: "Graphics", icon: "🎨", isGraphics: true)
             
         // MARK: - Sound & Music
             

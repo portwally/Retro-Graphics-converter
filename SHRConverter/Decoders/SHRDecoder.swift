@@ -155,6 +155,13 @@ class SHRDecoder {
                 return DreamGrafixDecoder.decodeDreamGrafixUnpacked(data: data)
             }
 
+            // ProDOS type $CA (ICN): Finder icon files
+            // (also as .icn files without type info, recognized by their header id $0001)
+            if (filename.count >= 7 && filename.suffix(7).hasPrefix("#ca"))
+                || (fileExtension == "icn" && size > 0x1A + 0x5E && data[4] == 0x01 && data[5] == 0x00) {
+                return AppleIIgsIconDecoder.decode(data: data)
+            }
+
             // ProDOS type $08 (FOT) packed with PackBytes: Apple's packed Hi-Res ($4000) and Double
             // Hi-Res ($4001); some files carry aux $0000 instead. Unpacked sizes tell them apart.
             if filename.count >= 7 && filename.suffix(7).hasPrefix("#08")

@@ -18,7 +18,7 @@ Just drag and drop your disk images in the app and extract your pics from there.
 📂 Supported Formats (16 Platforms)
 Retro Platforms
 
-🍎 Apple II/IIGS: SHR (Standard/3200/3200 Packed/816Paint/DreamGrafix/Paintworks/Apple Preferred Format), PaintWorks animations (first frame), HGR, DHGR, PNT, PIC<br>
+🍎 Apple II/IIGS: SHR (Standard/3200/3200 Packed/816Paint/DreamGrafix/Paintworks/Apple Preferred Format), PaintWorks animations (first frame), Finder icon files, HGR, DHGR, packed HGR/DHGR, PNT, PIC<br>
 🖥️ Amiga: IFF/ILBM (8-bit indexed, Extra-Half-Brite, 24-bit RGB, HAM6 4096 colors, HAM8 262144 colors), ADF disk images<br>
 🕹️ Atari ST: Degas (PI1/PI2/PI3), NEOchrome (.NEO), Art Director, GFA Artist, Palette Master (.ART), Doodle (.DOO), ST disk images (.st)<br>
 🎰 Atari 8-bit (400/800/XL/XE): GR.8, GR.9, GR.10, GR.11, GR.15/GR.7, MicroIllustrator (.MIC), ATR disk images<br>

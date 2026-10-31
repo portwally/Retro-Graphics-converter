@@ -54,6 +54,7 @@
 		3E75F27C2F21000000C49434 /* TRDOSDiskReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F27D2F21000000C49434 /* TRDOSDiskReader.swift */; };
 		3E75F27E2F22000000C49434 /* VIC20Decoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F27F2F22000000C49434 /* VIC20Decoder.swift */; };
 		3E75F2802F23000000C49434 /* CoCoDiskReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2812F23000000C49434 /* CoCoDiskReader.swift */; };
+		3E75F2852F24000000C49434 /* AppleIIgsIconDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E75F2862F24000000C49434 /* AppleIIgsIconDecoder.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -104,6 +105,7 @@
 		3E75F27D2F21000000C49434 /* TRDOSDiskReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TRDOSDiskReader.swift; sourceTree = "<group>"; };
 		3E75F27F2F22000000C49434 /* VIC20Decoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VIC20Decoder.swift; sourceTree = "<group>"; };
 		3E75F2812F23000000C49434 /* CoCoDiskReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoCoDiskReader.swift; sourceTree = "<group>"; };
+		3E75F2862F24000000C49434 /* AppleIIgsIconDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIIgsIconDecoder.swift; sourceTree = "<group>"; };
 		3E9C9E9A2EE37BDF00DEE453 /* Retro-Graphics-Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Retro-Graphics-Converter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -139,6 +141,7 @@
 				3E75F2792F1F000000C49434 /* BBCMicroDiskReader.swift */,
 				3E75F2202F11204400C49434 /* C64Decoder.swift */,
 				3E75F2812F23000000C49434 /* CoCoDiskReader.swift */,
+				3E75F2862F24000000C49434 /* AppleIIgsIconDecoder.swift */,
 				3E75F2212F11204400C49434 /* DiskImageReader.swift */,
 				3E75F24B2F16300000C49434 /* DreamGrafixDecoder.swift */,
 				3E75F2222F11204400C49434 /* ModernImageDecoder.swift */,
@@ -350,6 +353,7 @@
 				3E75F27C2F21000000C49434 /* TRDOSDiskReader.swift in Sources */,
 				3E75F27E2F22000000C49434 /* VIC20Decoder.swift in Sources */,
 				3E75F2802F23000000C49434 /* CoCoDiskReader.swift in Sources */,
+				3E75F2852F24000000C49434 /* AppleIIgsIconDecoder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -20,7 +20,10 @@ struct PaletteRenderer {
 
         switch type {
         case .SHR(let mode, _, _):
-            if mode.contains("DreamGrafix") {
+            if mode == AppleIIgsIconDecoder.modeName {
+                let colors = (palette.palettes.first ?? []).map { (r: $0.r, g: $0.g, b: $0.b) }
+                cgImage = AppleIIgsIconDecoder.decode(data: data, paletteOverride: colors).image
+            } else if mode.contains("DreamGrafix") {
                 // DreamGrafix (256 or 3200 colors): the real decoder draws it with the edited colors,
                 // at the size its footer gives
                 let tables = palette.palettes.map { $0.map { (r: $0.r, g: $0.g, b: $0.b) } }

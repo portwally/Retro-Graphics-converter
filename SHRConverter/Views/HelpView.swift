@@ -446,6 +446,7 @@ struct HelpView: View {
             FormatRow(format: "Paintworks", description: "Activision Paintworks format")
             FormatRow(format: "APF", description: "Apple Preferred Format")
             FormatRow(format: "DreamGrafix", description: "256 and 3200-color modes with LZW compression")
+            FormatRow(format: "Finder Icons", description: "IIgs icon files ($CA), shown as a sheet of all icons")
 
             Divider()
 
