@@ -65,3 +65,6 @@ default.profraw
 
 # Finished App Store screenshots (rebuild with AppStoreAssets/make-appstore-screenshots.swift)
 AppStoreAssets/screenshots/
+
+# Personal to-do list (not part of the repo)
+todo.md
