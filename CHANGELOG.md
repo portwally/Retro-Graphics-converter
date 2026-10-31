@@ -1,5 +1,25 @@
 # Changelog
 
+## Version 4.6 - 2026-10-31
+
+More pictures from Apple IIgs and Commodore 64 disks, and correct colors for 640-mode pictures.
+
+### New Formats and Pictures
+
+- **Large APF Pictures**: Apple Preferred Format pictures larger than the screen - up to 2048 lines, such as 640x480 and 800x600 3200-color pictures - now open; they were rejected above 400 lines. Palette editing works on them too
+- **Packed SHR under the PaintWorks Type**: packed Super Hi-Res screens saved with type $C0/$0000 (the PaintWorks type) but stored as plain PackBytes now open; 55 such pictures on real game disks were shown as unsupported
+- **Packed Hi-Res and Double Hi-Res (FOT $08)**: Apple's PackBytes-compressed Hi-Res and Double Hi-Res files now open
+- **Apple IIgs Finder Icons**: icon files (ProDOS type $CA) open as a sheet of all their icons, large and small, in the Finder's 640-mode colors. The colors can be edited in the palette editor
+- **More C64 Formats**: Doodle, Hi-Eddi, Hires-Editor, Hi-Pic Creator, Run Paint, Vidcom 64, Picasso 64, Dolphin Ed, Blazing Paddles, Wigmore Artist 64, Image System, Saracen Paint, CDU-Paint, Micro Illustrator, Drazpaint, Star Painter and plain 8,002-byte hires bitmaps now open, as do packed Koala (GG), packed Doodle (JJ), packed Drazpaint and Amica Paint pictures. Files on C64 disks have no extension, so they are recognized by size and load address (and GG/JJ names). Palette editing works for all of them
+- **C64 FLI and Interlace**: FLI, FLI Designer, FLI Graph, FLI Editor, FLI Profi, AFLI, Hires FLI Designer, CFLI, Flash FLI, Big FLI, Flip, Hires Manager, Gunpaint, Funpaint, Pixel Perfect, Drazlace, True Paint, ECI, Hires Interlace, Interlace Hires Editor, Hireslace Editor, Cheese and Image System hires pictures now open, packed versions included. Interlaced pictures show both frames blended, as on a real C64. FLI pictures are 296 pixels wide, as the leftmost 24 pixels are lost to the FLI bug
+
+### Fixes
+
+- **640-Mode Colors**: 640-mode Apple Preferred Format pictures (about 360 on the test disks) were drawn with only the first 4 palette colors; each of the 4 pixels in a byte now uses its own quarter of the palette, as on the IIgs
+- **640-Mode Screens**: 32 KB Super Hi-Res screens whose lines are set to 640 mode were drawn as 320 mode and came out garbled; they are now drawn 640 pixels wide, also when packed and in the palette editor
+- **Packed Screens Saved as PaintWorks**: a packed screen saved with the PaintWorks type is no longer drawn as noise; the PaintWorks palette header is checked first
+- **Centauri Logo Editor**: .cle pictures were shown as Apple II Hi-Res; fixed
+
 ## Version 4.5 - 2026-10-11
 
 A stability and correctness release following a full code audit. The disk readers and decoders were
@@ -60,16 +80,6 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 ### Palette Editing
 
 - **Apple Preferred Format**: Palette editing now works for APF pictures, the most common Apple IIgs format. Before, edits had no effect or drew garbage
-- **Large APF Pictures**: Apple Preferred Format pictures larger than the screen - up to 2048 lines, such as 640x480 and 800x600 3200-color pictures - now open; they were rejected above 400 lines. Palette editing works on them too
-- **640-Mode Colors**: 640-mode Apple Preferred Format pictures (about 360 on the test disks) were drawn with only the first 4 palette colors; each of the 4 pixels in a byte now uses its own quarter of the palette, as on the IIgs
-- **640-Mode Screens**: 32 KB Super Hi-Res screens whose lines are set to 640 mode were drawn as 320 mode and came out garbled; they are now drawn 640 pixels wide, also when packed and in the palette editor
-- **Packed Screens Saved as PaintWorks**: a packed screen saved with the PaintWorks type is no longer drawn as noise; the PaintWorks palette header is checked first
-- **Packed SHR under the PaintWorks Type**: packed Super Hi-Res screens saved with type $C0/$0000 (the PaintWorks type) but stored as plain PackBytes now open; 55 such pictures on real game disks were shown as unsupported
-- **Packed Hi-Res and Double Hi-Res (FOT $08)**: Apple's PackBytes-compressed Hi-Res and Double Hi-Res files now open
-- **Apple IIgs Finder Icons**: icon files (ProDOS type $CA) open as a sheet of all their icons, large and small, in the Finder's 640-mode colors. The colors can be edited in the palette editor
-- **More C64 Formats**: Doodle, Hi-Eddi, Hires-Editor, Hi-Pic Creator, Run Paint, Vidcom 64, Picasso 64, Dolphin Ed, Blazing Paddles, Wigmore Artist 64, Image System, Saracen Paint, CDU-Paint, Micro Illustrator, Drazpaint, Star Painter and plain 8,002-byte hires bitmaps now open, as do packed Koala (GG), packed Doodle (JJ), packed Drazpaint and Amica Paint pictures. Files on C64 disks have no extension, so they are recognized by size and load address (and GG/JJ names). Palette editing works for all of them
-- **C64 FLI and Interlace**: FLI, FLI Designer, FLI Graph, FLI Editor, FLI Profi, AFLI, Hires FLI Designer, CFLI, Flash FLI, Big FLI, Flip, Hires Manager, Gunpaint, Funpaint, Pixel Perfect, Drazlace, True Paint, ECI, Hires Interlace, Interlace Hires Editor, Hireslace Editor, Cheese and Image System hires pictures now open, packed versions included. Interlaced pictures show both frames blended, as on a real C64. FLI pictures are 296 pixels wide, as the leftmost 24 pixels are lost to the FLI bug
-- **Centauri Logo Editor**: .cle pictures were shown as Apple II Hi-Res; fixed
 - **816/Paint and DreamGrafix**: 256-color pictures are unpacked before re-rendering
 - **More Platforms**: Palette edits now take effect for Amstrad CPC, Atari 8-bit, BBC Micro, Plus/4, VIC-20, TRS-80/CoCo, C64 hi-res, NEOchrome and MSX Screen 1/7. If a color is not used in the picture, the status bar says so
 - **Accurate Palettes**: ZX Spectrum colors no longer shift after an edit; Amstrad CPC shows the inks actually used by the file; MSX Screen 5/7 show the palette found in the file
