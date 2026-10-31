@@ -11,7 +11,7 @@ Just drag and drop your disk images in the app and extract your pics from there.
 
 **Get it:** [Mac App Store](https://apps.apple.com/us/app/retro-graphics-converter/id6756440759?mt=12) (ready to run) or free from the [GitHub releases](https://github.com/portwally/Retro-Graphics-converter/releases). Requires macOS 15.6 or later, Apple Silicon or Intel.
 
-**New in 4.5:** a full quality pass - every decoder and disk reader was checked against thousands of real disk images and sample pictures. Keyboard shortcuts, new Atari ST formats (Art Director, GFA Artist, Palette Master, Doodle), D71/D81 and DiskCopy 4.2 disks, palette editing for many more formats, and many fixes. See the [CHANGELOG](CHANGELOG.md) for everything.
+**New in 4.6:** a full quality pass - every decoder and disk reader was checked against thousands of real disk images and sample pictures. Keyboard shortcuts, new Atari ST formats (Art Director, GFA Artist, Palette Master, Doodle), D71/D81 and DiskCopy 4.2 disks, palette editing for many more formats, and many fixes. See the [CHANGELOG](CHANGELOG.md) for everything.
 
 <img width="1000" alt="Disk catalog browser showing the pictures on a C64 Koala Painter disk" src="screenshots/disk-browser.png" />
 
