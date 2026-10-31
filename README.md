@@ -1,6 +1,6 @@
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![Language](https://img.shields.io/badge/language-Swift-orange)
-![Version](https://img.shields.io/badge/version-4.5-blue)
+![Version](https://img.shields.io/badge/version-4.6-blue)
 
 I was in search of a tool for MacOS that could batch convert Apple IIgs SHR graphics into png format but could not find anything.
 In the end I decided to code one myself in Swift. It started with SHR uncompressed graphic files to png format.
