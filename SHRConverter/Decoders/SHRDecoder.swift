@@ -75,6 +75,13 @@ class SHRDecoder {
             if result.image != nil { return result }
         }
 
+        // More C64 formats (Doodle, Hi-Eddi, Vidcom, Blazing Paddles, packed Koala...): by extension,
+        // or by size and load address for files from C64 disks
+        if let c64Format = C64Decoder.extraFormatName(data: data, fileExtension: fileExtension, filename: filename),
+           let image = C64Decoder.decodeExtraFormat(c64Format, data: data) {
+            return (image, .C64(format: c64Format))
+        }
+
         // Magic byte detection
         if size >= 8 {
             if data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {

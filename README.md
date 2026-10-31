@@ -22,7 +22,7 @@ Retro Platforms
 🖥️ Amiga: IFF/ILBM (8-bit indexed, Extra-Half-Brite, 24-bit RGB, HAM6 4096 colors, HAM8 262144 colors), ADF disk images<br>
 🕹️ Atari ST: Degas (PI1/PI2/PI3), NEOchrome (.NEO), Art Director, GFA Artist, Palette Master (.ART), Doodle (.DOO), ST disk images (.st)<br>
 🎰 Atari 8-bit (400/800/XL/XE): GR.8, GR.9, GR.10, GR.11, GR.15/GR.7, MicroIllustrator (.MIC), ATR disk images<br>
-💾 Commodore 64: Koala Painter, HIRES, Art Studio, Advanced Art Studio, D64/D71/D81 disk images<br>
+💾 Commodore 64: Koala Painter (also packed GG), Doodle (also packed JJ), HIRES, Art Studio, Advanced Art Studio, Hi-Eddi, Hires-Editor, Hi-Pic Creator, Run Paint, Vidcom 64, Picasso 64, Dolphin Ed, Blazing Paddles, Wigmore Artist 64, Image System, Saracen Paint, CDU-Paint, Micro Illustrator, Drazpaint, Amica Paint, Star Painter, plain hires bitmaps, D64/D71/D81 disk images<br>
 🎹 Commodore Plus/4: HiRes (320×200), Multicolor (160×200), 128-color TED palette<br>
 📺 Commodore VIC-20: HiRes (176×184), Multicolor (88×184), 16-color VIC palette<br>
 🎮 ZX Spectrum: SCR (6912 bytes), TRD disk images (TR-DOS Beta Disk Interface)<br>

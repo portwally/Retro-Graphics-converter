@@ -49,8 +49,10 @@ struct PaletteRenderer {
         case .HGR:
             cgImage = renderHGR(data: data, palette: palette)
 
-        case .C64:
-            cgImage = renderC64(data: data, palette: palette)
+        case .C64(let format):
+            let colors = palette.primaryPalette.map { (r: $0.r, g: $0.g, b: $0.b) }
+            cgImage = C64Decoder.decodeExtraFormat(format, data: data, palette: colors)
+                ?? renderC64(data: data, palette: palette)
 
         case .IFF(_, _, _):
             cgImage = renderIFF(data: data, palette: palette)
