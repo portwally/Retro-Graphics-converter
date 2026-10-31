@@ -112,10 +112,17 @@ class SHRDecoder {
         if let filename = filename?.lowercased() {
             // ProDOS type $C0 (PNT) with different auxtypes
             if filename.contains("#c00000") {
-                // Paintworks Packed Picture - uses PackBits, not PackBytes
+                // Paintworks Packed Picture. Some programs save a plain packed SHR screen ($C0/$0001
+                // layout) under aux $0000. A Paintworks file starts with a palette, whose high bytes
+                // are $0R; if it does not, try the packed screen first, as the Paintworks decoder
+                // can turn any data into a (wrong) picture.
+                let looksLikePaintworks = data.count >= 0x222 && (0..<16).allSatisfy { data[$0 * 2 + 1] & 0xF0 == 0 }
+                if !looksLikePaintworks {
+                    let packed = PackedSHRDecoder.decodePNT0001(data: data)
+                    if packed.image != nil { return packed }
+                }
                 let paintworks = PackedSHRDecoder.decodePNT0000(data: data)
                 if paintworks.image != nil { return paintworks }
-                // Some programs save a plain packed SHR screen ($C0/$0001 layout) under aux $0000
                 let packed = PackedSHRDecoder.decodePNT0001(data: data)
                 if packed.image != nil { return packed }
                 return paintworks

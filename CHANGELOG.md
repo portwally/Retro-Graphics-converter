@@ -61,6 +61,9 @@ checked against 3,368 real Apple II disk images, public sample files for the oth
 
 - **Apple Preferred Format**: Palette editing now works for APF pictures, the most common Apple IIgs format. Before, edits had no effect or drew garbage
 - **Large APF Pictures**: Apple Preferred Format pictures larger than the screen - up to 2048 lines, such as 640x480 and 800x600 3200-color pictures - now open; they were rejected above 400 lines. Palette editing works on them too
+- **640-Mode Colors**: 640-mode Apple Preferred Format pictures (about 360 on the test disks) were drawn with only the first 4 palette colors; each of the 4 pixels in a byte now uses its own quarter of the palette, as on the IIgs
+- **640-Mode Screens**: 32 KB Super Hi-Res screens whose lines are set to 640 mode were drawn as 320 mode and came out garbled; they are now drawn 640 pixels wide, also when packed and in the palette editor
+- **Packed Screens Saved as PaintWorks**: a packed screen saved with the PaintWorks type is no longer drawn as noise; the PaintWorks palette header is checked first
 - **Packed SHR under the PaintWorks Type**: packed Super Hi-Res screens saved with type $C0/$0000 (the PaintWorks type) but stored as plain PackBytes now open; 55 such pictures on real game disks were shown as unsupported
 - **Packed Hi-Res and Double Hi-Res (FOT $08)**: Apple's PackBytes-compressed Hi-Res and Double Hi-Res files now open
 - **Apple IIgs Finder Icons**: icon files (ProDOS type $CA) open as a sheet of all their icons, large and small, in the Finder's 640-mode colors. The colors can be edited in the palette editor

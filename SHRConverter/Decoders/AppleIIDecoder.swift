@@ -7,10 +7,13 @@ class AppleIIDecoder {
     
     // MARK: - SHR Decoder (320x200, 32KB)
 
-    static func decodeSHR(data: Data, is3200Color: Bool) -> CGImage? {
-        let width = 320
+    /// Standard screens (`is3200Color` false) honor each line's SCB: palette number and 320/640 mode.
+    /// A screen with any 640-mode line is drawn 640 pixels wide, its 320-mode lines doubled.
+    /// `paletteOverride` replaces the 16 palettes stored in the file (palette editor).
+    static func decodeSHR(data: Data, is3200Color: Bool,
+                          paletteOverride: [[(r: UInt8, g: UInt8, b: UInt8)]]? = nil) -> CGImage? {
+        var width = 320
         let height = 200
-        var rgbaBuffer = [UInt8](repeating: 255, count: width * height * 4)
 
         let pixelDataStart = 0
         let scbOffset = 32000
@@ -27,7 +30,9 @@ class AppleIIDecoder {
             // Read palettes (with bounds checking)
             for i in 0..<16 {
                 let pOffset = standardPaletteOffset + (i * 32)
-                if pOffset + 32 <= data.count {
+                if let override = paletteOverride, !override.isEmpty {
+                    palettes.append(i < override.count ? override[i] : override[0])
+                } else if pOffset + 32 <= data.count {
                     palettes.append(ImageHelpers.readPalette(from: data, offset: pOffset, reverseOrder: false))
                 } else {
                     // Use default palette if not enough data
@@ -35,20 +40,23 @@ class AppleIIDecoder {
                 }
             }
 
+            let scbs = (0..<height).map { scbOffset + $0 < data.count ? data[scbOffset + $0] : 0 }
+            if scbs.contains(where: { $0 & 0x80 != 0 }) { width = 640 }
+            var rgbaBuffer = [UInt8](repeating: 255, count: width * height * 4)
+
             for y in 0..<height {
-                // Read SCB with bounds checking
-                let scb: UInt8
-                if scbOffset + y < data.count {
-                    scb = data[scbOffset + y]
+                let currentPalette = palettes[Int(scbs[y] & 0x0F)]
+                if scbs[y] & 0x80 != 0 {
+                    renderLine640(y: y, data: data, pixelStart: pixelDataStart, palette: currentPalette, to: &rgbaBuffer)
                 } else {
-                    scb = 0  // Default to palette 0
+                    renderLine(y: y, data: data, pixelStart: pixelDataStart, palette: currentPalette, to: &rgbaBuffer,
+                               width: width, scale: width / 320)
                 }
-                let paletteIndex = Int(scb & 0x0F)
-                let currentPalette = palettes[paletteIndex]
-                renderLine(y: y, data: data, pixelStart: pixelDataStart, palette: currentPalette, to: &rgbaBuffer, width: width)
             }
+            return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
 
         } else {
+            var rgbaBuffer = [UInt8](repeating: 255, count: width * height * 4)
             for y in 0..<height {
                 let pOffset = brooksPaletteOffset + (y * 32)
                 let currentPalette: [(r: UInt8, g: UInt8, b: UInt8)]
@@ -59,34 +67,38 @@ class AppleIIDecoder {
                 }
                 renderLine(y: y, data: data, pixelStart: pixelDataStart, palette: currentPalette, to: &rgbaBuffer, width: width)
             }
+            return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
         }
-
-        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
     }
     
-    private static func renderLine(y: Int, data: Data, pixelStart: Int, palette: [(r: UInt8, g: UInt8, b: UInt8)], to buffer: inout [UInt8], width: Int) {
-        let bytesPerLine = 160
-        let lineStart = pixelStart + (y * bytesPerLine)
-        
-        for xByte in 0..<bytesPerLine {
+    /// 320-mode line: two 4-bit pixels per byte. `scale` 2 doubles them on a 640-wide screen.
+    private static func renderLine(y: Int, data: Data, pixelStart: Int, palette: [(r: UInt8, g: UInt8, b: UInt8)],
+                                   to buffer: inout [UInt8], width: Int, scale: Int = 1) {
+        let lineStart = pixelStart + y * 160
+        for xByte in 0..<160 {
             let byte = data[lineStart + xByte]
-            
-            let idx1 = (byte & 0xF0) >> 4
-            let idx2 = (byte & 0x0F)
-            
-            let c1 = palette[Int(idx1)]
-            let bufferIdx1 = (y * width + (xByte * 2)) * 4
-            buffer[bufferIdx1]     = c1.r
-            buffer[bufferIdx1 + 1] = c1.g
-            buffer[bufferIdx1 + 2] = c1.b
-            buffer[bufferIdx1 + 3] = 255
-            
-            let c2 = palette[Int(idx2)]
-            let bufferIdx2 = (y * width + (xByte * 2) + 1) * 4
-            buffer[bufferIdx2]     = c2.r
-            buffer[bufferIdx2 + 1] = c2.g
-            buffer[bufferIdx2 + 2] = c2.b
-            buffer[bufferIdx2 + 3] = 255
+            for (n, index) in [Int(byte >> 4), Int(byte & 0x0F)].enumerated() {
+                let c = palette[index]
+                for s in 0..<scale {
+                    let i = (y * width + (xByte * 2 + n) * scale + s) * 4
+                    buffer[i] = c.r; buffer[i + 1] = c.g; buffer[i + 2] = c.b; buffer[i + 3] = 255
+                }
+            }
+        }
+    }
+
+    /// 640-mode line: four 2-bit pixels per byte, each using its own quarter of the palette
+    /// (colors 8-11, 12-15, 0-3, 4-7), on a 640-wide screen
+    private static func renderLine640(y: Int, data: Data, pixelStart: Int, palette: [(r: UInt8, g: UInt8, b: UInt8)],
+                                      to buffer: inout [UInt8]) {
+        let lineStart = pixelStart + y * 160
+        for xByte in 0..<160 {
+            let byte = data[lineStart + xByte]
+            for n in 0..<4 {
+                let c = palette[[8, 12, 0, 4][n] + Int((byte >> (6 - n * 2)) & 0x03)]
+                let i = (y * 640 + xByte * 4 + n) * 4
+                buffer[i] = c.r; buffer[i + 1] = c.g; buffer[i + 2] = c.b; buffer[i + 3] = 255
+            }
         }
     }
     

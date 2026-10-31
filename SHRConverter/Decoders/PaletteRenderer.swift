@@ -142,36 +142,10 @@ struct PaletteRenderer {
     // MARK: - SHR Standard Renderer
 
     private static func renderStandardSHR(data: Data, palette: PaletteInfo) -> CGImage? {
-        let width = 320
-        let height = 200
-        var rgbaBuffer = [UInt8](repeating: 255, count: width * height * 4)
-
-        let pixelDataStart = 0
-        let scbOffset = 32000
-
-        guard data.count >= 32000 else { return nil }
-
-        // Convert PaletteInfo palettes to the tuple format used by renderer
-        let palettes: [[(r: UInt8, g: UInt8, b: UInt8)]] = palette.palettes.map { paletteColors in
-            paletteColors.map { ($0.r, $0.g, $0.b) }
-        }
-
-        // Ensure we have at least one palette
+        // The real decoder, so 640-mode lines are drawn the same way as when the picture was opened
+        let palettes = palette.palettes.map { $0.map { (r: $0.r, g: $0.g, b: $0.b) } }
         guard !palettes.isEmpty else { return nil }
-
-        for y in 0..<height {
-            let scb: UInt8
-            if scbOffset + y < data.count {
-                scb = data[scbOffset + y]
-            } else {
-                scb = 0
-            }
-            let paletteIndex = Int(scb & 0x0F)
-            let currentPalette = paletteIndex < palettes.count ? palettes[paletteIndex] : palettes[0]
-            renderSHRLine(y: y, data: data, pixelStart: pixelDataStart, palette: currentPalette, to: &rgbaBuffer, width: width)
-        }
-
-        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+        return AppleIIDecoder.decodeSHR(data: data, is3200Color: false, paletteOverride: palettes)
     }
 
     // MARK: - SHR 3200 Color Renderer
@@ -216,34 +190,6 @@ struct PaletteRenderer {
 
         for xByte in 0..<bytesPerLine {
             let byte = pixelData[lineStart + xByte]
-
-            let idx1 = Int((byte & 0xF0) >> 4)
-            let idx2 = Int(byte & 0x0F)
-
-            let c1 = idx1 < palette.count ? palette[idx1] : (r: UInt8(0), g: UInt8(0), b: UInt8(0))
-            let bufferIdx1 = (y * width + (xByte * 2)) * 4
-            buffer[bufferIdx1]     = c1.r
-            buffer[bufferIdx1 + 1] = c1.g
-            buffer[bufferIdx1 + 2] = c1.b
-            buffer[bufferIdx1 + 3] = 255
-
-            let c2 = idx2 < palette.count ? palette[idx2] : (r: UInt8(0), g: UInt8(0), b: UInt8(0))
-            let bufferIdx2 = (y * width + (xByte * 2) + 1) * 4
-            buffer[bufferIdx2]     = c2.r
-            buffer[bufferIdx2 + 1] = c2.g
-            buffer[bufferIdx2 + 2] = c2.b
-            buffer[bufferIdx2 + 3] = 255
-        }
-    }
-
-    private static func renderSHRLine(y: Int, data: Data, pixelStart: Int, palette: [(r: UInt8, g: UInt8, b: UInt8)], to buffer: inout [UInt8], width: Int) {
-        let bytesPerLine = 160
-        let lineStart = pixelStart + (y * bytesPerLine)
-
-        guard lineStart + bytesPerLine <= data.count else { return }
-
-        for xByte in 0..<bytesPerLine {
-            let byte = data[lineStart + xByte]
 
             let idx1 = Int((byte & 0xF0) >> 4)
             let idx2 = Int(byte & 0x0F)
@@ -1002,60 +948,8 @@ struct PaletteRenderer {
     // MARK: - Packed SHR Renderer
 
     private static func renderPackedSHR(data: Data, palette: PaletteInfo) -> CGImage? {
-        // Decompress the packed data first
         let decompressedData = PackedSHRDecoder.unpackBytes(data: data, maxOutputSize: 65536)
-
         guard decompressedData.count >= 32768 else { return nil }
-
-        let width = 320
-        let height = 200
-        var rgbaBuffer = [UInt8](repeating: 255, count: width * height * 4)
-
-        let pixelDataStart = 0
-        let scbOffset = 32000
-
-        // Convert PaletteInfo palettes to the tuple format used by renderer
-        let palettes: [[(r: UInt8, g: UInt8, b: UInt8)]] = palette.palettes.map { paletteColors in
-            paletteColors.map { ($0.r, $0.g, $0.b) }
-        }
-
-        guard !palettes.isEmpty else { return nil }
-
-        for y in 0..<height {
-            let scb: UInt8
-            if scbOffset + y < decompressedData.count {
-                scb = decompressedData[scbOffset + y]
-            } else {
-                scb = 0
-            }
-            let paletteIndex = Int(scb & 0x0F)
-            let currentPalette = paletteIndex < palettes.count ? palettes[paletteIndex] : palettes[0]
-
-            // Render the line using decompressed data
-            for x in 0..<(width / 2) {
-                let byteOffset = pixelDataStart + y * 160 + x
-                guard byteOffset < decompressedData.count else { continue }
-
-                let byte = decompressedData[byteOffset]
-                let pixel1 = Int((byte >> 4) & 0x0F)
-                let pixel2 = Int(byte & 0x0F)
-
-                let bufferIdx1 = (y * width + x * 2) * 4
-                let color1 = pixel1 < currentPalette.count ? currentPalette[pixel1] : currentPalette[0]
-                rgbaBuffer[bufferIdx1] = color1.r
-                rgbaBuffer[bufferIdx1 + 1] = color1.g
-                rgbaBuffer[bufferIdx1 + 2] = color1.b
-                rgbaBuffer[bufferIdx1 + 3] = 255
-
-                let bufferIdx2 = (y * width + x * 2 + 1) * 4
-                let color2 = pixel2 < currentPalette.count ? currentPalette[pixel2] : currentPalette[0]
-                rgbaBuffer[bufferIdx2] = color2.r
-                rgbaBuffer[bufferIdx2 + 1] = color2.g
-                rgbaBuffer[bufferIdx2 + 2] = color2.b
-                rgbaBuffer[bufferIdx2 + 3] = 255
-            }
-        }
-
-        return ImageHelpers.createCGImage(from: rgbaBuffer, width: width, height: height)
+        return renderStandardSHR(data: decompressedData, palette: palette)
     }
 }

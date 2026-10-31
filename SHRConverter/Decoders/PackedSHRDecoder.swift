@@ -340,9 +340,9 @@ class PackedSHRDecoder {
                         let x = xByte * 4 + pixelInByte
                         if x >= width { break }
                         
-                        let highBit = (byte >> (7 - pixelInByte)) & 1
-                        let lowBit = (byte >> (3 - pixelInByte)) & 1
-                        let colorIndex = Int((highBit << 1) | lowBit)
+                        // Four 2-bit pixels; each of the four uses its own quarter of the palette
+                        // (colors 8-11, 12-15, 0-3, 4-7)
+                        let colorIndex = [8, 12, 0, 4][pixelInByte] + Int((byte >> (6 - pixelInByte * 2)) & 0x03)
                         
                         let color = colorIndex < palette.count ? palette[colorIndex] : (0, 0, 0)
                         let bufIdx = (y * width + x) * 4
