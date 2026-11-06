@@ -25,6 +25,26 @@ class PackedSHRDecoder {
     // Reference: Apple IIgs Tech Note #94 "Packing It In (and Out)"
     //            CiderPress2 source code (ApplePack.cs)
     
+    /// Size the data unpacks to if it is a complete PackBytes stream - every command whole and the
+    /// last one ending exactly at the end of the data - otherwise nil
+    static func packBytesOutputSize(data: Data) -> Int? {
+        var pos = 0
+        var output = 0
+        while pos < data.count {
+            let flag = data[data.startIndex + pos]
+            pos += 1
+            let count = Int(flag & 0x3F) + 1
+            switch flag & 0xC0 {
+            case 0x00: pos += count; output += count
+            case 0x40: pos += 1; output += count
+            case 0x80: pos += 4; output += count * 4
+            default: pos += 1; output += count * 4
+            }
+            if pos > data.count || output > 70000 { return nil }
+        }
+        return output
+    }
+
     static func unpackBytes(data: Data, maxOutputSize: Int = 65536) -> Data {
         var output = Data()
         output.reserveCapacity(min(maxOutputSize, data.count * 4))

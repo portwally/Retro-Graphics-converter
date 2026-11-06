@@ -19,6 +19,7 @@ More pictures from Apple IIgs and Commodore 64 disks, and correct colors for 640
 - **640-Mode Screens**: 32 KB Super Hi-Res screens whose lines are set to 640 mode were drawn as 320 mode and came out garbled; they are now drawn 640 pixels wide, also when packed and in the palette editor
 - **Packed Screens Saved as PaintWorks**: a packed screen saved with the PaintWorks type is no longer drawn as noise; the PaintWorks palette header is checked first
 - **Centauri Logo Editor**: .cle pictures were shown as Apple II Hi-Res; fixed
+- **Packed Hi-Res and Double Hi-Res Outside a Disk**: packed (PackBytes) Hi-Res and Double Hi-Res files opened only straight from a disk image, where the ProDOS type is known; saved as files (`.fot`, or the `.dat` that Export Files writes) they did not open. `.fot` files now open, and so do untagged `.dat`, `.bin` and extension-less files that are a complete PackBytes stream unpacking to exactly one screen
 
 ## Version 4.5 - 2026-10-11
 

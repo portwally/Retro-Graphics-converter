@@ -178,15 +178,23 @@ class SHRDecoder {
 
             // ProDOS type $08 (FOT) packed with PackBytes: Apple's packed Hi-Res ($4000) and Double
             // Hi-Res ($4001); some files carry aux $0000 instead. Unpacked sizes tell them apart.
-            if filename.count >= 7 && filename.suffix(7).hasPrefix("#08")
-                && !(8184...8200).contains(data.count) && data.count != 16384 {
-                let unpacked = PackedSHRDecoder.unpackBytes(data: data, maxOutputSize: 16384 + 64)
-                if (8184...8200).contains(unpacked.count) {
-                    var screen = unpacked.prefix(8192)
-                    if screen.count < 8192 { screen.append(contentsOf: repeatElement(UInt8(0), count: 8192 - screen.count)) }
-                    if let image = AppleIIDecoder.decodeHGR(data: Data(screen)) { return (image, .HGR) }
-                } else if unpacked.count == 16384, let image = AppleIIDecoder.decodeDHGR(data: unpacked) {
-                    return (image, .DHGR)
+            let isRawScreenSize = (8184...8200).contains(data.count) || data.count == 16384
+            if filename.count >= 7 && filename.suffix(7).hasPrefix("#08") && !isRawScreenSize,
+               let packed = decodePackedFOT(data: data) {
+                return packed
+            }
+
+            // The same files outside a ProDOS disk have no type tag: ".fot" says the type; untagged
+            // .dat/.bin/extension-less files (what "Export Files" writes) are taken only if they are a
+            // PackBytes stream that ends exactly at the end of the file and unpacks to a whole screen.
+            let hasTypeTag = filename.range(of: "#[0-9a-f]{6}$", options: .regularExpression) != nil
+            if !hasTypeTag && !isRawScreenSize && size > 2 {
+                if fileExtension == "fot" {
+                    if let packed = decodePackedFOT(data: data) { return packed }
+                } else if ["dat", "bin", ""].contains(fileExtension),
+                          let screenSize = PackedSHRDecoder.packBytesOutputSize(data: data), screenSize == 8192 || screenSize == 16384,
+                          let packed = decodePackedFOT(data: data) {
+                    return packed
                 }
             }
             
@@ -401,6 +409,19 @@ class SHRDecoder {
         }
     }
     
+    /// Apple's PackBytes-packed Hi-Res or Double Hi-Res screen (ProDOS type $08), told apart by the unpacked size
+    private static func decodePackedFOT(data: Data) -> (image: CGImage?, type: AppleIIImageType)? {
+        let unpacked = PackedSHRDecoder.unpackBytes(data: data, maxOutputSize: 16384 + 64)
+        if (8184...8200).contains(unpacked.count) {
+            var screen = unpacked.prefix(8192)
+            if screen.count < 8192 { screen.append(contentsOf: repeatElement(UInt8(0), count: 8192 - screen.count)) }
+            if let image = AppleIIDecoder.decodeHGR(data: Data(screen)) { return (image, .HGR) }
+        } else if unpacked.count == 16384, let image = AppleIIDecoder.decodeDHGR(data: unpacked) {
+            return (image, .DHGR)
+        }
+        return nil
+    }
+
     private static func decodeAppleIIBySize(data: Data, size: Int) -> (image: CGImage?, type: AppleIIImageType) {
         switch size {
         case 32767...32768:
